@@ -1,1 +1,6 @@
-node_modules/\ndist/\n.env.local\n.env
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+tsconfig.tsbuildinfo
