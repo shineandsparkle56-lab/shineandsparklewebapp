@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Shine and Sparkle"
+version = "1.0.0"
+id = "artifacts/shine-and-sparkle"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22696
+
+[services.development]
+run = "pnpm --filter @workspace/shine-and-sparkle run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/shine-and-sparkle", "run", "build" ]
+publicDir = "artifacts/shine-and-sparkle/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22696"
+BASE_PATH = "/"
