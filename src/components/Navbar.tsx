@@ -6,9 +6,9 @@ import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 import { Button } from "./ui/button";
 
 const navLinks = [
-  { name: "Home",    href: "#",        icon: Home },
-  { name: "About",   href: "#about",   icon: Info },
-  { name: "Contact", href: "#contact", icon: Phone },
+  { name: "Home",    href: "/",        icon: Home },
+  { name: "About",   href: "/about",   icon: Info },
+  { name: "Contact", href: "/contact", icon: Phone },
 ];
 
 export function Navbar() {
@@ -96,7 +96,7 @@ export function Navbar() {
           </div>
 
           {/* Logo */}
-          <a href="#" className="font-serif text-lg md:text-xl font-bold text-primary tracking-tight whitespace-nowrap">
+          <a href="/" className="font-serif text-lg md:text-xl font-bold text-primary tracking-tight whitespace-nowrap">
             Shine and Sparkle
           </a>
         </div>

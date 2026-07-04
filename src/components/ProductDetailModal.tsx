@@ -60,7 +60,6 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
     setAddedFeedback(true);
     setTimeout(() => setAddedFeedback(false), 1800);
   };
-
   const handleBuyNow = () => {
     if (!product) return;
     const sizeNote =
@@ -277,23 +276,31 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
 
                   {/* CTA buttons */}
                   <div className="flex flex-col sm:flex-row gap-3 mt-auto pt-2">
-                    <Button
-                      variant="outline"
-                      className="flex-1 border-[#9B6FD1] text-[#9B6FD1] hover:bg-[#9B6FD1]/5 rounded-full gap-2"
-                      onClick={handleAddToCart}
-                      data-testid="modal-add-to-cart-btn"
-                    >
-                      <ShoppingBag className="w-4 h-4" />
-                      {addedFeedback ? "Added!" : "Add to Cart"}
-                    </Button>
-                    <Button
-                      className="flex-1 bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white rounded-full gap-2 shadow-md hover:shadow-lg transition-all"
-                      onClick={handleBuyNow}
-                      data-testid="modal-buy-now-btn"
-                    >
-                      <Zap className="w-4 h-4" />
-                      Buy Now on WhatsApp
-                    </Button>
+                    {product.stock === 0 ? (
+                      <div className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full bg-gray-100 text-gray-400 font-semibold text-sm">
+                        Out of Stock
+                      </div>
+                    ) : (
+                      <>
+                        <Button
+                          variant="outline"
+                          className="flex-1 border-[#9B6FD1] text-[#9B6FD1] hover:bg-[#9B6FD1]/5 rounded-full gap-2"
+                          onClick={handleAddToCart}
+                          data-testid="modal-add-to-cart-btn"
+                        >
+                          <ShoppingBag className="w-4 h-4" />
+                          {addedFeedback ? "Added!" : "Add to Cart"}
+                        </Button>
+                        <Button
+                          className="flex-1 bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white rounded-full gap-2 shadow-md hover:shadow-lg transition-all"
+                          onClick={handleBuyNow}
+                          data-testid="modal-buy-now-btn"
+                        >
+                          <Zap className="w-4 h-4" />
+                          Buy Now on WhatsApp
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </motion.div>

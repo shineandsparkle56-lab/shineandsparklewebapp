@@ -20,15 +20,12 @@ import { TermsOfService } from "./pages/TermsOfService";
 
 const queryClient = new QueryClient();
 
-function Storefront() {
+// ── Shared page shell — Navbar + Footer + CartDrawer on every page ──
+function PageShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen w-full flex flex-col bg-white">
       <Navbar />
-      <main className="flex-1">
-        <ProductGrid />
-        <About />
-        <Contact />
-      </main>
+      <main className="flex-1 pt-14">{children}</main>
       <Footer />
       <CartDrawer />
       <FloatingCart />
@@ -38,11 +35,21 @@ function Storefront() {
 
 function AppRouter() {
   const [path] = useLocation();
-  if (path === "/admin") return <AdminLogin />;
+
+  if (path === "/admin")           return <AdminLogin />;
   if (path === "/admin/dashboard") return <AdminPanel />;
-  if (path === "/privacy-policy") return <PrivacyPolicy />;
+  if (path === "/privacy-policy")  return <PrivacyPolicy />;
   if (path === "/terms-of-service") return <TermsOfService />;
-  return <Storefront />;
+
+  if (path === "/about")   return <PageShell><About /></PageShell>;
+  if (path === "/contact") return <PageShell><Contact /></PageShell>;
+
+  // Default: storefront
+  return (
+    <PageShell>
+      <ProductGrid />
+    </PageShell>
+  );
 }
 
 function App() {

@@ -30,8 +30,8 @@ const contactOptions = [
     icon: Mail,
     title: "Email",
     desc: "For formal inquiries, wholesale requests, or collaborations.",
-    label: "hello@shineandsparkle.in",
-    href: "mailto:hello@shineandsparkle.in",
+    label: "shineandsparkle56@gmail.com",
+    href: "mailto:shineandsparkle56@gmail.com",
     primary: false,
   },
 ];

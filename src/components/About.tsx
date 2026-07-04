@@ -59,7 +59,7 @@ export function About() {
             </p>
           </div>
           <a
-            href="#shop"
+            href="/"
             className="shrink-0 bg-white text-[#9B6FD1] font-semibold text-sm px-6 py-3 rounded-full hover:bg-[#F3EEFB] transition-colors"
           >
             Browse Collection
