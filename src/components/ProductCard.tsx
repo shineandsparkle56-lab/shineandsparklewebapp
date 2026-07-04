@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Product } from "../data/products";
 import { Button } from "./ui/button";
-import { useCart, WHATSAPP_NUMBER } from "../context/CartContext";
+import { useCart } from "../context/CartContext";
 import { ProductDetailModal } from "./ProductDetailModal";
 
 interface ProductCardProps {
@@ -13,7 +13,7 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, index, view = "grid" }: ProductCardProps) {
-  const { addToCart } = useCart();
+  const { addToCart, setIsCartOpen } = useCart();
   const [modalOpen, setModalOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
   const images = product.images?.length ? product.images : [product.image];
@@ -30,8 +30,8 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
   };
 
   const handleBuyNow = () => {
-    const msg = `Hi Shine and Sparkle! I want to order:\n\n${product.name} x 1 - ₹${product.price}\n\nTotal: ₹${product.price}\n\nPlease confirm my purchase.`;
-    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, "_blank");
+    addToCart(product);
+    setIsCartOpen(true);
   };
 
   // ── LIST VIEW ──────────────────────────────────────────────────

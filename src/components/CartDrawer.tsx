@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Minus, Plus, X, ShoppingBag, MessageCircle,
@@ -7,6 +7,8 @@ import {
 import { useCart, WHATSAPP_NUMBER } from "../context/CartContext";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "./ui/sheet";
 import { supabase } from "../lib/supabase";
+import { AutocompleteInput } from "./ui/AutocompleteInput";
+import { INDIA_STATES, getCitiesForState } from "../data/indiaCitiesStates";
 
 type PaymentMode = "prepaid" | "cod";
 
@@ -48,6 +50,12 @@ export function CartDrawer() {
   const [rateError, setRateError] = useState("");
   const [checkingOut, setCheckingOut] = useState(false);
   const pincodeRef = useRef<HTMLInputElement>(null);
+  // Capture the Sheet content DOM node so AutocompleteInput portals render
+  // inside the same Radix stacking context (avoids z-index conflicts).
+  const [sheetContentEl, setSheetContentEl] = useState<HTMLElement | null>(null);
+  const onSheetContent = useCallback((node: HTMLElement | null) => {
+    setSheetContentEl(node);
+  }, []);
 
   const shippingCharge = shipping?.serviceable ? (shipping.shippingCharge ?? 0) : 0;
   const codCharge = paymentMode === "cod" && shipping?.serviceable ? (shipping.codCharge ?? 0) : 0;
@@ -170,7 +178,7 @@ export function CartDrawer() {
 
   return (
     <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
-      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0 max-h-screen" data-testid="cart-drawer">
+      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0 max-h-screen" data-testid="cart-drawer" ref={onSheetContent}>
 
         {/* Header */}
         <SheetHeader className="px-5 pt-5 pb-3 border-b border-gray-100 shrink-0">
@@ -240,67 +248,8 @@ export function CartDrawer() {
                 </AnimatePresence>
               </div>
 
-              {/* ── Customer Info ── */}
-              <div className="mx-4 mt-3 bg-[#F3EEFB]/60 rounded-2xl p-4 space-y-3">
-                <p className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-[#9B6FD1]" />
-                  Your Details
-                </p>
-
-                <div className="grid grid-cols-2 gap-2.5">
-                  {/* Name */}
-                  <div className="col-span-2">
-                    <input
-                      type="text"
-                      placeholder="Full Name *"
-                      value={customer.name}
-                      onChange={(e) => setC("name", e.target.value)}
-                      className={INPUT_CLASS}
-                    />
-                  </div>
-                  {/* Mobile */}
-                  <div className="col-span-2">
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      maxLength={10}
-                      placeholder="Mobile Number (10 digits) *"
-                      value={customer.mobile}
-                      onChange={(e) => setC("mobile", e.target.value.replace(/\D/g, "").slice(0, 10))}
-                      className={INPUT_CLASS}
-                    />
-                  </div>
-                  {/* Address */}
-                  <div className="col-span-2">
-                    <textarea
-                      rows={2}
-                      placeholder="Full Address (House No., Street, Area) *"
-                      value={customer.address}
-                      onChange={(e) => setC("address", e.target.value)}
-                      className={INPUT_CLASS + " resize-none"}
-                    />
-                  </div>
-                  {/* City */}
-                  <input
-                    type="text"
-                    placeholder="City *"
-                    value={customer.city}
-                    onChange={(e) => setC("city", e.target.value)}
-                    className={INPUT_CLASS}
-                  />
-                  {/* State */}
-                  <input
-                    type="text"
-                    placeholder="State *"
-                    value={customer.state}
-                    onChange={(e) => setC("state", e.target.value)}
-                    className={INPUT_CLASS}
-                  />
-                </div>
-              </div>
-
               {/* ── Delivery & Shipping ── */}
-              <div className="mx-4 my-3 bg-[#F3EEFB]/60 rounded-2xl p-4 space-y-3">
+              <div className="mx-4 mt-3 bg-[#F3EEFB]/60 rounded-2xl p-4 space-y-3">
                 <p className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-[#9B6FD1]" />
                   Delivery & Shipping
@@ -399,6 +348,45 @@ export function CartDrawer() {
                     Enter pincode to check delivery charges
                   </div>
                 )}
+              </div>
+
+              {/* ── Your Details ── */}
+              <div className="mx-4 my-3 bg-[#F3EEFB]/60 rounded-2xl p-4 space-y-3">
+                <p className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-[#9B6FD1]" />
+                  Your Details
+                </p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="col-span-2">
+                    <input type="text" placeholder="Full Name *" value={customer.name} onChange={(e) => setC("name", e.target.value)} className={INPUT_CLASS} />
+                  </div>
+                  <div className="col-span-2">
+                    <input type="tel" inputMode="numeric" maxLength={10} placeholder="Mobile Number (10 digits) *" value={customer.mobile} onChange={(e) => setC("mobile", e.target.value.replace(/\D/g, "").slice(0, 10))} className={INPUT_CLASS} />
+                  </div>
+                  <div className="col-span-2">
+                    <textarea rows={2} placeholder="Full Address (House No., Street, Area) *" value={customer.address} onChange={(e) => setC("address", e.target.value)} className={INPUT_CLASS + " resize-none"} />
+                  </div>
+                  <AutocompleteInput
+                    value={customer.state}
+                    onChange={(val) => {
+                      setC("state", val);
+                      // Clear city when state changes
+                      if (val !== customer.state) setC("city", "");
+                    }}
+                    options={INDIA_STATES}
+                    placeholder="State *"
+                    className={INPUT_CLASS}
+                    portalContainer={sheetContentEl}
+                  />
+                  <AutocompleteInput
+                    value={customer.city}
+                    onChange={(val) => setC("city", val)}
+                    options={getCitiesForState(customer.state)}
+                    placeholder={customer.state ? "City *" : "Select state first"}
+                    className={INPUT_CLASS}
+                    disabled={!customer.state}
+                    portalContainer={sheetContentEl}
+                  />                </div>
               </div>
             </div>
 
