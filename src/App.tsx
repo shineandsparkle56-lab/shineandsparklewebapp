@@ -7,7 +7,6 @@ import { WishlistProvider } from "./context/WishlistContext";
 import { ProductsProvider } from "./context/ProductsContext";
 
 import { Navbar } from "./components/Navbar";
-import { Hero } from "./components/Hero";
 import { ProductGrid } from "./components/ProductGrid";
 import { About } from "./components/About";
 import { Contact } from "./components/Contact";
@@ -25,7 +24,6 @@ function Storefront() {
     <div className="min-h-screen w-full flex flex-col bg-white">
       <Navbar />
       <main className="flex-1">
-        <Hero />
         <ProductGrid />
         <About />
         <Contact />

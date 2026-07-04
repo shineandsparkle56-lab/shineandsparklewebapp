@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ShoppingBag, Zap } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, ShoppingBag, Zap } from "lucide-react";
 import { Product } from "../data/products";
 import { Button } from "./ui/button";
 import { useCart, WHATSAPP_NUMBER } from "../context/CartContext";
@@ -14,6 +14,14 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
   const { addToCart } = useCart();
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [addedFeedback, setAddedFeedback] = useState(false);
+  const [activeImg, setActiveImg] = useState(0);
+
+  const images = product?.images?.length ? product.images : product ? [product.image] : [];
+
+  // Reset image index when product changes
+  useEffect(() => {
+    setActiveImg(0);
+  }, [product?.id]);
 
   // Lock body scroll while modal is open
   useEffect(() => {
@@ -31,6 +39,7 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
   const handleClose = () => {
     setSelectedSize(null);
     setAddedFeedback(false);
+    setActiveImg(0);
     onClose();
   };
 
@@ -38,6 +47,8 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") handleClose();
+      if (e.key === "ArrowLeft") setActiveImg((p) => (p - 1 + images.length) % images.length);
+      if (e.key === "ArrowRight") setActiveImg((p) => (p + 1) % images.length);
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
@@ -63,6 +74,16 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
     );
   };
 
+  const goPrev = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setActiveImg((p) => (p - 1 + images.length) % images.length);
+  };
+
+  const goNext = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setActiveImg((p) => (p + 1) % images.length);
+  };
+
   return (
     <AnimatePresence>
       {product && (
@@ -79,10 +100,7 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
             data-testid="modal-backdrop"
           />
 
-          {/*
-            Outer scroll container — fills the screen and allows vertical
-            scroll on short-viewport / mobile devices.
-          */}
+          {/* Outer scroll container */}
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-3 sm:p-6">
               <motion.div
@@ -96,8 +114,8 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* ── Image panel ─────────────────────────────────────── */}
-                <div className="relative w-full md:w-[45%] flex-shrink-0 bg-[#F3EEFB] rounded-t-3xl md:rounded-l-3xl md:rounded-tr-none overflow-hidden">
-                  {/* Back button — always visible, top-left of image */}
+                <div className="relative w-full md:w-[45%] flex-shrink-0 bg-[#F3EEFB] rounded-t-3xl md:rounded-l-3xl md:rounded-tr-none overflow-hidden flex flex-col">
+                  {/* Back button */}
                   <button
                     onClick={handleClose}
                     className="absolute top-4 left-4 z-20 flex items-center gap-1.5 bg-white/90 backdrop-blur-sm text-gray-700 hover:text-[#9B6FD1] text-sm font-medium px-3 py-2 rounded-full shadow-md transition-all hover:bg-white"
@@ -114,14 +132,65 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                     </div>
                   )}
 
-                  {/* Fixed-ratio image — max 360 px tall on mobile so content shows */}
-                  <div className="aspect-square md:aspect-auto md:h-full w-full max-h-72 sm:max-h-80 md:max-h-none">
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      className="w-full h-full object-cover object-center"
-                    />
+                  {/* Main image with crossfade */}
+                  <div className="relative aspect-square md:aspect-auto md:flex-1 w-full max-h-72 sm:max-h-80 md:max-h-none overflow-hidden">
+                    <AnimatePresence mode="sync">
+                      <motion.img
+                        key={activeImg}
+                        src={images[activeImg]}
+                        alt={`${product.name} – view ${activeImg + 1}`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.35 }}
+                        className="absolute inset-0 w-full h-full object-cover object-center"
+                      />
+                    </AnimatePresence>
+
+                    {/* Prev / Next arrows — only when multiple images */}
+                    {images.length > 1 && (
+                      <>
+                        <button
+                          onClick={goPrev}
+                          className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-white/80 hover:bg-white shadow-md transition-all"
+                          aria-label="Previous image"
+                        >
+                          <ChevronLeft className="w-4 h-4 text-gray-700" />
+                        </button>
+                        <button
+                          onClick={goNext}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-white/80 hover:bg-white shadow-md transition-all"
+                          aria-label="Next image"
+                        >
+                          <ChevronRight className="w-4 h-4 text-gray-700" />
+                        </button>
+                      </>
+                    )}
                   </div>
+
+                  {/* Thumbnail strip — only when multiple images */}
+                  {images.length > 1 && (
+                    <div className="flex gap-2 p-3 justify-center bg-[#F3EEFB]">
+                      {images.map((img, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setActiveImg(i)}
+                          aria-label={`View image ${i + 1}`}
+                          className={`w-12 h-12 rounded-lg overflow-hidden border-2 transition-all duration-200 flex-shrink-0 ${
+                            i === activeImg
+                              ? "border-[#9B6FD1] shadow-md scale-105"
+                              : "border-transparent opacity-60 hover:opacity-90 hover:border-[#9B6FD1]/40"
+                          }`}
+                        >
+                          <img
+                            src={img}
+                            alt={`Thumbnail ${i + 1}`}
+                            className="w-full h-full object-cover object-center"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* ── Details panel ────────────────────────────────────── */}
@@ -171,17 +240,12 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                           ? "Bracelet Size"
                           : "Size"}
                       </p>
-                      <div
-                        className="flex flex-wrap gap-2"
-                        data-testid="size-selector"
-                      >
+                      <div className="flex flex-wrap gap-2" data-testid="size-selector">
                         {product.sizes.map((size) => (
                           <button
                             key={size}
                             onClick={() =>
-                              setSelectedSize(
-                                size === selectedSize ? null : size
-                              )
+                              setSelectedSize(size === selectedSize ? null : size)
                             }
                             data-testid={`size-option-${size}`}
                             className={`px-4 py-2 rounded-full text-sm font-medium border transition-all duration-200 ${
@@ -204,17 +268,14 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                       "Handcrafted in India",
                       "Free shipping above ₹999",
                     ].map((feat) => (
-                      <p
-                        key={feat}
-                        className="flex items-center gap-2 text-xs text-gray-500"
-                      >
+                      <p key={feat} className="flex items-center gap-2 text-xs text-gray-500">
                         <span className="w-1.5 h-1.5 rounded-full bg-[#9B6FD1] flex-shrink-0" />
                         {feat}
                       </p>
                     ))}
                   </div>
 
-                  {/* CTA buttons — always visible at bottom of panel */}
+                  {/* CTA buttons */}
                   <div className="flex flex-col sm:flex-row gap-3 mt-auto pt-2">
                     <Button
                       variant="outline"

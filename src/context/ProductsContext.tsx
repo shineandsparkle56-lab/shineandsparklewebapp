@@ -44,6 +44,7 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
         originalPrice: row.original_price,
         discount: row.discount,
         image: row.image,
+        images: Array.isArray(row.images) && row.images.length ? row.images : [row.image],
         description: row.description,
         sizes: row.sizes,
       }))
@@ -61,6 +62,7 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
         original_price: p.originalPrice,
         discount: p.discount,
         image: p.image,
+        images: p.images,
         description: p.description,
         sizes: p.sizes,
       }])
@@ -79,6 +81,7 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
         originalPrice: data.original_price,
         discount: data.discount,
         image: data.image,
+        images: Array.isArray(data.images) && data.images.length ? data.images : [data.image],
         description: data.description,
         sizes: data.sizes,
       },

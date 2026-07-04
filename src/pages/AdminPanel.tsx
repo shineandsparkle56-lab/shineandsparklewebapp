@@ -10,6 +10,7 @@ import { Product } from "../data/products";
 import { supabase } from "../lib/supabase";
 
 const BUCKET = "product-images";
+const MAX_IMAGES = 5;
 
 const CATEGORIES: Product["category"][] = ["rings", "earrings", "necklaces", "bracelets"];
 
@@ -33,9 +34,9 @@ export function AdminPanel() {
   const { products, addProduct, deleteProduct, loading, error } = useProducts();
   const [form, setForm] = useState(empty);
 
-  // Image state — either a local File or a remote URL string
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string>("");
+  // Multi-image state
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -50,20 +51,39 @@ export function AdminPanel() {
     if (!sessionStorage.getItem("sns_admin")) navigate("/admin");
   }, [navigate]);
 
-  // ── Image helpers ──────────────────────────────────────────────
-  const pickFile = (file: File) => {
-    if (!file.type.startsWith("image/")) {
-      setUploadError("Only image files are supported.");
-      return;
-    }
+  // Revoke object URLs on unmount
+  useEffect(() => {
+    return () => { imagePreviews.forEach((p) => URL.revokeObjectURL(p)); };
+  }, []);
+
+  // ── Image helpers ────────────────────────────────────────────
+  const addFiles = (incoming: FileList | File[]) => {
     setUploadError("");
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    const arr = Array.from(incoming);
+    const slots = MAX_IMAGES - imageFiles.length;
+    if (slots <= 0) { setUploadError(`Max ${MAX_IMAGES} images allowed.`); return; }
+    const newFiles: File[] = [];
+    const newPreviews: string[] = [];
+    for (const file of arr.slice(0, slots)) {
+      if (!file.type.startsWith("image/")) { setUploadError("Only image files are supported."); continue; }
+      newFiles.push(file);
+      newPreviews.push(URL.createObjectURL(file));
+    }
+    setImageFiles((prev) => [...prev, ...newFiles]);
+    setImagePreviews((prev) => [...prev, ...newPreviews]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const clearImage = () => {
-    setImageFile(null);
-    setImagePreview("");
+  const removeImage = (idx: number) => {
+    URL.revokeObjectURL(imagePreviews[idx]);
+    setImageFiles((prev) => prev.filter((_, i) => i !== idx));
+    setImagePreviews((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const clearImages = () => {
+    imagePreviews.forEach((p) => URL.revokeObjectURL(p));
+    setImageFiles([]);
+    setImagePreviews([]);
     setUploadError("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -80,7 +100,7 @@ export function AdminPanel() {
     return data.publicUrl;
   };
 
-  // ── Form submit ────────────────────────────────────────────────
+  // ── Form submit ──────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const price = Number(form.price);
@@ -90,11 +110,11 @@ export function AdminPanel() {
     setSaving(true);
     setUploadError("");
 
-    let imageUrl = "";
-    if (imageFile) {
+    let imageUrls: string[] = [];
+    if (imageFiles.length > 0) {
       try {
         setUploading(true);
-        imageUrl = await uploadToStorage(imageFile);
+        imageUrls = await Promise.all(imageFiles.map((f) => uploadToStorage(f)));
         setUploading(false);
       } catch (err: unknown) {
         setUploading(false);
@@ -109,8 +129,9 @@ export function AdminPanel() {
       }
     }
 
-    if (!imageUrl) {
-      imageUrl = `https://placehold.co/400x400/F3EEFB/9B6FD1?text=${encodeURIComponent(form.name)}`;
+    if (imageUrls.length === 0) {
+      const placeholder = `https://placehold.co/400x400/F3EEFB/9B6FD1?text=${encodeURIComponent(form.name)}`;
+      imageUrls = [placeholder];
     }
 
     const discount = Math.max(0, Math.round(((originalPrice - price) / originalPrice) * 100));
@@ -120,14 +141,15 @@ export function AdminPanel() {
       price,
       originalPrice,
       discount,
-      image: imageUrl,
+      image: imageUrls[0],
+      images: imageUrls,
       description: form.description.trim(),
       sizes: SIZES_BY_CATEGORY[form.category],
     });
 
     setSaving(false);
     setForm(empty);
-    clearImage();
+    clearImages();
     setToast("Product saved to Supabase!");
     setTimeout(() => setToast(""), 3000);
   };
@@ -143,12 +165,11 @@ export function AdminPanel() {
   const set = (k: keyof typeof form, v: string) =>
     setForm((prev) => ({ ...prev, [k]: v }));
 
-  // ── Drag & drop ────────────────────────────────────────────────
+  // ── Drag & drop ──────────────────────────────────────────────
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) pickFile(file);
+    if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
   };
 
   return (
@@ -164,7 +185,10 @@ export function AdminPanel() {
           </div>
           <div className="flex items-center gap-3">
             <a href="/" className="text-sm text-gray-500 hover:text-[#9B6FD1] transition-colors">View Store</a>
-            <button onClick={() => { sessionStorage.removeItem("sns_admin"); navigate("/admin"); }} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-500 transition-colors">
+            <button
+              onClick={() => { sessionStorage.removeItem("sns_admin"); navigate("/admin"); }}
+              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-500 transition-colors"
+            >
               <LogOut className="w-4 h-4" /> Logout
             </button>
           </div>
@@ -212,36 +236,51 @@ export function AdminPanel() {
                 <input required type="number" min="1" value={form.originalPrice} onChange={(e) => set("originalPrice", e.target.value)} placeholder="1199" className="input" />
               </div>
 
-              {/* ── Image upload ── */}
+              {/* ── Multi-image upload ── */}
               <div className="sm:col-span-2">
-                <label className="label"><Image className="w-3.5 h-3.5 inline mr-1" /> Product Image</label>
+                <label className="label">
+                  <Image className="w-3.5 h-3.5 inline mr-1" /> Product Images
+                  <span className="text-gray-400 font-normal normal-case ml-1">(up to {MAX_IMAGES} · first is the cover)</span>
+                </label>
 
-                {imagePreview ? (
-                  /* Preview */
-                  <div className="flex items-start gap-4">
-                    <div className="relative">
-                      <img src={imagePreview} alt="preview" className="w-28 h-28 rounded-xl object-cover border border-gray-100 bg-[#F3EEFB]" />
-                      {uploading && (
-                        <div className="absolute inset-0 rounded-xl bg-black/40 flex items-center justify-center">
-                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        </div>
-                      )}
-                      <button type="button" onClick={clearImage} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 transition-colors">
-                        <X className="w-3.5 h-3.5" />
+                {/* Thumbnail previews */}
+                {imagePreviews.length > 0 && (
+                  <div className="flex flex-wrap gap-3 mb-3">
+                    {imagePreviews.map((src, idx) => (
+                      <div key={idx} className="relative group w-20 h-20 shrink-0">
+                        <img src={src} alt={`Image ${idx + 1}`} className="w-full h-full rounded-xl object-cover border border-gray-100 bg-[#F3EEFB]" />
+                        {idx === 0 && (
+                          <span className="absolute bottom-1 left-1 text-[10px] font-bold bg-[#9B6FD1] text-white px-1.5 py-0.5 rounded-full leading-none pointer-events-none">
+                            Cover
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeImage(idx)}
+                          className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                          aria-label={`Remove image ${idx + 1}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+
+                    {/* Add-more tile */}
+                    {imagePreviews.length < MAX_IMAGES && (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-[#9B6FD1] hover:text-[#9B6FD1] transition-colors shrink-0"
+                      >
+                        <Plus className="w-5 h-5" />
+                        <span className="text-[10px]">Add more</span>
                       </button>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-700 truncate max-w-xs">{imageFile?.name}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {imageFile ? `${(imageFile.size / 1024).toFixed(0)} KB` : ""}
-                      </p>
-                      <button type="button" onClick={() => fileInputRef.current?.click()} className="mt-2 text-xs text-[#9B6FD1] hover:underline">
-                        Change image
-                      </button>
-                    </div>
+                    )}
                   </div>
-                ) : (
-                  /* Drop zone */
+                )}
+
+                {/* Drop zone — only when no images selected yet */}
+                {imagePreviews.length === 0 && (
                   <div
                     onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                     onDragLeave={() => setDragOver(false)}
@@ -255,23 +294,28 @@ export function AdminPanel() {
                       <Upload className="w-5 h-5 text-[#9B6FD1]" />
                     </div>
                     <div className="text-center">
-                      <p className="text-sm font-medium text-gray-700">Drop an image or <span className="text-[#9B6FD1]">browse</span></p>
-                      <p className="text-xs text-gray-400 mt-0.5">PNG, JPG, WEBP up to 5 MB</p>
+                      <p className="text-sm font-medium text-gray-700">Drop images or <span className="text-[#9B6FD1]">browse</span></p>
+                      <p className="text-xs text-gray-400 mt-0.5">PNG, JPG, WEBP · up to {MAX_IMAGES} images</p>
                     </div>
                   </div>
                 )}
 
-                {/* Hidden file input */}
+                {/* Hidden multi-file input */}
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
+                  multiple
                   className="hidden"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) pickFile(f); }}
+                  onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); }}
                 />
 
-                {uploadError && (
-                  <p className="text-red-500 text-xs mt-1.5">{uploadError}</p>
+                {uploadError && <p className="text-red-500 text-xs mt-1.5">{uploadError}</p>}
+                {uploading && (
+                  <p className="text-[#9B6FD1] text-xs mt-1.5 flex items-center gap-1.5">
+                    <span className="w-3 h-3 border-2 border-[#9B6FD1] border-t-transparent rounded-full animate-spin inline-block" />
+                    Uploading {imageFiles.length} image{imageFiles.length > 1 ? "s" : ""}…
+                  </p>
                 )}
               </div>
 
@@ -285,7 +329,7 @@ export function AdminPanel() {
             <div className="flex justify-end pt-1">
               <button type="submit" disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-[#9B6FD1] text-white text-sm font-semibold rounded-xl hover:bg-[#8a5fc0] transition-colors disabled:opacity-60">
                 {saving ? (
-                  <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />{uploading ? "Uploading image…" : "Saving…"}</>
+                  <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />{uploading ? "Uploading images…" : "Saving…"}</>
                 ) : (
                   <><Plus className="w-4 h-4" />Add Product</>
                 )}
@@ -320,10 +364,17 @@ export function AdminPanel() {
               )}
               {products.map((p) => (
                 <div key={p.id} className="flex items-center gap-4 px-6 py-4">
-                  <img src={p.image} alt={p.name} className="w-12 h-12 rounded-xl object-cover bg-[#F3EEFB] shrink-0" />
+                  <div className="flex -space-x-2 shrink-0">
+                    {(p.images?.length ? p.images.slice(0, 3) : [p.image]).map((img, i) => (
+                      <img key={i} src={img} alt={p.name} className="w-12 h-12 rounded-xl object-cover bg-[#F3EEFB] border-2 border-white" style={{ zIndex: 3 - i }} />
+                    ))}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-800 text-sm truncate">{p.name}</p>
-                    <p className="text-xs text-gray-400 capitalize">{p.category} · ₹{p.price}</p>
+                    <p className="text-xs text-gray-400 capitalize">
+                      {p.category} · ₹{p.price}
+                      {p.images?.length > 1 && <span className="ml-1 text-[#9B6FD1]">· {p.images.length} photos</span>}
+                    </p>
                   </div>
                   <button onClick={() => setDeleteId(p.id)} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors" aria-label="Delete">
                     <Trash2 className="w-4 h-4" />

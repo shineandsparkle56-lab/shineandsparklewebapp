@@ -8,7 +8,7 @@ export function Hero() {
         <div className="flex-1 text-center md:text-left z-10">
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-serif text-gray-900 leading-tight mb-6">
             Shine Bright, <br />
-            <span className="text-primary italic">Sparkle Alsdsbgways</span>
+            <span className="text-primary italic">Sparkle Always</span>
           </h1>
           <p className="text-lg md:text-xl text-gray-600 mb-10 max-w-lg mx-auto md:mx-0 font-light">
             Handcrafted jewelry for the modern woman. Discover delicate pieces designed to make every day feel special.
