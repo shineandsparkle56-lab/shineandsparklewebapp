@@ -24,7 +24,17 @@ const SIZES_BY_CATEGORY: Record<Product["category"], string[]> = {
 };
 const empty = { name: "", category: "rings" as Product["category"], price: "", originalPrice: "", description: "", stock: "10" };
 
-// ── Order type matching what we save in Supabase ─────────────
+type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
+
+const ORDER_STATUSES: { value: OrderStatus; label: string; color: string }[] = [
+  { value: "pending",   label: "Pending",   color: "bg-yellow-100 text-yellow-700" },
+  { value: "confirmed", label: "Confirmed", color: "bg-blue-100 text-blue-700" },
+  { value: "shipped",   label: "Shipped",   color: "bg-purple-100 text-purple-700" },
+  { value: "delivered", label: "Delivered", color: "bg-green-100 text-green-700" },
+  { value: "cancelled", label: "Cancelled", color: "bg-red-100 text-red-600" },
+];
+
+// ── Order type ───────────────────────────────────────────────
 interface OrderRow {
   id: number;
   items: { product: { id: number; name: string; category: string; price: number; image: string; images: string[] }; quantity: number }[];
@@ -34,12 +44,27 @@ interface OrderRow {
   grand_total: number;
   pincode: string;
   payment_mode: string;
+  status?: OrderStatus;
   customer_name?: string;
   customer_mobile?: string;
   customer_address?: string;
   customer_city?: string;
   customer_state?: string;
   created_at: string;
+}
+
+interface EditOrderForm {
+  customer_name: string;
+  customer_mobile: string;
+  customer_address: string;
+  customer_city: string;
+  customer_state: string;
+  pincode: string;
+  payment_mode: string;
+  status: OrderStatus;
+  subtotal: string;
+  shipping_charge: string;
+  cod_charge: string;
 }
 
 export function AdminPanel() {
@@ -58,6 +83,7 @@ export function AdminPanel() {
 
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string>("");
+  const [toastType, setToastType] = useState<"success" | "error">("success");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -66,7 +92,16 @@ export function AdminPanel() {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
-  // Edit state
+  // Order delete state
+  const [deleteOrderId, setDeleteOrderId] = useState<number | null>(null);
+  const [deletingOrder, setDeletingOrder] = useState(false);
+
+  // Order edit state
+  const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
+  const [editOrderForm, setEditOrderForm] = useState<EditOrderForm | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
+
+  // Product edit state
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [editForm, setEditForm] = useState(empty);
   const [editImageFiles, setEditImageFiles] = useState<File[]>([]);
@@ -83,6 +118,11 @@ export function AdminPanel() {
     if (activeTab === "orders") fetchOrders();
   }, [activeTab]);
 
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToast(msg); setToastType(type);
+    setTimeout(() => setToast(""), 3500);
+  };
+
   const fetchOrders = async () => {
     setOrdersLoading(true);
     const { data, error } = await supabase
@@ -92,6 +132,94 @@ export function AdminPanel() {
     if (!error && data) setOrders(data as OrderRow[]);
     setOrdersLoading(false);
   };
+
+  // ── Order handlers ───────────────────────────────────────────
+  const handleDeleteOrder = async () => {
+    if (deleteOrderId === null) return;
+    setDeletingOrder(true);
+
+    const { error, count } = await supabase
+      .from("orders")
+      .delete({ count: "exact" })
+      .eq("id", deleteOrderId);
+
+    if (error) {
+      console.error("Delete order error:", error);
+      showToast(`Failed to delete order: ${error.message}`, "error");
+    } else if (count === 0) {
+      // RLS blocked the delete — row still exists in DB
+      console.warn("Delete returned no rows affected. Check RLS policy on orders table.");
+      showToast("Delete blocked by database policy. Check Supabase RLS settings.", "error");
+    } else {
+      setOrders((prev) => prev.filter((o) => o.id !== deleteOrderId));
+      showToast("Order deleted.");
+    }
+    setDeletingOrder(false);
+    setDeleteOrderId(null);
+  };
+
+  const openEditOrder = (order: OrderRow) => {
+    setEditOrder(order);
+    setEditOrderForm({
+      customer_name:    order.customer_name    ?? "",
+      customer_mobile:  order.customer_mobile  ?? "",
+      customer_address: order.customer_address ?? "",
+      customer_city:    order.customer_city    ?? "",
+      customer_state:   order.customer_state   ?? "",
+      pincode:          order.pincode          ?? "",
+      payment_mode:     order.payment_mode     ?? "prepaid",
+      status:           order.status           ?? "pending",
+      subtotal:         String(order.subtotal),
+      shipping_charge:  String(order.shipping_charge),
+      cod_charge:       String(order.cod_charge),
+    });
+  };
+
+  const closeEditOrder = () => {
+    setEditOrder(null);
+    setEditOrderForm(null);
+  };
+
+  const handleSaveOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editOrder || !editOrderForm) return;
+    setSavingOrder(true);
+
+    const subtotal       = Number(editOrderForm.subtotal)       || 0;
+    const shipping_charge = Number(editOrderForm.shipping_charge) || 0;
+    const cod_charge      = Number(editOrderForm.cod_charge)      || 0;
+    const grand_total     = subtotal + shipping_charge + (editOrderForm.payment_mode === "cod" ? cod_charge : 0);
+
+    const patch = {
+      customer_name:    editOrderForm.customer_name.trim(),
+      customer_mobile:  editOrderForm.customer_mobile.trim(),
+      customer_address: editOrderForm.customer_address.trim(),
+      customer_city:    editOrderForm.customer_city.trim(),
+      customer_state:   editOrderForm.customer_state.trim(),
+      pincode:          editOrderForm.pincode.trim(),
+      payment_mode:     editOrderForm.payment_mode,
+      status:           editOrderForm.status,
+      subtotal,
+      shipping_charge,
+      cod_charge,
+      grand_total,
+    };
+
+    const { error } = await supabase.from("orders").update(patch).eq("id", editOrder.id);
+    if (error) {
+      showToast("Failed to save order.", "error");
+    } else {
+      setOrders((prev) =>
+        prev.map((o) => o.id === editOrder.id ? { ...o, ...patch } : o)
+      );
+      showToast("Order updated!");
+      closeEditOrder();
+    }
+    setSavingOrder(false);
+  };
+
+  const setOF = (k: keyof EditOrderForm, v: string) =>
+    setEditOrderForm((prev) => prev ? { ...prev, [k]: v } : prev);
 
   const handleDownloadPDF = async (order: OrderRow) => {
     setDownloadingId(order.id);
@@ -144,12 +272,10 @@ export function AdminPanel() {
     const arr = Array.from(incoming);
     const slots = MAX_IMAGES - imageFiles.length;
     if (slots <= 0) { setUploadError(`Max ${MAX_IMAGES} images allowed.`); return; }
-    const newFiles: File[] = [];
-    const newPreviews: string[] = [];
+    const newFiles: File[] = []; const newPreviews: string[] = [];
     for (const file of arr.slice(0, slots)) {
       if (!file.type.startsWith("image/")) { setUploadError("Only image files are supported."); continue; }
-      newFiles.push(file);
-      newPreviews.push(URL.createObjectURL(file));
+      newFiles.push(file); newPreviews.push(URL.createObjectURL(file));
     }
     setImageFiles((prev) => [...prev, ...newFiles]);
     setImagePreviews((prev) => [...prev, ...newPreviews]);
@@ -178,8 +304,7 @@ export function AdminPanel() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const price = Number(form.price);
-    const originalPrice = Number(form.originalPrice);
+    const price = Number(form.price); const originalPrice = Number(form.originalPrice);
     if (!price || !originalPrice) return;
     setSaving(true); setUploadError("");
     let imageUrls: string[] = [];
@@ -196,16 +321,14 @@ export function AdminPanel() {
     const discount = Math.max(0, Math.round(((originalPrice - price) / originalPrice) * 100));
     await addProduct({ name: form.name.trim(), category: form.category, price, originalPrice, discount, image: imageUrls[0], images: imageUrls, description: form.description.trim(), sizes: SIZES_BY_CATEGORY[form.category], stock: Math.max(0, Number(form.stock) || 0) });
     setSaving(false); setForm(empty); clearImages();
-    setToast("Product saved!"); setTimeout(() => setToast(""), 3000);
+    showToast("Product saved!");
   };
 
   const openEdit = (p: Product) => {
     setEditProduct(p);
     setEditForm({ name: p.name, category: p.category, price: String(p.price), originalPrice: String(p.originalPrice), description: p.description, stock: String(p.stock) });
     setEditExistingImages(p.images?.length ? p.images : [p.image]);
-    setEditImageFiles([]);
-    setEditImagePreviews([]);
-    setEditUploadError("");
+    setEditImageFiles([]); setEditImagePreviews([]); setEditUploadError("");
   };
 
   const closeEdit = () => {
@@ -214,20 +337,16 @@ export function AdminPanel() {
     setEditImageFiles([]); setEditImagePreviews([]);
   };
 
-  const removeEditExisting = (idx: number) => {
-    setEditExistingImages((prev) => prev.filter((_, i) => i !== idx));
-  };
+  const removeEditExisting = (idx: number) => setEditExistingImages((prev) => prev.filter((_, i) => i !== idx));
 
   const addEditFiles = (incoming: FileList | File[]) => {
     const arr = Array.from(incoming);
     const slots = MAX_IMAGES - editExistingImages.length - editImageFiles.length;
     if (slots <= 0) { setEditUploadError(`Max ${MAX_IMAGES} images.`); return; }
-    const newFiles: File[] = [];
-    const newPreviews: string[] = [];
+    const newFiles: File[] = []; const newPreviews: string[] = [];
     for (const file of arr.slice(0, slots)) {
       if (!file.type.startsWith("image/")) continue;
-      newFiles.push(file);
-      newPreviews.push(URL.createObjectURL(file));
+      newFiles.push(file); newPreviews.push(URL.createObjectURL(file));
     }
     setEditImageFiles((prev) => [...prev, ...newFiles]);
     setEditImagePreviews((prev) => [...prev, ...newPreviews]);
@@ -237,50 +356,37 @@ export function AdminPanel() {
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editProduct) return;
-    const price = Number(editForm.price);
-    const originalPrice = Number(editForm.originalPrice);
+    const price = Number(editForm.price); const originalPrice = Number(editForm.originalPrice);
     if (!price || !originalPrice) return;
     setEditSaving(true); setEditUploadError("");
-
     let newUrls: string[] = [];
     if (editImageFiles.length > 0) {
       try { newUrls = await Promise.all(editImageFiles.map((f) => uploadToStorage(f))); }
-      catch (err: unknown) {
-        setEditSaving(false);
-        setEditUploadError(err instanceof Error ? err.message : "Upload failed.");
-        return;
-      }
+      catch (err: unknown) { setEditSaving(false); setEditUploadError(err instanceof Error ? err.message : "Upload failed."); return; }
     }
-
     const allImages = [...editExistingImages, ...newUrls];
     if (allImages.length === 0) allImages.push(`https://placehold.co/400x400/F3EEFB/9B6FD1?text=${encodeURIComponent(editForm.name)}`);
     const discount = Math.max(0, Math.round(((originalPrice - price) / originalPrice) * 100));
-
-    await updateProduct(editProduct.id, {
-      name: editForm.name.trim(),
-      category: editForm.category,
-      price, originalPrice, discount,
-      image: allImages[0],
-      images: allImages,
-      description: editForm.description.trim(),
-      sizes: SIZES_BY_CATEGORY[editForm.category],
-      stock: Math.max(0, Number(editForm.stock) || 0),
-    });
-
-    setEditSaving(false);
-    closeEdit();
-    setToast("Product updated!"); setTimeout(() => setToast(""), 3000);
+    await updateProduct(editProduct.id, { name: editForm.name.trim(), category: editForm.category, price, originalPrice, discount, image: allImages[0], images: allImages, description: editForm.description.trim(), sizes: SIZES_BY_CATEGORY[editForm.category], stock: Math.max(0, Number(editForm.stock) || 0) });
+    setEditSaving(false); closeEdit();
+    showToast("Product updated!");
   };
 
   const setE = (k: keyof typeof empty, v: string) => setEditForm((prev) => ({ ...prev, [k]: v }));
-
   const handleDelete = async () => {
     if (deleteId === null) return;
-    setDeleting(true); await deleteProduct(deleteId); setDeleting(false); setDeleteId(null);
+    setDeleting(true);
+    const product = products.find((p) => p.id === deleteId);
+    const imageUrls = product?.images?.length ? product.images : product?.image ? [product.image] : [];
+    await deleteProduct(deleteId, imageUrls);
+    setDeleting(false);
+    setDeleteId(null);
   };
-
   const set = (k: keyof typeof form, v: string) => setForm((prev) => ({ ...prev, [k]: v }));
   const onDrop = (e: React.DragEvent) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); };
+
+  const statusMeta = (status?: OrderStatus) =>
+    ORDER_STATUSES.find((s) => s.value === (status ?? "pending")) ?? ORDER_STATUSES[0];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -300,8 +406,6 @@ export function AdminPanel() {
             </button>
           </div>
         </div>
-
-        {/* Tabs */}
         <div className="max-w-5xl mx-auto px-4 flex gap-1 border-t border-gray-100">
           {([["products", Package, "Products"], ["orders", ShoppingBag, "Orders"]] as const).map(([tab, Icon, label]) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
@@ -315,7 +419,7 @@ export function AdminPanel() {
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
         {activeTab === "products" && (
           <>
-            {/* ── Add Product Form ── */}
+            {/* Add Product Form */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
                 <Plus className="w-5 h-5 text-[#9B6FD1]" />
@@ -336,17 +440,13 @@ export function AdminPanel() {
                     {uploading && <p className="text-[#9B6FD1] text-xs mt-1.5 flex items-center gap-1.5"><span className="w-3 h-3 border-2 border-[#9B6FD1] border-t-transparent rounded-full animate-spin inline-block" />Uploading {imageFiles.length} image{imageFiles.length > 1 ? "s" : ""}…</p>}
                   </div>
                   <div className="sm:col-span-2"><label className="label">Description</label><textarea rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Describe this product…" className="input resize-none" /></div>
-                  <div>
-                    <label className="label">Stock Quantity</label>
-                    <input required type="number" min="0" value={form.stock} onChange={(e) => set("stock", e.target.value)} placeholder="10" className="input" />
-                    <p className="text-[11px] text-gray-400 mt-1">Set to 0 to mark as Out of Stock</p>
-                  </div>
+                  <div><label className="label">Stock Quantity</label><input required type="number" min="0" value={form.stock} onChange={(e) => set("stock", e.target.value)} placeholder="10" className="input" /><p className="text-[11px] text-gray-400 mt-1">Set to 0 to mark as Out of Stock</p></div>
                 </div>
                 <div className="flex justify-end pt-1"><button type="submit" disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-[#9B6FD1] text-white text-sm font-semibold rounded-xl hover:bg-[#8a5fc0] transition-colors disabled:opacity-60">{saving ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />{uploading ? "Uploading…" : "Saving…"}</> : <><Plus className="w-4 h-4" />Add Product</>}</button></div>
               </form>
             </div>
 
-            {/* ── Product list ── */}
+            {/* Product list */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
                 <Package className="w-5 h-5 text-[#9B6FD1]" />
@@ -357,15 +457,9 @@ export function AdminPanel() {
               : error ? (<div className="px-6 py-8 text-center"><p className="text-red-400 text-sm font-medium">Could not load products</p><p className="text-gray-400 text-xs mt-1">{error}</p></div>)
               : (<div className="divide-y divide-gray-50">{products.length === 0 && <p className="text-center text-gray-400 text-sm py-10">No products yet. Add one above.</p>}{products.map((p) => (<div key={p.id} className="flex items-center gap-4 px-6 py-4">
                   <div className="flex -space-x-2 shrink-0">{(p.images?.length ? p.images.slice(0, 3) : [p.image]).map((img, i) => (<img key={i} src={img} alt={p.name} className="w-12 h-12 rounded-xl object-cover bg-[#F3EEFB] border-2 border-white" style={{ zIndex: 3 - i }} />))}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-800 text-sm truncate">{p.name}</p>
-                    <p className="text-xs text-gray-400 capitalize">{p.category} · ₹{p.price}{p.images?.length > 1 && <span className="ml-1 text-[#9B6FD1]">· {p.images.length} photos</span>}</p>
-                  </div>
-                  {/* Stock stepper */}
+                  <div className="flex-1 min-w-0"><p className="font-medium text-gray-800 text-sm truncate">{p.name}</p><p className="text-xs text-gray-400 capitalize">{p.category} · ₹{p.price}{p.images?.length > 1 && <span className="ml-1 text-[#9B6FD1]">· {p.images.length} photos</span>}</p></div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.stock === 0 ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>
-                      {p.stock === 0 ? "OUT OF STOCK" : `${p.stock} in stock`}
-                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.stock === 0 ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>{p.stock === 0 ? "OUT OF STOCK" : `${p.stock} in stock`}</span>
                     <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1">
                       <button type="button" onClick={() => updateStock(p.id, p.stock - 1)} disabled={p.stock === 0} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] disabled:opacity-30 transition-colors"><Minus className="w-3 h-3" /></button>
                       <span className="text-sm font-semibold text-gray-700 w-8 text-center">{p.stock}</span>
@@ -406,76 +500,261 @@ export function AdminPanel() {
               </div>
             ) : (
               <div className="divide-y divide-gray-50">
-                {orders.map((order) => (
-                  <div key={order.id} className="px-6 py-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        {/* Order header */}
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-xs font-bold text-[#9B6FD1] bg-[#F3EEFB] px-2 py-0.5 rounded-full">
-                            #{order.id}
-                          </span>
-                          <span className="text-xs text-gray-400">
-                            {new Date(order.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${order.payment_mode === "cod" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
-                            {order.payment_mode === "cod" ? "COD" : "Prepaid"}
-                          </span>
-                        </div>
-
-                        {/* Items */}
-                        <div className="flex flex-wrap gap-2 mb-3">
-                          {order.items.map((item, i) => (
-                            <div key={i} className="flex items-center gap-1.5 bg-gray-50 rounded-xl px-2 py-1">
-                              <img src={item.product.image} alt={item.product.name} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
-                              <span className="text-xs text-gray-700 font-medium max-w-[100px] truncate">{item.product.name}</span>
-                              <span className="text-xs text-gray-400">×{item.quantity}</span>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Totals */}
-                        <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-                          {(order.customer_name) && (
-                            <span className="w-full text-gray-700 font-medium">
-                              {order.customer_name} · {order.customer_mobile}
+                {orders.map((order) => {
+                  const sm = statusMeta(order.status);
+                  return (
+                    <div key={order.id} className="px-6 py-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          {/* Order header */}
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <span className="text-xs font-bold text-[#9B6FD1] bg-[#F3EEFB] px-2 py-0.5 rounded-full">#{order.id}</span>
+                            <span className="text-xs text-gray-400">
+                              {new Date(order.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                             </span>
-                          )}
-                          {order.customer_address && (
-                            <span className="w-full text-gray-500">
-                              {order.customer_address}, {order.customer_city}, {order.customer_state} — {order.pincode}
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${order.payment_mode === "cod" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
+                              {order.payment_mode === "cod" ? "COD" : "Prepaid"}
                             </span>
-                          )}
-                          <span>Subtotal: <strong className="text-gray-700">₹{order.subtotal}</strong></span>
-                          {order.shipping_charge > 0 && <span>Shipping: <strong className="text-gray-700">₹{order.shipping_charge}</strong></span>}
-                          {order.cod_charge > 0 && <span>COD: <strong className="text-gray-700">₹{order.cod_charge}</strong></span>}
-                        </div>
-                      </div>
+                            {/* Status badge */}
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${sm.color}`}>
+                              {sm.label}
+                            </span>
+                          </div>
 
-                      {/* Right: total + download */}
-                      <div className="shrink-0 flex flex-col items-end gap-2">
-                        <p className="text-lg font-bold font-serif text-gray-900">₹{order.grand_total}</p>
-                        <button
-                          onClick={() => handleDownloadPDF(order)}
-                          disabled={downloadingId === order.id}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white text-xs font-semibold rounded-xl transition-colors disabled:opacity-60"
-                        >
-                          {downloadingId === order.id
-                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            : <Download className="w-3.5 h-3.5" />}
-                          PDF
-                        </button>
+                          {/* Items */}
+                          <div className="flex flex-wrap gap-2 mb-3">
+                            {order.items.map((item, i) => (
+                              <div key={i} className="flex items-center gap-1.5 bg-gray-50 rounded-xl px-2 py-1">
+                                <img src={item.product.image} alt={item.product.name} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
+                                <span className="text-xs text-gray-700 font-medium max-w-[100px] truncate">{item.product.name}</span>
+                                <span className="text-xs text-gray-400">×{item.quantity}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Customer + totals */}
+                          <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                            {order.customer_name && (
+                              <span className="w-full text-gray-700 font-medium">{order.customer_name} · {order.customer_mobile}</span>
+                            )}
+                            {order.customer_address && (
+                              <span className="w-full text-gray-500">{order.customer_address}, {order.customer_city}, {order.customer_state} — {order.pincode}</span>
+                            )}
+                            <span>Subtotal: <strong className="text-gray-700">₹{order.subtotal}</strong></span>
+                            {order.shipping_charge > 0 && <span>Shipping: <strong className="text-gray-700">₹{order.shipping_charge}</strong></span>}
+                            {order.cod_charge > 0 && <span>COD: <strong className="text-gray-700">₹{order.cod_charge}</strong></span>}
+                          </div>
+                        </div>
+
+                        {/* Right column: total + actions */}
+                        <div className="shrink-0 flex flex-col items-end gap-2">
+                          <p className="text-lg font-bold font-serif text-gray-900">₹{order.grand_total}</p>
+                          <div className="flex items-center gap-1.5">
+                            {/* PDF */}
+                            <button
+                              onClick={() => handleDownloadPDF(order)}
+                              disabled={downloadingId === order.id}
+                              title="Download PDF"
+                              className="flex items-center gap-1 px-2.5 py-1.5 bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white text-xs font-semibold rounded-xl transition-colors disabled:opacity-60"
+                            >
+                              {downloadingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                              PDF
+                            </button>
+                            {/* Edit */}
+                            <button
+                              onClick={() => openEditOrder(order)}
+                              title="Edit order"
+                              className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-400 hover:text-[#9B6FD1] hover:bg-[#F3EEFB] transition-colors border border-gray-200"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            {/* Delete */}
+                            <button
+                              onClick={() => setDeleteOrderId(order.id)}
+                              title="Delete order"
+                              className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors border border-gray-200"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         )}
       </div>
 
-      {/* ── Edit Product Modal ── */}
+      {/* ══════════════════════════════════════════════════════
+          EDIT ORDER MODAL
+      ══════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {editOrder && editOrderForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={closeEditOrder}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 16 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 16 }}
+              transition={{ type: "spring", stiffness: 340, damping: 30 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+                <div className="flex items-center gap-2">
+                  <Pencil className="w-4 h-4 text-[#9B6FD1]" />
+                  <h2 className="font-semibold text-gray-800">Edit Order</h2>
+                  <span className="text-xs text-gray-400">#{editOrder.id}</span>
+                </div>
+                <button onClick={closeEditOrder} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveOrder} className="p-6 space-y-5">
+                {/* Status */}
+                <div>
+                  <label className="label">Order Status</label>
+                  <div className="flex flex-wrap gap-2">
+                    {ORDER_STATUSES.map((s) => (
+                      <button
+                        key={s.value}
+                        type="button"
+                        onClick={() => setOF("status", s.value)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border-2 transition-all ${
+                          editOrderForm.status === s.value
+                            ? `${s.color} border-current`
+                            : "bg-white border-gray-200 text-gray-500 hover:border-gray-300"
+                        }`}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Payment mode */}
+                <div>
+                  <label className="label">Payment Mode</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["prepaid", "cod"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setOF("payment_mode", mode)}
+                        className={`py-2 rounded-xl text-sm font-semibold border-2 transition-all ${
+                          editOrderForm.payment_mode === mode
+                            ? "bg-[#9B6FD1] border-[#9B6FD1] text-white"
+                            : "bg-white border-gray-200 text-gray-600 hover:border-[#9B6FD1]/50"
+                        }`}
+                      >
+                        {mode === "prepaid" ? "Prepaid" : "Cash on Delivery"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Customer details */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="sm:col-span-2">
+                    <label className="label">Customer Name</label>
+                    <input value={editOrderForm.customer_name} onChange={(e) => setOF("customer_name", e.target.value)} className="input" placeholder="Full name" />
+                  </div>
+                  <div>
+                    <label className="label">Mobile</label>
+                    <input value={editOrderForm.customer_mobile} onChange={(e) => setOF("customer_mobile", e.target.value)} className="input" placeholder="10-digit mobile" maxLength={10} />
+                  </div>
+                  <div>
+                    <label className="label">Pincode</label>
+                    <input value={editOrderForm.pincode} onChange={(e) => setOF("pincode", e.target.value)} className="input" placeholder="6-digit pincode" maxLength={6} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="label">Address</label>
+                    <textarea rows={2} value={editOrderForm.customer_address} onChange={(e) => setOF("customer_address", e.target.value)} className="input resize-none" placeholder="House No., Street, Area" />
+                  </div>
+                  <div>
+                    <label className="label">City</label>
+                    <input value={editOrderForm.customer_city} onChange={(e) => setOF("customer_city", e.target.value)} className="input" placeholder="City" />
+                  </div>
+                  <div>
+                    <label className="label">State</label>
+                    <input value={editOrderForm.customer_state} onChange={(e) => setOF("customer_state", e.target.value)} className="input" placeholder="State" />
+                  </div>
+                </div>
+
+                {/* Charges */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="label">Subtotal (₹)</label>
+                    <input type="number" min="0" value={editOrderForm.subtotal} onChange={(e) => setOF("subtotal", e.target.value)} className="input" />
+                  </div>
+                  <div>
+                    <label className="label">Shipping (₹)</label>
+                    <input type="number" min="0" value={editOrderForm.shipping_charge} onChange={(e) => setOF("shipping_charge", e.target.value)} className="input" />
+                  </div>
+                  <div>
+                    <label className="label">COD Charge (₹)</label>
+                    <input type="number" min="0" value={editOrderForm.cod_charge} onChange={(e) => setOF("cod_charge", e.target.value)} className="input" />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 justify-end pt-1">
+                  <button type="button" onClick={closeEditOrder} className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+                  <button type="submit" disabled={savingOrder} className="flex items-center gap-2 px-6 py-2.5 bg-[#9B6FD1] text-white text-sm font-semibold rounded-xl hover:bg-[#8a5fc0] transition-colors disabled:opacity-60">
+                    {savingOrder
+                      ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving…</>
+                      : <><CheckCircle2 className="w-4 h-4" />Save Changes</>
+                    }
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ══════════════════════════════════════════════════════
+          DELETE ORDER MODAL
+      ══════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {deleteOrderId !== null && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+            onClick={() => setDeleteOrderId(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl p-6 max-w-xs w-full shadow-2xl"
+            >
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mb-4">
+                <Trash2 className="w-5 h-5 text-red-500" />
+              </div>
+              <h3 className="font-semibold text-gray-800 mb-1">Delete order #{deleteOrderId}?</h3>
+              <p className="text-sm text-gray-500 mb-5">This will permanently remove the order from Supabase. This cannot be undone.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setDeleteOrderId(null)} className="flex-1 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+                <button disabled={deletingOrder} onClick={handleDeleteOrder} className="flex-1 py-2 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-colors disabled:opacity-60">
+                  {deletingOrder ? "Deleting…" : "Delete"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ══════════════════════════════════════════════════════
+          EDIT PRODUCT MODAL
+      ══════════════════════════════════════════════════════ */}
       <AnimatePresence>
         {editProduct && (
           <motion.div
@@ -493,7 +772,6 @@ export function AdminPanel() {
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
             >
-              {/* Modal header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
                 <div className="flex items-center gap-2">
                   <Pencil className="w-4 h-4 text-[#9B6FD1]" />
@@ -504,110 +782,29 @@ export function AdminPanel() {
                   <X className="w-4 h-4" />
                 </button>
               </div>
-
-              {/* Form */}
               <form onSubmit={handleEditSubmit} className="p-6 space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-
-                  {/* Name */}
+                  <div className="sm:col-span-2"><label className="label">Product Name</label><input required value={editForm.name} onChange={(e) => setE("name", e.target.value)} className="input" /></div>
+                  <div><label className="label">Category</label><div className="relative"><select value={editForm.category} onChange={(e) => setE("category", e.target.value as Product["category"])} className="input appearance-none pr-8 capitalize">{CATEGORIES.map((c) => <option key={c} value={c} className="capitalize">{c}</option>)}</select><ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" /></div></div>
+                  <div><label className="label">Stock Quantity</label><input required type="number" min="0" value={editForm.stock} onChange={(e) => setE("stock", e.target.value)} className="input" /></div>
+                  <div><label className="label">Selling Price (₹)</label><input required type="number" min="1" value={editForm.price} onChange={(e) => setE("price", e.target.value)} className="input" /></div>
+                  <div><label className="label">Original Price (₹)</label><input required type="number" min="1" value={editForm.originalPrice} onChange={(e) => setE("originalPrice", e.target.value)} className="input" /></div>
                   <div className="sm:col-span-2">
-                    <label className="label">Product Name</label>
-                    <input required value={editForm.name} onChange={(e) => setE("name", e.target.value)} className="input" />
-                  </div>
-
-                  {/* Category */}
-                  <div>
-                    <label className="label">Category</label>
-                    <div className="relative">
-                      <select value={editForm.category} onChange={(e) => setE("category", e.target.value as Product["category"])} className="input appearance-none pr-8 capitalize">
-                        {CATEGORIES.map((c) => <option key={c} value={c} className="capitalize">{c}</option>)}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                    </div>
-                  </div>
-
-                  {/* Stock */}
-                  <div>
-                    <label className="label">Stock Quantity</label>
-                    <input required type="number" min="0" value={editForm.stock} onChange={(e) => setE("stock", e.target.value)} className="input" />
-                  </div>
-
-                  {/* Price */}
-                  <div>
-                    <label className="label">Selling Price (₹)</label>
-                    <input required type="number" min="1" value={editForm.price} onChange={(e) => setE("price", e.target.value)} className="input" />
-                  </div>
-
-                  {/* Original price */}
-                  <div>
-                    <label className="label">Original Price (₹)</label>
-                    <input required type="number" min="1" value={editForm.originalPrice} onChange={(e) => setE("originalPrice", e.target.value)} className="input" />
-                  </div>
-
-                  {/* Images */}
-                  <div className="sm:col-span-2">
-                    <label className="label">
-                      <Image className="w-3.5 h-3.5 inline mr-1" /> Product Images
-                      <span className="text-gray-400 font-normal normal-case ml-1">(first is cover · max {MAX_IMAGES})</span>
-                    </label>
-
+                    <label className="label"><Image className="w-3.5 h-3.5 inline mr-1" /> Product Images<span className="text-gray-400 font-normal normal-case ml-1">(first is cover · max {MAX_IMAGES})</span></label>
                     <div className="flex flex-wrap gap-3 mb-3">
-                      {/* Existing images */}
-                      {editExistingImages.map((src, idx) => (
-                        <div key={`existing-${idx}`} className="relative group w-20 h-20 shrink-0">
-                          <img src={src} alt={`Image ${idx + 1}`} className="w-full h-full rounded-xl object-cover border border-gray-100 bg-[#F3EEFB]" />
-                          {idx === 0 && <span className="absolute bottom-1 left-1 text-[10px] font-bold bg-[#9B6FD1] text-white px-1.5 py-0.5 rounded-full leading-none pointer-events-none">Cover</span>}
-                          <button type="button" onClick={() => removeEditExisting(idx)} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100">
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-
-                      {/* New image previews */}
-                      {editImagePreviews.map((src, idx) => (
-                        <div key={`new-${idx}`} className="relative group w-20 h-20 shrink-0">
-                          <img src={src} alt={`New ${idx + 1}`} className="w-full h-full rounded-xl object-cover border-2 border-[#9B6FD1]/40 bg-[#F3EEFB]" />
-                          <span className="absolute bottom-1 left-1 text-[10px] font-bold bg-green-500 text-white px-1.5 py-0.5 rounded-full leading-none pointer-events-none">New</span>
-                          <button type="button" onClick={() => {
-                            URL.revokeObjectURL(src);
-                            setEditImageFiles((p) => p.filter((_, i) => i !== idx));
-                            setEditImagePreviews((p) => p.filter((_, i) => i !== idx));
-                          }} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100">
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-
-                      {/* Add more tile */}
-                      {(editExistingImages.length + editImageFiles.length) < MAX_IMAGES && (
-                        <button type="button" onClick={() => editFileRef.current?.click()} className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-[#9B6FD1] hover:text-[#9B6FD1] transition-colors shrink-0">
-                          <Plus className="w-5 h-5" />
-                          <span className="text-[10px]">Add</span>
-                        </button>
-                      )}
+                      {editExistingImages.map((src, idx) => (<div key={`existing-${idx}`} className="relative group w-20 h-20 shrink-0"><img src={src} alt={`Image ${idx + 1}`} className="w-full h-full rounded-xl object-cover border border-gray-100 bg-[#F3EEFB]" />{idx === 0 && <span className="absolute bottom-1 left-1 text-[10px] font-bold bg-[#9B6FD1] text-white px-1.5 py-0.5 rounded-full leading-none pointer-events-none">Cover</span>}<button type="button" onClick={() => removeEditExisting(idx)} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"><X className="w-3 h-3" /></button></div>))}
+                      {editImagePreviews.map((src, idx) => (<div key={`new-${idx}`} className="relative group w-20 h-20 shrink-0"><img src={src} alt={`New ${idx + 1}`} className="w-full h-full rounded-xl object-cover border-2 border-[#9B6FD1]/40 bg-[#F3EEFB]" /><span className="absolute bottom-1 left-1 text-[10px] font-bold bg-green-500 text-white px-1.5 py-0.5 rounded-full leading-none pointer-events-none">New</span><button type="button" onClick={() => { URL.revokeObjectURL(src); setEditImageFiles((p) => p.filter((_, i) => i !== idx)); setEditImagePreviews((p) => p.filter((_, i) => i !== idx)); }} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"><X className="w-3 h-3" /></button></div>))}
+                      {(editExistingImages.length + editImageFiles.length) < MAX_IMAGES && (<button type="button" onClick={() => editFileRef.current?.click()} className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-[#9B6FD1] hover:text-[#9B6FD1] transition-colors shrink-0"><Plus className="w-5 h-5" /><span className="text-[10px]">Add</span></button>)}
                     </div>
-
                     <input ref={editFileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { if (e.target.files?.length) addEditFiles(e.target.files); }} />
                     {editUploadError && <p className="text-red-500 text-xs mt-1">{editUploadError}</p>}
                   </div>
-
-                  {/* Description */}
-                  <div className="sm:col-span-2">
-                    <label className="label">Description</label>
-                    <textarea rows={3} value={editForm.description} onChange={(e) => setE("description", e.target.value)} className="input resize-none" />
-                  </div>
+                  <div className="sm:col-span-2"><label className="label">Description</label><textarea rows={3} value={editForm.description} onChange={(e) => setE("description", e.target.value)} className="input resize-none" /></div>
                 </div>
-
-                {/* Actions */}
                 <div className="flex gap-3 justify-end pt-1">
-                  <button type="button" onClick={closeEdit} className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-                    Cancel
-                  </button>
+                  <button type="button" onClick={closeEdit} className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
                   <button type="submit" disabled={editSaving} className="flex items-center gap-2 px-6 py-2.5 bg-[#9B6FD1] text-white text-sm font-semibold rounded-xl hover:bg-[#8a5fc0] transition-colors disabled:opacity-60">
-                    {editSaving
-                      ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving…</>
-                      : <><CheckCircle2 className="w-4 h-4" /> Save Changes</>
-                    }
+                    {editSaving ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving…</> : <><CheckCircle2 className="w-4 h-4" />Save Changes</>}
                   </button>
                 </div>
               </form>
@@ -616,7 +813,9 @@ export function AdminPanel() {
         )}
       </AnimatePresence>
 
-      {/* ── Delete modal ── */}
+      {/* ══════════════════════════════════════════════════════
+          DELETE PRODUCT MODAL
+      ══════════════════════════════════════════════════════ */}
       <AnimatePresence>
         {deleteId !== null && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setDeleteId(null)}>
@@ -633,11 +832,20 @@ export function AdminPanel() {
         )}
       </AnimatePresence>
 
-      {/* ── Toast ── */}
+      {/* ══════════════════════════════════════════════════════
+          TOAST
+      ══════════════════════════════════════════════════════ */}
       <AnimatePresence>
         {toast && (
-          <motion.div initial={{ opacity: 0, y: 60 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 60 }} className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 bg-green-600 text-white px-5 py-3 rounded-2xl shadow-xl text-sm font-medium">
-            <CheckCircle2 className="w-4 h-4" />{toast}
+          <motion.div
+            initial={{ opacity: 0, y: 60 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 60 }}
+            className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-5 py-3 rounded-2xl shadow-xl text-sm font-medium text-white ${toastType === "error" ? "bg-red-500" : "bg-green-600"}`}
+          >
+            {toastType === "error"
+              ? <X className="w-4 h-4" />
+              : <CheckCircle2 className="w-4 h-4" />
+            }
+            {toast}
           </motion.div>
         )}
       </AnimatePresence>

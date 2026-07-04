@@ -6,7 +6,7 @@ interface ProductsContextValue {
   products: Product[];
   addProduct: (p: Omit<Product, "id">) => Promise<void>;
   updateProduct: (id: number, p: Omit<Product, "id">) => Promise<void>;
-  deleteProduct: (id: number) => Promise<void>;
+  deleteProduct: (id: number, imageUrls?: string[]) => Promise<void>;
   updateStock: (id: number, newStock: number) => Promise<void>;
   loading: boolean;
   error: string;
@@ -99,10 +99,36 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const deleteProduct = async (id: number) => {
+  const deleteProduct = async (id: number, imageUrls?: string[]) => {
+    // Delete the DB row first
     const { error: err } = await supabase.from("products").delete().eq("id", id);
     if (err) throw new Error(err.message);
     setProducts((prev) => prev.filter((p) => p.id !== id));
+
+    // Delete images from storage (best-effort — don't block on failure)
+    if (imageUrls && imageUrls.length > 0) {
+      // Extract the storage path from each public URL.
+      // Public URLs look like: https://<project>.supabase.co/storage/v1/object/public/product-images/<path>
+      const BUCKET = "product-images";
+      const paths = imageUrls
+        .map((url) => {
+          try {
+            const u = new URL(url);
+            // path after /public/product-images/
+            const marker = `/public/${BUCKET}/`;
+            const idx = u.pathname.indexOf(marker);
+            return idx !== -1 ? decodeURIComponent(u.pathname.slice(idx + marker.length)) : null;
+          } catch {
+            return null;
+          }
+        })
+        .filter((p): p is string => p !== null && p.length > 0);
+
+      if (paths.length > 0) {
+        const { error: storageErr } = await supabase.storage.from(BUCKET).remove(paths);
+        if (storageErr) console.warn("Storage cleanup failed:", storageErr.message);
+      }
+    }
   };
 
   const updateStock = async (id: number, newStock: number) => {
