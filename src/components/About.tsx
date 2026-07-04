@@ -9,8 +9,7 @@ export function About() {
           <p className="text-lg text-gray-700 leading-relaxed mb-16 font-light">
             Shine and Sparkle was born from a simple belief: every woman deserves to feel precious. 
             We create delicate, feminine jewelry that isn't just worn, but cherished. 
-            Drawing inspiration from modern Indian aesthetics, our pieces blend traditional warmth with contemporary elegance. 
-            Step into our world, where every detail is chosen with love.
+          
           </p>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
