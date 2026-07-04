@@ -1,10 +1,8 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Heart } from "lucide-react";
 import { Product } from "../data/products";
 import { Button } from "./ui/button";
 import { useCart, WHATSAPP_NUMBER } from "../context/CartContext";
-import { useWishlist } from "../context/WishlistContext";
 import { ProductDetailModal } from "./ProductDetailModal";
 
 interface ProductCardProps {
@@ -15,9 +13,7 @@ interface ProductCardProps {
 
 export function ProductCard({ product, index, view = "grid" }: ProductCardProps) {
   const { addToCart } = useCart();
-  const { toggleWishlist, isWishlisted } = useWishlist();
   const [modalOpen, setModalOpen] = useState(false);
-  const wishlisted = isWishlisted(product.id);
   const coverImage = product.images?.length ? product.images[0] : product.image;
 
   const handleBuyNow = () => {
@@ -25,7 +21,7 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
-  // ── LIST VIEW — mobile card style ───────────────────────────
+  // ── LIST VIEW ────────────────────────────────────────────────
   if (view === "list") {
     return (
       <>
@@ -56,15 +52,6 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
                 {product.discount}% OFF
               </div>
             )}
-
-            <button
-              onClick={() => toggleWishlist(product)}
-              className="absolute bottom-3 right-3 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-md hover:scale-110 transition-transform duration-200"
-              data-testid={`btn-wishlist-${product.id}`}
-              aria-label={wishlisted ? `Remove ${product.name} from wishlist` : `Save ${product.name} to wishlist`}
-            >
-              <Heart className={`w-4 h-4 transition-colors duration-200 ${wishlisted ? "fill-[#9B6FD1] text-[#9B6FD1]" : "text-gray-400"}`} />
-            </button>
           </div>
 
           <div className="p-4 flex flex-col gap-3">
@@ -129,13 +116,6 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
               {product.discount}% OFF
             </div>
           )}
-          <button
-            onClick={(e) => { e.stopPropagation(); toggleWishlist(product); }}
-            className="absolute top-1.5 right-1.5 z-10 w-6 h-6 flex items-center justify-center rounded-full bg-white/80 shadow"
-            aria-label={wishlisted ? `Remove ${product.name} from wishlist` : `Save ${product.name} to wishlist`}
-          >
-            <Heart className={`w-3 h-3 ${wishlisted ? "fill-[#9B6FD1] text-[#9B6FD1]" : "text-gray-400"}`} />
-          </button>
         </button>
         <div className="px-1 pt-1.5 pb-2">
           <p className="text-xs font-serif text-gray-800 truncate">{product.name}</p>
@@ -174,17 +154,6 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
             </span>
           </div>
         </button>
-
-        <div className="relative">
-          <button
-            onClick={() => toggleWishlist(product)}
-            className="absolute top-0 right-4 -translate-y-full z-10 w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-md hover:scale-110 transition-transform duration-200"
-            data-testid={`btn-wishlist-${product.id}`}
-            aria-label={wishlisted ? `Remove ${product.name} from wishlist` : `Save ${product.name} to wishlist`}
-          >
-            <Heart className={`w-4 h-4 transition-colors duration-200 ${wishlisted ? "fill-[#9B6FD1] text-[#9B6FD1]" : "text-gray-400"}`} />
-          </button>
-        </div>
 
         <div className="p-6 flex flex-col flex-1">
           <h3 className="text-xl font-serif text-gray-900 mb-2">{product.name}</h3>

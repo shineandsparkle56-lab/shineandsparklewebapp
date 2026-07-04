@@ -11,7 +11,7 @@ export function Hero() {
             <span className="text-primary italic">Sparkle Always</span>
           </h1>
           <p className="text-lg md:text-xl text-gray-600 mb-10 max-w-lg mx-auto md:mx-0 font-light">
-            Handcrafted jewelry for the modern woman. Discover delicate pieces designed to make every day feel special.
+            Trendy Indian jewelry at wholesale prices. Browse our latest collection and order directly on WhatsApp.
           </p>
           <Button 
             asChild
@@ -28,7 +28,7 @@ export function Hero() {
           <div className="aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl relative">
             <img 
               src={heroImage} 
-              alt="Delicate jewelry flat lay on lavender background" 
+              alt="Indian jewelry collection on lavender background" 
               className="w-full h-full object-cover"
             />
           </div>

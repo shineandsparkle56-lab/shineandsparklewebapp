@@ -265,7 +265,7 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                   <div className="flex flex-col gap-2 mb-8">
                     {[
                       "Anti-tarnish coating",
-                      "Handcrafted in India",
+                      "Sourced from trusted suppliers",
                       "Free shipping above ₹999",
                     ].map((feat) => (
                       <p key={feat} className="flex items-center gap-2 text-xs text-gray-500">

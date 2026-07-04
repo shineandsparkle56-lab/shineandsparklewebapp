@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, ReactNode } from "react";
 import { Product } from "../data/products";
 
-export const WHATSAPP_NUMBER = "919999999999";
+export const WHATSAPP_NUMBER = "919574024419";
 
 export interface CartItem {
   product: Product;
