@@ -235,28 +235,34 @@ export function CartDrawer() {
               </p>
 
               {/* Pincode input */}
-              <div className="flex gap-2">
-                <input
-                  ref={pincodeRef}
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={pincode}
-                  onChange={(e) => {
-                    const v = e.target.value.replace(/\D/g, "").slice(0, 6);
-                    setPincode(v);
-                    if (v.length < 6) { setShipping(null); setRateError(""); }
-                  }}
-                  placeholder="Enter 6-digit pincode"
-                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9B6FD1]/40 bg-white"
-                />
-                <button
-                  onClick={checkShippingRate}
-                  disabled={checkingRate || pincode.length !== 6}
-                  className="px-4 py-2 bg-[#9B6FD1] hover:bg-[#8a5fc0] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors flex items-center gap-1.5"
-                >
-                  {checkingRate ? <Loader2 className="w-4 h-4 animate-spin" /> : "Check"}
-                </button>
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <input
+                    ref={pincodeRef}
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={pincode}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+                      setPincode(v);
+                      if (v.length < 6) { setShipping(null); setRateError(""); }
+                    }}
+                    onKeyDown={(e) => e.key === "Enter" && checkShippingRate()}
+                    placeholder="Enter delivery pincode"
+                    className="flex-1 min-w-0 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#9B6FD1]/40 bg-white"
+                  />
+                  <button
+                    onClick={checkShippingRate}
+                    disabled={checkingRate || pincode.length !== 6}
+                    className="shrink-0 px-5 py-2.5 bg-[#9B6FD1] hover:bg-[#8a5fc0] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-1.5"
+                  >
+                    {checkingRate
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : "Check"
+                    }
+                  </button>
+                </div>
               </div>
 
               {/* Payment mode toggle */}
@@ -290,25 +296,27 @@ export function CartDrawer() {
                   <motion.div
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`rounded-xl px-3 py-2.5 text-xs ${
+                    className={`rounded-xl px-3 py-3 text-sm ${
                       shipping.serviceable
-                        ? "bg-green-50 border border-green-100 text-green-700"
+                        ? "bg-green-50 border border-green-100"
                         : "bg-red-50 border border-red-100 text-red-600"
                     }`}
                   >
                     {shipping.serviceable ? (
-                      <div className="flex items-start gap-2">
-                        <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-semibold">{shipping.courierName}</p>
-                          <p>Delivery in {shipping.estimatedDays} day{(shipping.estimatedDays ?? 0) > 1 ? "s" : ""}</p>
-                          {codCharge > 0 && <p className="text-gray-500 mt-0.5">Includes COD charge: ₹{codCharge}</p>}
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-green-700 mt-0.5">
+                            Estimated delivery in {shipping.estimatedDays} day{(shipping.estimatedDays ?? 0) > 1 ? "s" : ""}
+                            {codCharge > 0 && ` • COD charge: ₹${codCharge}`}
+                          </p>
                         </div>
+                        <span className="text-base font-bold text-[#9B6FD1] shrink-0">₹{shipping.shippingCharge}</span>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 text-red-600">
                         <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                        {shipping.message ?? "Delivery not available to this pincode."}
+                        <span className="text-xs">{shipping.message ?? "Delivery not available to this pincode."}</span>
                       </div>
                     )}
                   </motion.div>

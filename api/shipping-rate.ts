@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { log } from "console";
 
 const SR_BASE = "https://apiv2.shiprocket.in/v1/external";
 
@@ -117,6 +118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       estimated_delivery_days: number;
       freight_charge: number;
       cod_charges?: number;
+      whatsapp_charges?: number;
     }> = srData?.data?.available_courier_companies ?? [];
 
     if (!available.length) {
@@ -129,11 +131,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     available.sort((a, b) => a.freight_charge - b.freight_charge);
     const best = available[0];
 
+    // freight_charge + whatsapp_charges = total charge shown in Shiprocket dashboard
+    const totalCharge = best.freight_charge + (best.whatsapp_charges ?? 0);
+
+    console.log(best)
+
     return res.status(200).json({
       serviceable: true,
       courierName: best.courier_name,
       estimatedDays: best.estimated_delivery_days,
-      shippingCharge: Math.round(best.freight_charge),
+      shippingCharge: Math.round(totalCharge),
       codCharge: cod ? Math.round(best.cod_charges ?? 0) : 0,
     });
   } catch (err) {
