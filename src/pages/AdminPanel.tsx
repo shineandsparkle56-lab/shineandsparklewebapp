@@ -4,34 +4,48 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Trash2, LogOut, Package, Sparkles,
   ChevronDown, CheckCircle2, Upload, X, Image,
+  ShoppingBag, Download, FileText, Loader2, Minus, Pencil,
 } from "lucide-react";
 import { useProducts } from "../context/ProductsContext";
 import { Product } from "../data/products";
 import { supabase } from "../lib/supabase";
+import { generateOrderPDF } from "../utils/generateOrderPDF";
+import type { OrderMeta } from "../utils/generateOrderPDF";
+import type { CartItem } from "../context/CartContext";
 
 const BUCKET = "product-images";
 const MAX_IMAGES = 5;
-
 const CATEGORIES: Product["category"][] = ["rings", "earrings", "necklaces", "bracelets"];
-
 const SIZES_BY_CATEGORY: Record<Product["category"], string[]> = {
   rings: ["5", "6", "7", "8", "9"],
   earrings: ["One Size"],
   necklaces: ["16 inch", "18 inch", "20 inch"],
   bracelets: ['Small (6.5")', 'Medium (7")', 'Large (7.5")'],
 };
+const empty = { name: "", category: "rings" as Product["category"], price: "", originalPrice: "", description: "", stock: "10" };
 
-const empty = {
-  name: "",
-  category: "rings" as Product["category"],
-  price: "",
-  originalPrice: "",
-  description: "",
-};
+// ── Order type matching what we save in Supabase ─────────────
+interface OrderRow {
+  id: number;
+  items: { product: { id: number; name: string; category: string; price: number; image: string; images: string[] }; quantity: number }[];
+  subtotal: number;
+  shipping_charge: number;
+  cod_charge: number;
+  grand_total: number;
+  pincode: string;
+  payment_mode: string;
+  customer_name?: string;
+  customer_mobile?: string;
+  customer_address?: string;
+  customer_city?: string;
+  customer_state?: string;
+  created_at: string;
+}
 
 export function AdminPanel() {
   const [, navigate] = useLocation();
-  const { products, addProduct, deleteProduct, loading, error } = useProducts();
+  const { products, addProduct, updateProduct, deleteProduct, updateStock, loading, error } = useProducts();
+  const [activeTab, setActiveTab] = useState<"products" | "orders">("products");
   const [form, setForm] = useState(empty);
 
   // Multi-image state
@@ -47,14 +61,82 @@ export function AdminPanel() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    if (!sessionStorage.getItem("sns_admin")) navigate("/admin");
-  }, [navigate]);
+  // Orders state
+  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
-  // Revoke object URLs on unmount
+  // Edit state
+  const [editProduct, setEditProduct] = useState<Product | null>(null);
+  const [editForm, setEditForm] = useState(empty);
+  const [editImageFiles, setEditImageFiles] = useState<File[]>([]);
+  const [editImagePreviews, setEditImagePreviews] = useState<string[]>([]);
+  const [editExistingImages, setEditExistingImages] = useState<string[]>([]);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editUploadError, setEditUploadError] = useState("");
+  const editFileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { if (!sessionStorage.getItem("sns_admin")) navigate("/admin"); }, [navigate]);
+  useEffect(() => { return () => { imagePreviews.forEach((p) => URL.revokeObjectURL(p)); }; }, []);
+
   useEffect(() => {
-    return () => { imagePreviews.forEach((p) => URL.revokeObjectURL(p)); };
-  }, []);
+    if (activeTab === "orders") fetchOrders();
+  }, [activeTab]);
+
+  const fetchOrders = async () => {
+    setOrdersLoading(true);
+    const { data, error } = await supabase
+      .from("orders")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (!error && data) setOrders(data as OrderRow[]);
+    setOrdersLoading(false);
+  };
+
+  const handleDownloadPDF = async (order: OrderRow) => {
+    setDownloadingId(order.id);
+    try {
+      const cartItems: CartItem[] = order.items.map((i) => ({
+        product: {
+          id: i.product.id,
+          name: i.product.name,
+          category: i.product.category as Product["category"],
+          price: i.product.price,
+          originalPrice: i.product.price,
+          discount: 0,
+          image: i.product.image,
+          images: i.product.images ?? [i.product.image],
+          description: "",
+          sizes: [],
+          stock: 99,
+        },
+        quantity: i.quantity,
+      }));
+      const meta: OrderMeta = {
+        customerName:    order.customer_name,
+        customerMobile:  order.customer_mobile,
+        customerAddress: order.customer_address,
+        customerCity:    order.customer_city,
+        customerState:   order.customer_state,
+        pincode:         order.pincode,
+        paymentMode:     order.payment_mode,
+        shippingCharge:  order.shipping_charge,
+        codCharge:       order.cod_charge,
+        grandTotal:      order.grand_total,
+      };
+      const blob = await generateOrderPDF(cartItems, order.subtotal, meta);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Order_${order.id}_${new Date(order.created_at).toLocaleDateString("en-IN").replace(/\//g, "-")}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (err) {
+      console.error("PDF download failed:", err);
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   // ── Image helpers ────────────────────────────────────────────
   const addFiles = (incoming: FileList | File[]) => {
@@ -82,95 +164,123 @@ export function AdminPanel() {
 
   const clearImages = () => {
     imagePreviews.forEach((p) => URL.revokeObjectURL(p));
-    setImageFiles([]);
-    setImagePreviews([]);
-    setUploadError("");
+    setImageFiles([]); setImagePreviews([]); setUploadError("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const uploadToStorage = async (file: File): Promise<string> => {
     const ext = file.name.split(".").pop() ?? "jpg";
     const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-      cacheControl: "3600",
-      upsert: false,
-    });
+    const { error } = await supabase.storage.from(BUCKET).upload(path, file, { cacheControl: "3600", upsert: false });
     if (error) throw new Error(error.message);
-    const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-    return data.publicUrl;
+    return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
   };
 
-  // ── Form submit ──────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const price = Number(form.price);
     const originalPrice = Number(form.originalPrice);
     if (!price || !originalPrice) return;
-
-    setSaving(true);
-    setUploadError("");
-
+    setSaving(true); setUploadError("");
     let imageUrls: string[] = [];
     if (imageFiles.length > 0) {
-      try {
-        setUploading(true);
-        imageUrls = await Promise.all(imageFiles.map((f) => uploadToStorage(f)));
-        setUploading(false);
-      } catch (err: unknown) {
-        setUploading(false);
-        setSaving(false);
+      try { setUploading(true); imageUrls = await Promise.all(imageFiles.map((f) => uploadToStorage(f))); setUploading(false); }
+      catch (err: unknown) {
+        setUploading(false); setSaving(false);
         const msg = err instanceof Error ? err.message : "Upload failed.";
-        setUploadError(
-          msg.toLowerCase().includes("bucket")
-            ? 'Storage bucket missing. Go to Supabase → Storage → New bucket → name it "product-images" → set to Public.'
-            : msg
-        );
+        setUploadError(msg.toLowerCase().includes("bucket") ? 'Storage bucket missing. Go to Supabase → Storage → New bucket → name it "product-images" → set to Public.' : msg);
+        return;
+      }
+    }
+    if (imageUrls.length === 0) imageUrls = [`https://placehold.co/400x400/F3EEFB/9B6FD1?text=${encodeURIComponent(form.name)}`];
+    const discount = Math.max(0, Math.round(((originalPrice - price) / originalPrice) * 100));
+    await addProduct({ name: form.name.trim(), category: form.category, price, originalPrice, discount, image: imageUrls[0], images: imageUrls, description: form.description.trim(), sizes: SIZES_BY_CATEGORY[form.category], stock: Math.max(0, Number(form.stock) || 0) });
+    setSaving(false); setForm(empty); clearImages();
+    setToast("Product saved!"); setTimeout(() => setToast(""), 3000);
+  };
+
+  const openEdit = (p: Product) => {
+    setEditProduct(p);
+    setEditForm({ name: p.name, category: p.category, price: String(p.price), originalPrice: String(p.originalPrice), description: p.description, stock: String(p.stock) });
+    setEditExistingImages(p.images?.length ? p.images : [p.image]);
+    setEditImageFiles([]);
+    setEditImagePreviews([]);
+    setEditUploadError("");
+  };
+
+  const closeEdit = () => {
+    setEditProduct(null);
+    editImagePreviews.forEach((u) => URL.revokeObjectURL(u));
+    setEditImageFiles([]); setEditImagePreviews([]);
+  };
+
+  const removeEditExisting = (idx: number) => {
+    setEditExistingImages((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const addEditFiles = (incoming: FileList | File[]) => {
+    const arr = Array.from(incoming);
+    const slots = MAX_IMAGES - editExistingImages.length - editImageFiles.length;
+    if (slots <= 0) { setEditUploadError(`Max ${MAX_IMAGES} images.`); return; }
+    const newFiles: File[] = [];
+    const newPreviews: string[] = [];
+    for (const file of arr.slice(0, slots)) {
+      if (!file.type.startsWith("image/")) continue;
+      newFiles.push(file);
+      newPreviews.push(URL.createObjectURL(file));
+    }
+    setEditImageFiles((prev) => [...prev, ...newFiles]);
+    setEditImagePreviews((prev) => [...prev, ...newPreviews]);
+    if (editFileRef.current) editFileRef.current.value = "";
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editProduct) return;
+    const price = Number(editForm.price);
+    const originalPrice = Number(editForm.originalPrice);
+    if (!price || !originalPrice) return;
+    setEditSaving(true); setEditUploadError("");
+
+    let newUrls: string[] = [];
+    if (editImageFiles.length > 0) {
+      try { newUrls = await Promise.all(editImageFiles.map((f) => uploadToStorage(f))); }
+      catch (err: unknown) {
+        setEditSaving(false);
+        setEditUploadError(err instanceof Error ? err.message : "Upload failed.");
         return;
       }
     }
 
-    if (imageUrls.length === 0) {
-      const placeholder = `https://placehold.co/400x400/F3EEFB/9B6FD1?text=${encodeURIComponent(form.name)}`;
-      imageUrls = [placeholder];
-    }
-
+    const allImages = [...editExistingImages, ...newUrls];
+    if (allImages.length === 0) allImages.push(`https://placehold.co/400x400/F3EEFB/9B6FD1?text=${encodeURIComponent(editForm.name)}`);
     const discount = Math.max(0, Math.round(((originalPrice - price) / originalPrice) * 100));
-    await addProduct({
-      name: form.name.trim(),
-      category: form.category,
-      price,
-      originalPrice,
-      discount,
-      image: imageUrls[0],
-      images: imageUrls,
-      description: form.description.trim(),
-      sizes: SIZES_BY_CATEGORY[form.category],
+
+    await updateProduct(editProduct.id, {
+      name: editForm.name.trim(),
+      category: editForm.category,
+      price, originalPrice, discount,
+      image: allImages[0],
+      images: allImages,
+      description: editForm.description.trim(),
+      sizes: SIZES_BY_CATEGORY[editForm.category],
+      stock: Math.max(0, Number(editForm.stock) || 0),
     });
 
-    setSaving(false);
-    setForm(empty);
-    clearImages();
-    setToast("Product saved to Supabase!");
-    setTimeout(() => setToast(""), 3000);
+    setEditSaving(false);
+    closeEdit();
+    setToast("Product updated!"); setTimeout(() => setToast(""), 3000);
   };
+
+  const setE = (k: keyof typeof empty, v: string) => setEditForm((prev) => ({ ...prev, [k]: v }));
 
   const handleDelete = async () => {
     if (deleteId === null) return;
-    setDeleting(true);
-    await deleteProduct(deleteId);
-    setDeleting(false);
-    setDeleteId(null);
+    setDeleting(true); await deleteProduct(deleteId); setDeleting(false); setDeleteId(null);
   };
 
-  const set = (k: keyof typeof form, v: string) =>
-    setForm((prev) => ({ ...prev, [k]: v }));
-
-  // ── Drag & drop ──────────────────────────────────────────────
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
-  };
+  const set = (k: keyof typeof form, v: string) => setForm((prev) => ({ ...prev, [k]: v }));
+  const onDrop = (e: React.DragEvent) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -185,222 +295,338 @@ export function AdminPanel() {
           </div>
           <div className="flex items-center gap-3">
             <a href="/" className="text-sm text-gray-500 hover:text-[#9B6FD1] transition-colors">View Store</a>
-            <button
-              onClick={() => { sessionStorage.removeItem("sns_admin"); navigate("/admin"); }}
-              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-500 transition-colors"
-            >
+            <button onClick={() => { sessionStorage.removeItem("sns_admin"); navigate("/admin"); }} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-500 transition-colors">
               <LogOut className="w-4 h-4" /> Logout
             </button>
           </div>
         </div>
+
+        {/* Tabs */}
+        <div className="max-w-5xl mx-auto px-4 flex gap-1 border-t border-gray-100">
+          {([["products", Package, "Products"], ["orders", ShoppingBag, "Orders"]] as const).map(([tab, Icon, label]) => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === tab ? "border-[#9B6FD1] text-[#9B6FD1]" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+              <Icon className="w-4 h-4" />{label}
+            </button>
+          ))}
+        </div>
       </header>
 
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
-
-        {/* ── Add Product Form ── */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
-            <Plus className="w-5 h-5 text-[#9B6FD1]" />
-            <h2 className="font-semibold text-gray-800">Add New Product</h2>
-          </div>
-
-          <form onSubmit={handleSubmit} className="p-6 space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-
-              {/* Name */}
-              <div className="sm:col-span-2">
-                <label className="label">Product Name</label>
-                <input required value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Gold Lotus Ring" className="input" />
+        {activeTab === "products" && (
+          <>
+            {/* ── Add Product Form ── */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+                <Plus className="w-5 h-5 text-[#9B6FD1]" />
+                <h2 className="font-semibold text-gray-800">Add New Product</h2>
               </div>
-
-              {/* Category */}
-              <div>
-                <label className="label">Category</label>
-                <div className="relative">
-                  <select value={form.category} onChange={(e) => set("category", e.target.value as Product["category"])} className="input appearance-none pr-8 capitalize">
-                    {CATEGORIES.map((c) => <option key={c} value={c} className="capitalize">{c}</option>)}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div className="sm:col-span-2"><label className="label">Product Name</label><input required value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Gold Lotus Ring" className="input" /></div>
+                  <div><label className="label">Category</label><div className="relative"><select value={form.category} onChange={(e) => set("category", e.target.value as Product["category"])} className="input appearance-none pr-8 capitalize">{CATEGORIES.map((c) => <option key={c} value={c} className="capitalize">{c}</option>)}</select><ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" /></div></div>
+                  <div><label className="label">Selling Price (₹)</label><input required type="number" min="1" value={form.price} onChange={(e) => set("price", e.target.value)} placeholder="799" className="input" /></div>
+                  <div><label className="label">Original Price (₹)</label><input required type="number" min="1" value={form.originalPrice} onChange={(e) => set("originalPrice", e.target.value)} placeholder="1199" className="input" /></div>
+                  <div className="sm:col-span-2">
+                    <label className="label"><Image className="w-3.5 h-3.5 inline mr-1" /> Product Images <span className="text-gray-400 font-normal normal-case ml-1">(up to {MAX_IMAGES} · first is cover)</span></label>
+                    {imagePreviews.length > 0 && (<div className="flex flex-wrap gap-3 mb-3">{imagePreviews.map((src, idx) => (<div key={idx} className="relative group w-20 h-20 shrink-0"><img src={src} alt={`Image ${idx + 1}`} className="w-full h-full rounded-xl object-cover border border-gray-100 bg-[#F3EEFB]" />{idx === 0 && <span className="absolute bottom-1 left-1 text-[10px] font-bold bg-[#9B6FD1] text-white px-1.5 py-0.5 rounded-full leading-none pointer-events-none">Cover</span>}<button type="button" onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"><X className="w-3 h-3" /></button></div>))}{imagePreviews.length < MAX_IMAGES && <button type="button" onClick={() => fileInputRef.current?.click()} className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-[#9B6FD1] hover:text-[#9B6FD1] transition-colors shrink-0"><Plus className="w-5 h-5" /><span className="text-[10px]">Add more</span></button>}</div>)}
+                    {imagePreviews.length === 0 && (<div onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={onDrop} onClick={() => fileInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-2 p-8 rounded-xl border-2 border-dashed cursor-pointer transition-all ${dragOver ? "border-[#9B6FD1] bg-[#F3EEFB]" : "border-gray-200 bg-gray-50 hover:border-[#9B6FD1] hover:bg-[#F3EEFB]"}`}><div className="w-10 h-10 rounded-xl bg-[#9B6FD1]/10 flex items-center justify-center"><Upload className="w-5 h-5 text-[#9B6FD1]" /></div><div className="text-center"><p className="text-sm font-medium text-gray-700">Drop images or <span className="text-[#9B6FD1]">browse</span></p><p className="text-xs text-gray-400 mt-0.5">PNG, JPG, WEBP · up to {MAX_IMAGES} images</p></div></div>)}
+                    <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); }} />
+                    {uploadError && <p className="text-red-500 text-xs mt-1.5">{uploadError}</p>}
+                    {uploading && <p className="text-[#9B6FD1] text-xs mt-1.5 flex items-center gap-1.5"><span className="w-3 h-3 border-2 border-[#9B6FD1] border-t-transparent rounded-full animate-spin inline-block" />Uploading {imageFiles.length} image{imageFiles.length > 1 ? "s" : ""}…</p>}
+                  </div>
+                  <div className="sm:col-span-2"><label className="label">Description</label><textarea rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Describe this product…" className="input resize-none" /></div>
+                  <div>
+                    <label className="label">Stock Quantity</label>
+                    <input required type="number" min="0" value={form.stock} onChange={(e) => set("stock", e.target.value)} placeholder="10" className="input" />
+                    <p className="text-[11px] text-gray-400 mt-1">Set to 0 to mark as Out of Stock</p>
+                  </div>
                 </div>
-              </div>
-
-              {/* Price */}
-              <div>
-                <label className="label">Selling Price (₹)</label>
-                <input required type="number" min="1" value={form.price} onChange={(e) => set("price", e.target.value)} placeholder="799" className="input" />
-              </div>
-
-              {/* Original price */}
-              <div>
-                <label className="label">Original Price (₹) <span className="text-gray-400 font-normal normal-case">(for discount badge)</span></label>
-                <input required type="number" min="1" value={form.originalPrice} onChange={(e) => set("originalPrice", e.target.value)} placeholder="1199" className="input" />
-              </div>
-
-              {/* ── Multi-image upload ── */}
-              <div className="sm:col-span-2">
-                <label className="label">
-                  <Image className="w-3.5 h-3.5 inline mr-1" /> Product Images
-                  <span className="text-gray-400 font-normal normal-case ml-1">(up to {MAX_IMAGES} · first is the cover)</span>
-                </label>
-
-                {/* Thumbnail previews */}
-                {imagePreviews.length > 0 && (
-                  <div className="flex flex-wrap gap-3 mb-3">
-                    {imagePreviews.map((src, idx) => (
-                      <div key={idx} className="relative group w-20 h-20 shrink-0">
-                        <img src={src} alt={`Image ${idx + 1}`} className="w-full h-full rounded-xl object-cover border border-gray-100 bg-[#F3EEFB]" />
-                        {idx === 0 && (
-                          <span className="absolute bottom-1 left-1 text-[10px] font-bold bg-[#9B6FD1] text-white px-1.5 py-0.5 rounded-full leading-none pointer-events-none">
-                            Cover
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => removeImage(idx)}
-                          className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
-                          aria-label={`Remove image ${idx + 1}`}
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
-
-                    {/* Add-more tile */}
-                    {imagePreviews.length < MAX_IMAGES && (
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-[#9B6FD1] hover:text-[#9B6FD1] transition-colors shrink-0"
-                      >
-                        <Plus className="w-5 h-5" />
-                        <span className="text-[10px]">Add more</span>
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {/* Drop zone — only when no images selected yet */}
-                {imagePreviews.length === 0 && (
-                  <div
-                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                    onDragLeave={() => setDragOver(false)}
-                    onDrop={onDrop}
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`flex flex-col items-center justify-center gap-2 p-8 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
-                      dragOver ? "border-[#9B6FD1] bg-[#F3EEFB]" : "border-gray-200 bg-gray-50 hover:border-[#9B6FD1] hover:bg-[#F3EEFB]"
-                    }`}
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-[#9B6FD1]/10 flex items-center justify-center">
-                      <Upload className="w-5 h-5 text-[#9B6FD1]" />
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm font-medium text-gray-700">Drop images or <span className="text-[#9B6FD1]">browse</span></p>
-                      <p className="text-xs text-gray-400 mt-0.5">PNG, JPG, WEBP · up to {MAX_IMAGES} images</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Hidden multi-file input */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); }}
-                />
-
-                {uploadError && <p className="text-red-500 text-xs mt-1.5">{uploadError}</p>}
-                {uploading && (
-                  <p className="text-[#9B6FD1] text-xs mt-1.5 flex items-center gap-1.5">
-                    <span className="w-3 h-3 border-2 border-[#9B6FD1] border-t-transparent rounded-full animate-spin inline-block" />
-                    Uploading {imageFiles.length} image{imageFiles.length > 1 ? "s" : ""}…
-                  </p>
-                )}
-              </div>
-
-              {/* Description */}
-              <div className="sm:col-span-2">
-                <label className="label">Description</label>
-                <textarea rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Describe this product…" className="input resize-none" />
-              </div>
+                <div className="flex justify-end pt-1"><button type="submit" disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-[#9B6FD1] text-white text-sm font-semibold rounded-xl hover:bg-[#8a5fc0] transition-colors disabled:opacity-60">{saving ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />{uploading ? "Uploading…" : "Saving…"}</> : <><Plus className="w-4 h-4" />Add Product</>}</button></div>
+              </form>
             </div>
 
-            <div className="flex justify-end pt-1">
-              <button type="submit" disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-[#9B6FD1] text-white text-sm font-semibold rounded-xl hover:bg-[#8a5fc0] transition-colors disabled:opacity-60">
-                {saving ? (
-                  <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />{uploading ? "Uploading images…" : "Saving…"}</>
-                ) : (
-                  <><Plus className="w-4 h-4" />Add Product</>
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
-
-        {/* ── Product list ── */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
-            <Package className="w-5 h-5 text-[#9B6FD1]" />
-            <h2 className="font-semibold text-gray-800">All Products</h2>
-            <span className="ml-auto text-sm text-gray-400">{products.length} total</span>
-          </div>
-
-          {loading ? (
-            <div className="flex items-center justify-center py-16 text-gray-400 text-sm gap-2">
-              <div className="w-4 h-4 border-2 border-[#9B6FD1] border-t-transparent rounded-full animate-spin" />
-              Loading from Supabase…
-            </div>
-          ) : error ? (
-            <div className="px-6 py-8 text-center">
-              <p className="text-red-400 text-sm font-medium">Could not load products</p>
-              <p className="text-gray-400 text-xs mt-1">{error}</p>
-              <p className="text-gray-400 text-xs mt-2">Check that the <strong>products</strong> table exists and the SELECT policy allows <strong>anon</strong> role.</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-50">
-              {products.length === 0 && (
-                <p className="text-center text-gray-400 text-sm py-10">No products yet. Add one above.</p>
-              )}
-              {products.map((p) => (
-                <div key={p.id} className="flex items-center gap-4 px-6 py-4">
-                  <div className="flex -space-x-2 shrink-0">
-                    {(p.images?.length ? p.images.slice(0, 3) : [p.image]).map((img, i) => (
-                      <img key={i} src={img} alt={p.name} className="w-12 h-12 rounded-xl object-cover bg-[#F3EEFB] border-2 border-white" style={{ zIndex: 3 - i }} />
-                    ))}
-                  </div>
+            {/* ── Product list ── */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+                <Package className="w-5 h-5 text-[#9B6FD1]" />
+                <h2 className="font-semibold text-gray-800">All Products</h2>
+                <span className="ml-auto text-sm text-gray-400">{products.length} total</span>
+              </div>
+              {loading ? (<div className="flex items-center justify-center py-16 text-gray-400 text-sm gap-2"><div className="w-4 h-4 border-2 border-[#9B6FD1] border-t-transparent rounded-full animate-spin" />Loading from Supabase…</div>)
+              : error ? (<div className="px-6 py-8 text-center"><p className="text-red-400 text-sm font-medium">Could not load products</p><p className="text-gray-400 text-xs mt-1">{error}</p></div>)
+              : (<div className="divide-y divide-gray-50">{products.length === 0 && <p className="text-center text-gray-400 text-sm py-10">No products yet. Add one above.</p>}{products.map((p) => (<div key={p.id} className="flex items-center gap-4 px-6 py-4">
+                  <div className="flex -space-x-2 shrink-0">{(p.images?.length ? p.images.slice(0, 3) : [p.image]).map((img, i) => (<img key={i} src={img} alt={p.name} className="w-12 h-12 rounded-xl object-cover bg-[#F3EEFB] border-2 border-white" style={{ zIndex: 3 - i }} />))}</div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-800 text-sm truncate">{p.name}</p>
-                    <p className="text-xs text-gray-400 capitalize">
-                      {p.category} · ₹{p.price}
-                      {p.images?.length > 1 && <span className="ml-1 text-[#9B6FD1]">· {p.images.length} photos</span>}
-                    </p>
+                    <p className="text-xs text-gray-400 capitalize">{p.category} · ₹{p.price}{p.images?.length > 1 && <span className="ml-1 text-[#9B6FD1]">· {p.images.length} photos</span>}</p>
                   </div>
-                  <button onClick={() => setDeleteId(p.id)} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors" aria-label="Delete">
-                    <Trash2 className="w-4 h-4" />
+                  {/* Stock stepper */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.stock === 0 ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>
+                      {p.stock === 0 ? "OUT OF STOCK" : `${p.stock} in stock`}
+                    </span>
+                    <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1">
+                      <button type="button" onClick={() => updateStock(p.id, p.stock - 1)} disabled={p.stock === 0} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] disabled:opacity-30 transition-colors"><Minus className="w-3 h-3" /></button>
+                      <span className="text-sm font-semibold text-gray-700 w-8 text-center">{p.stock}</span>
+                      <button type="button" onClick={() => updateStock(p.id, p.stock + 1)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] transition-colors"><Plus className="w-3 h-3" /></button>
+                    </div>
+                  </div>
+                  <button onClick={() => openEdit(p)} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-[#9B6FD1] hover:bg-[#F3EEFB] transition-colors" title="Edit product"><Pencil className="w-4 h-4" /></button>
+                  <button onClick={() => setDeleteId(p.id)} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                </div>))}</div>)}
+            </div>
+          </>
+        )}
+
+        {/* ── Orders Tab ── */}
+        {activeTab === "orders" && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShoppingBag className="w-5 h-5 text-[#9B6FD1]" />
+                <h2 className="font-semibold text-gray-800">Placed Orders</h2>
+                <span className="text-sm text-gray-400">{orders.length} total</span>
+              </div>
+              <button onClick={fetchOrders} className="text-xs text-[#9B6FD1] hover:underline">Refresh</button>
+            </div>
+
+            {ordersLoading ? (
+              <div className="flex items-center justify-center py-16 text-gray-400 text-sm gap-2">
+                <div className="w-4 h-4 border-2 border-[#9B6FD1] border-t-transparent rounded-full animate-spin" />
+                Loading orders…
+              </div>
+            ) : orders.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+                <div className="w-14 h-14 rounded-full bg-[#F3EEFB] flex items-center justify-center">
+                  <FileText className="w-7 h-7 text-[#9B6FD1]" />
+                </div>
+                <p className="text-gray-500 font-medium">No orders yet</p>
+                <p className="text-gray-400 text-sm">Orders will appear here when customers checkout via WhatsApp.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {orders.map((order) => (
+                  <div key={order.id} className="px-6 py-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        {/* Order header */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs font-bold text-[#9B6FD1] bg-[#F3EEFB] px-2 py-0.5 rounded-full">
+                            #{order.id}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {new Date(order.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${order.payment_mode === "cod" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
+                            {order.payment_mode === "cod" ? "COD" : "Prepaid"}
+                          </span>
+                        </div>
+
+                        {/* Items */}
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {order.items.map((item, i) => (
+                            <div key={i} className="flex items-center gap-1.5 bg-gray-50 rounded-xl px-2 py-1">
+                              <img src={item.product.image} alt={item.product.name} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
+                              <span className="text-xs text-gray-700 font-medium max-w-[100px] truncate">{item.product.name}</span>
+                              <span className="text-xs text-gray-400">×{item.quantity}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Totals */}
+                        <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                          {(order.customer_name) && (
+                            <span className="w-full text-gray-700 font-medium">
+                              {order.customer_name} · {order.customer_mobile}
+                            </span>
+                          )}
+                          {order.customer_address && (
+                            <span className="w-full text-gray-500">
+                              {order.customer_address}, {order.customer_city}, {order.customer_state} — {order.pincode}
+                            </span>
+                          )}
+                          <span>Subtotal: <strong className="text-gray-700">₹{order.subtotal}</strong></span>
+                          {order.shipping_charge > 0 && <span>Shipping: <strong className="text-gray-700">₹{order.shipping_charge}</strong></span>}
+                          {order.cod_charge > 0 && <span>COD: <strong className="text-gray-700">₹{order.cod_charge}</strong></span>}
+                        </div>
+                      </div>
+
+                      {/* Right: total + download */}
+                      <div className="shrink-0 flex flex-col items-end gap-2">
+                        <p className="text-lg font-bold font-serif text-gray-900">₹{order.grand_total}</p>
+                        <button
+                          onClick={() => handleDownloadPDF(order)}
+                          disabled={downloadingId === order.id}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white text-xs font-semibold rounded-xl transition-colors disabled:opacity-60"
+                        >
+                          {downloadingId === order.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Download className="w-3.5 h-3.5" />}
+                          PDF
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Edit Product Modal ── */}
+      <AnimatePresence>
+        {editProduct && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={closeEdit}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 16 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 16 }}
+              transition={{ type: "spring", stiffness: 340, damping: 30 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+            >
+              {/* Modal header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+                <div className="flex items-center gap-2">
+                  <Pencil className="w-4 h-4 text-[#9B6FD1]" />
+                  <h2 className="font-semibold text-gray-800">Edit Product</h2>
+                  <span className="text-xs text-gray-400 truncate max-w-[160px]">— {editProduct.name}</span>
+                </div>
+                <button onClick={closeEdit} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Form */}
+              <form onSubmit={handleEditSubmit} className="p-6 space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+
+                  {/* Name */}
+                  <div className="sm:col-span-2">
+                    <label className="label">Product Name</label>
+                    <input required value={editForm.name} onChange={(e) => setE("name", e.target.value)} className="input" />
+                  </div>
+
+                  {/* Category */}
+                  <div>
+                    <label className="label">Category</label>
+                    <div className="relative">
+                      <select value={editForm.category} onChange={(e) => setE("category", e.target.value as Product["category"])} className="input appearance-none pr-8 capitalize">
+                        {CATEGORIES.map((c) => <option key={c} value={c} className="capitalize">{c}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  {/* Stock */}
+                  <div>
+                    <label className="label">Stock Quantity</label>
+                    <input required type="number" min="0" value={editForm.stock} onChange={(e) => setE("stock", e.target.value)} className="input" />
+                  </div>
+
+                  {/* Price */}
+                  <div>
+                    <label className="label">Selling Price (₹)</label>
+                    <input required type="number" min="1" value={editForm.price} onChange={(e) => setE("price", e.target.value)} className="input" />
+                  </div>
+
+                  {/* Original price */}
+                  <div>
+                    <label className="label">Original Price (₹)</label>
+                    <input required type="number" min="1" value={editForm.originalPrice} onChange={(e) => setE("originalPrice", e.target.value)} className="input" />
+                  </div>
+
+                  {/* Images */}
+                  <div className="sm:col-span-2">
+                    <label className="label">
+                      <Image className="w-3.5 h-3.5 inline mr-1" /> Product Images
+                      <span className="text-gray-400 font-normal normal-case ml-1">(first is cover · max {MAX_IMAGES})</span>
+                    </label>
+
+                    <div className="flex flex-wrap gap-3 mb-3">
+                      {/* Existing images */}
+                      {editExistingImages.map((src, idx) => (
+                        <div key={`existing-${idx}`} className="relative group w-20 h-20 shrink-0">
+                          <img src={src} alt={`Image ${idx + 1}`} className="w-full h-full rounded-xl object-cover border border-gray-100 bg-[#F3EEFB]" />
+                          {idx === 0 && <span className="absolute bottom-1 left-1 text-[10px] font-bold bg-[#9B6FD1] text-white px-1.5 py-0.5 rounded-full leading-none pointer-events-none">Cover</span>}
+                          <button type="button" onClick={() => removeEditExisting(idx)} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+
+                      {/* New image previews */}
+                      {editImagePreviews.map((src, idx) => (
+                        <div key={`new-${idx}`} className="relative group w-20 h-20 shrink-0">
+                          <img src={src} alt={`New ${idx + 1}`} className="w-full h-full rounded-xl object-cover border-2 border-[#9B6FD1]/40 bg-[#F3EEFB]" />
+                          <span className="absolute bottom-1 left-1 text-[10px] font-bold bg-green-500 text-white px-1.5 py-0.5 rounded-full leading-none pointer-events-none">New</span>
+                          <button type="button" onClick={() => {
+                            URL.revokeObjectURL(src);
+                            setEditImageFiles((p) => p.filter((_, i) => i !== idx));
+                            setEditImagePreviews((p) => p.filter((_, i) => i !== idx));
+                          }} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+
+                      {/* Add more tile */}
+                      {(editExistingImages.length + editImageFiles.length) < MAX_IMAGES && (
+                        <button type="button" onClick={() => editFileRef.current?.click()} className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-[#9B6FD1] hover:text-[#9B6FD1] transition-colors shrink-0">
+                          <Plus className="w-5 h-5" />
+                          <span className="text-[10px]">Add</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <input ref={editFileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { if (e.target.files?.length) addEditFiles(e.target.files); }} />
+                    {editUploadError && <p className="text-red-500 text-xs mt-1">{editUploadError}</p>}
+                  </div>
+
+                  {/* Description */}
+                  <div className="sm:col-span-2">
+                    <label className="label">Description</label>
+                    <textarea rows={3} value={editForm.description} onChange={(e) => setE("description", e.target.value)} className="input resize-none" />
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3 justify-end pt-1">
+                  <button type="button" onClick={closeEdit} className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={editSaving} className="flex items-center gap-2 px-6 py-2.5 bg-[#9B6FD1] text-white text-sm font-semibold rounded-xl hover:bg-[#8a5fc0] transition-colors disabled:opacity-60">
+                    {editSaving
+                      ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving…</>
+                      : <><CheckCircle2 className="w-4 h-4" /> Save Changes</>
+                    }
                   </button>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Delete modal ── */}
       <AnimatePresence>
         {deleteId !== null && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setDeleteId(null)}>
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-xs w-full shadow-2xl">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mb-4">
-                <Trash2 className="w-5 h-5 text-red-500" />
-              </div>
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mb-4"><Trash2 className="w-5 h-5 text-red-500" /></div>
               <h3 className="font-semibold text-gray-800 mb-1">Delete product?</h3>
               <p className="text-sm text-gray-500 mb-5">This will remove it from Supabase and the store.</p>
               <div className="flex gap-3">
                 <button onClick={() => setDeleteId(null)} className="flex-1 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
-                <button disabled={deleting} onClick={handleDelete} className="flex-1 py-2 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-colors disabled:opacity-60">
-                  {deleting ? "Deleting…" : "Delete"}
-                </button>
+                <button disabled={deleting} onClick={handleDelete} className="flex-1 py-2 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-colors disabled:opacity-60">{deleting ? "Deleting…" : "Delete"}</button>
               </div>
             </motion.div>
           </motion.div>
@@ -411,8 +637,7 @@ export function AdminPanel() {
       <AnimatePresence>
         {toast && (
           <motion.div initial={{ opacity: 0, y: 60 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 60 }} className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 bg-green-600 text-white px-5 py-3 rounded-2xl shadow-xl text-sm font-medium">
-            <CheckCircle2 className="w-4 h-4" />
-            {toast}
+            <CheckCircle2 className="w-4 h-4" />{toast}
           </motion.div>
         )}
       </AnimatePresence>

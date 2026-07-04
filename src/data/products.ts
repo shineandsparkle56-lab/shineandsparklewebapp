@@ -15,10 +15,11 @@ export interface Product {
   price: number;
   originalPrice: number;
   discount: number;
-  image: string;       // primary image (kept for backwards compat)
-  images: string[];    // all images; first entry matches `image`
+  image: string;
+  images: string[];
   description: string;
   sizes: string[];
+  stock: number; // 0 = out of stock
 }
 
 export const products: Product[] = [
@@ -31,9 +32,9 @@ export const products: Product[] = [
     discount: 33,
     image: ring1,
     images: [ring1, ring2],
-    description:
-      "Inspired by the delicate curve of a rose in full bloom, this ring features a sculpted petal setting in anti-tarnish gold-plated brass. Lightweight and comfortable for all-day wear, it pairs beautifully with stacked rings or stands alone as a statement piece.",
+    description: "Inspired by the delicate curve of a rose in full bloom, this ring features a sculpted petal setting in anti-tarnish gold-plated brass.",
     sizes: ["5", "6", "7", "8", "9"],
+    stock: 99,
   },
   {
     id: 2,
@@ -44,9 +45,9 @@ export const products: Product[] = [
     discount: 28,
     image: earrings1,
     images: [earrings1, earrings2],
-    description:
-      "Timeless freshwater pearl drops suspended from a delicate gold-plated hook. The soft luster of each pearl catches the light beautifully, making these earrings perfect for both everyday elegance and special occasions.",
+    description: "Timeless freshwater pearl drops suspended from a delicate gold-plated hook.",
     sizes: ["One Size"],
+    stock: 99,
   },
   {
     id: 3,
@@ -57,9 +58,9 @@ export const products: Product[] = [
     discount: 28,
     image: necklace1,
     images: [necklace1, necklace2],
-    description:
-      "A crescent moon pendant encrusted with micro-pavé crystals, suspended on a dainty 18-inch gold-plated chain. A dreamy everyday piece that adds just the right amount of sparkle — like moonlight caught in silver.",
+    description: "A crescent moon pendant encrusted with micro-pavé crystals, suspended on a dainty 18-inch gold-plated chain.",
     sizes: ["16 inch", "18 inch", "20 inch"],
+    stock: 99,
   },
   {
     id: 4,
@@ -70,9 +71,9 @@ export const products: Product[] = [
     discount: 31,
     image: bracelet1,
     images: [bracelet1, bracelet2],
-    description:
-      "A set of three stackable bangles, each adorned with a different floral motif — rose, daisy, and jasmine. Crafted in anti-tarnish silver-tone metal, they clink together with a satisfying softness that feels entirely luxurious.",
-    sizes: ["Small (6.5\")", "Medium (7\")", "Large (7.5\")"],
+    description: "A set of three stackable bangles, each adorned with a different floral motif.",
+    sizes: ['Small (6.5")', 'Medium (7")', 'Large (7.5")'],
+    stock: 99,
   },
   {
     id: 5,
@@ -83,9 +84,9 @@ export const products: Product[] = [
     discount: 31,
     image: earrings2,
     images: [earrings2, earrings1],
-    description:
-      "Long, linear drop earrings featuring a constellation of hand-set cubic zirconia stones that shimmer and move with you. Light as a feather, bold as the night sky — these are your go-to for a touch of drama.",
+    description: "Long, linear drop earrings featuring a constellation of hand-set cubic zirconia stones.",
     sizes: ["One Size"],
+    stock: 99,
   },
   {
     id: 6,
@@ -96,9 +97,9 @@ export const products: Product[] = [
     discount: 30,
     image: ring2,
     images: [ring2, ring1],
-    description:
-      "An intricate vine pattern winds its way around the finger in this beautifully crafted open-band ring. Set with tiny emerald-green stones along the vine, it evokes a garden at golden hour — alive, lush, and endlessly romantic.",
+    description: "An intricate vine pattern winds its way around the finger in this beautifully crafted open-band ring.",
     sizes: ["5", "6", "7", "8", "9"],
+    stock: 99,
   },
   {
     id: 7,
@@ -109,9 +110,9 @@ export const products: Product[] = [
     discount: 29,
     image: necklace2,
     images: [necklace2, necklace1],
-    description:
-      "A statement choker set with rows of hand-placed Austrian crystals on a flexible velvet ribbon. Adjustable at the back, it sits perfectly at the collarbone and transforms any neckline — from casual to couture.",
+    description: "A statement choker set with rows of hand-placed Austrian crystals on a flexible velvet ribbon.",
     sizes: ["13 inch", "14 inch", "15 inch"],
+    stock: 99,
   },
   {
     id: 8,
@@ -122,9 +123,9 @@ export const products: Product[] = [
     discount: 29,
     image: bracelet2,
     images: [bracelet2, bracelet1],
-    description:
-      "A delicate gold-plated chain bracelet hung with five hand-picked charms — a star, a crescent moon, a tiny heart, a flower, and a teardrop crystal. Each charm tells a story. Wear all five, or mix with your favorites.",
-    sizes: ["Small (6.5\")", "Medium (7\")", "Large (7.5\")"],
+    description: "A delicate gold-plated chain bracelet hung with five hand-picked charms.",
+    sizes: ['Small (6.5")', 'Medium (7")', 'Large (7.5")'],
+    stock: 99,
   },
 ];
 

@@ -5,21 +5,39 @@ import { supabase } from "../lib/supabase";
 interface ProductsContextValue {
   products: Product[];
   addProduct: (p: Omit<Product, "id">) => Promise<void>;
+  updateProduct: (id: number, p: Omit<Product, "id">) => Promise<void>;
   deleteProduct: (id: number) => Promise<void>;
+  updateStock: (id: number, newStock: number) => Promise<void>;
   loading: boolean;
   error: string;
 }
 
 const ProductsContext = createContext<ProductsContextValue | null>(null);
 
+function mapRow(row: Record<string, unknown>): Product {
+  return {
+    id: row.id as number,
+    name: row.name as string,
+    category: row.category as Product["category"],
+    price: row.price as number,
+    originalPrice: row.original_price as number,
+    discount: row.discount as number,
+    image: row.image as string,
+    images: Array.isArray(row.images) && (row.images as string[]).length
+      ? (row.images as string[])
+      : [row.image as string],
+    description: row.description as string,
+    sizes: row.sizes as string[],
+    stock: typeof row.stock === "number" ? row.stock : 99,
+  };
+}
+
 export function ProductsProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
+  useEffect(() => { fetchProducts(); }, []);
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -29,26 +47,8 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
       .select("*")
       .order("created_at", { ascending: true });
 
-    if (err) {
-      setError(err.message);
-      setLoading(false);
-      return;
-    }
-
-    setProducts(
-      (data ?? []).map((row) => ({
-        id: row.id,
-        name: row.name,
-        category: row.category,
-        price: row.price,
-        originalPrice: row.original_price,
-        discount: row.discount,
-        image: row.image,
-        images: Array.isArray(row.images) && row.images.length ? row.images : [row.image],
-        description: row.description,
-        sizes: row.sizes,
-      }))
-    );
+    if (err) { setError(err.message); setLoading(false); return; }
+    setProducts((data ?? []).map(mapRow));
     setLoading(false);
   };
 
@@ -65,27 +65,38 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
         images: p.images,
         description: p.description,
         sizes: p.sizes,
+        stock: p.stock,
       }])
       .select()
       .single();
 
     if (err) throw new Error(err.message);
+    setProducts((prev) => [...prev, mapRow(data)]);
+  };
 
-    setProducts((prev) => [
-      ...prev,
-      {
-        id: data.id,
-        name: data.name,
-        category: data.category,
-        price: data.price,
-        originalPrice: data.original_price,
-        discount: data.discount,
-        image: data.image,
-        images: Array.isArray(data.images) && data.images.length ? data.images : [data.image],
-        description: data.description,
-        sizes: data.sizes,
-      },
-    ]);
+  const updateProduct = async (id: number, p: Omit<Product, "id">) => {
+    const { error: err } = await supabase
+      .from("products")
+      .update({
+        name: p.name,
+        category: p.category,
+        price: p.price,
+        original_price: p.originalPrice,
+        discount: p.discount,
+        image: p.image,
+        images: p.images,
+        description: p.description,
+        sizes: p.sizes,
+        stock: p.stock,
+      })
+      .eq("id", id);
+    if (err) throw new Error(err.message);
+    // Patch local state directly — no need to re-fetch
+    setProducts((prev) =>
+      prev.map((prod) =>
+        prod.id === id ? { ...prod, ...p, id } : prod
+      )
+    );
   };
 
   const deleteProduct = async (id: number) => {
@@ -94,8 +105,20 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
     setProducts((prev) => prev.filter((p) => p.id !== id));
   };
 
+  const updateStock = async (id: number, newStock: number) => {
+    const stock = Math.max(0, newStock);
+    const { error: err } = await supabase
+      .from("products")
+      .update({ stock })
+      .eq("id", id);
+    if (err) throw new Error(err.message);
+    setProducts((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, stock } : p))
+    );
+  };
+
   return (
-    <ProductsContext.Provider value={{ products, addProduct, deleteProduct, loading, error }}>
+    <ProductsContext.Provider value={{ products, addProduct, updateProduct, deleteProduct, updateStock, loading, error }}>
       {children}
     </ProductsContext.Provider>
   );

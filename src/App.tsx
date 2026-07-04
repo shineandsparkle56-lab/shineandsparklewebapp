@@ -8,6 +8,8 @@ import { ScrollProvider } from "./context/ScrollContext";
 
 import { Navbar } from "./components/Navbar";
 import { ProductGrid } from "./components/ProductGrid";
+import { About } from "./components/About";
+import { Contact } from "./components/Contact";
 import { Footer } from "./components/Footer";
 import { CartDrawer } from "./components/CartDrawer";
 import { FloatingCart } from "./components/FloatingCart";
@@ -24,6 +26,8 @@ function Storefront() {
       <Navbar />
       <main className="flex-1">
         <ProductGrid />
+        <About />
+        <Contact />
       </main>
       <Footer />
       <CartDrawer />

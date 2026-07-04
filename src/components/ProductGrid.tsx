@@ -18,7 +18,7 @@ const TABS: { id: Category; label: string }[] = [
 
 // Navbar is h-20 (80px). Filter bar is ~48px. Total reserved = 128px.
 // We use CSS vars so the section padding always matches.
-const NAVBAR_H = 80;   // px — must match h-20 in Navbar
+const NAVBAR_H = 56;   // px — matches h-14 in Navbar
 const FILTER_H = 52;   // px — filter bar height including py
 const TOTAL_OFFSET = NAVBAR_H + FILTER_H; // 132px
 
@@ -26,7 +26,7 @@ export function ProductGrid() {
   const { products, loading, error } = useProducts();
   const { scrollingDown } = useScroll();
   const [activeCategory, setActiveCategory] = useState<Category>("all");
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
 
   const filtered =
     activeCategory === "all"
@@ -43,7 +43,7 @@ export function ProductGrid() {
       ── */}
       <div
         className={`fixed left-0 right-0 z-30 bg-white border-b border-gray-100 shadow-sm transition-transform duration-300 ease-in-out ${
-          scrollingDown ? "-translate-y-[152px]" : "translate-y-0"
+          scrollingDown ? "-translate-y-[128px]" : "translate-y-0"
         }`}
         style={{ top: `${NAVBAR_H}px` }}
         data-testid="category-filter-bar"
@@ -76,8 +76,8 @@ export function ProductGrid() {
               ))}
             </div>
 
-            {/* ── View toggle — always visible, pinned right ── */}
-            <div className="flex items-center gap-1 bg-[#F3EEFB] rounded-full p-1 shrink-0">
+            {/* ── View toggle — mobile only ── */}
+            <div className="flex sm:hidden items-center gap-1 bg-[#F3EEFB] rounded-full p-1 shrink-0">
               <button
                 onClick={() => setViewMode("grid")}
                 aria-label="Grid view"
@@ -145,9 +145,10 @@ export function ProductGrid() {
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.25, ease: "easeInOut" }}
                   className={
+                    // On desktop (sm+) always grid — toggle only applies on mobile
                     viewMode === "list"
-                      ? "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
-                      : "grid grid-cols-2 gap-0.5 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4"
+                      ? "grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4"
+                      : "grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4"
                   }
                 >
                   {filtered.map((product, index) => (
@@ -155,7 +156,7 @@ export function ProductGrid() {
                       key={product.id}
                       product={product}
                       index={index}
-                      view={viewMode}
+                      view={viewMode === "list" ? "list" : "grid"}
                     />
                   ))}
                 </motion.div>

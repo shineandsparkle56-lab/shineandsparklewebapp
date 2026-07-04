@@ -8,26 +8,32 @@ const ScrollContext = createContext<ScrollContextValue>({ scrollingDown: false }
 
 export function ScrollProvider({ children }: { children: ReactNode }) {
   const [scrollingDown, setScrollingDown] = useState(false);
-  const lastY = useRef(0);
+  const lastY = useRef(typeof window !== "undefined" ? window.scrollY : 0);
 
   useEffect(() => {
+    // Disable browser scroll restoration so page always starts at top on refresh
+    if ("scrollRestoration" in history) {
+      history.scrollRestoration = "manual";
+    }
+    // Sync initial state — browser may restore scroll position on refresh
+    lastY.current = window.scrollY;
+    if (window.scrollY > 10) {
+      setScrollingDown(false);
+    }
+
     const onScroll = () => {
       const y = window.scrollY;
       const delta = y - lastY.current;
 
       if (y < 10) {
-        // Always show at the very top
         setScrollingDown(false);
       } else if (delta > 4) {
-        // Scrolling down with enough momentum — hide
         setScrollingDown(true);
         lastY.current = y;
       } else if (delta < -4) {
-        // Scrolling up with enough momentum — show
         setScrollingDown(false);
         lastY.current = y;
       }
-      // Ignore tiny jitter (|delta| <= 4)
     };
 
     window.addEventListener("scroll", onScroll, { passive: true });
