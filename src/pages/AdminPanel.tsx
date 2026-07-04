@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -12,6 +12,7 @@ import { supabase } from "../lib/supabase";
 import { generateOrderPDF } from "../utils/generateOrderPDF";
 import type { OrderMeta } from "../utils/generateOrderPDF";
 import type { CartItem } from "../context/CartContext";
+import { DraggableImageGrid, ImageItem } from "../components/ui/DraggableImageGrid";
 
 const BUCKET = "product-images";
 const MAX_IMAGES = 5;
@@ -73,9 +74,8 @@ export function AdminPanel() {
   const [activeTab, setActiveTab] = useState<"products" | "orders">("products");
   const [form, setForm] = useState(empty);
 
-  // Multi-image state
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  // Multi-image state (Add form) — single array keeps files + previews in sync
+  const [imageItems, setImageItems] = useState<ImageItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -104,15 +104,14 @@ export function AdminPanel() {
   // Product edit state
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [editForm, setEditForm] = useState(empty);
-  const [editImageFiles, setEditImageFiles] = useState<File[]>([]);
-  const [editImagePreviews, setEditImagePreviews] = useState<string[]>([]);
-  const [editExistingImages, setEditExistingImages] = useState<string[]>([]);
+  // Edit modal images: merged array of existing URLs + new File items
+  const [editImageItems, setEditImageItems] = useState<ImageItem[]>([]);
   const [editSaving, setEditSaving] = useState(false);
   const [editUploadError, setEditUploadError] = useState("");
   const editFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { if (!sessionStorage.getItem("sns_admin")) navigate("/admin"); }, [navigate]);
-  useEffect(() => { return () => { imagePreviews.forEach((p) => URL.revokeObjectURL(p)); }; }, []);
+  useEffect(() => { return () => { imageItems.forEach((it) => URL.revokeObjectURL(it.preview)); }; }, []);
 
   useEffect(() => {
     if (activeTab === "orders") fetchOrders();
@@ -266,33 +265,35 @@ export function AdminPanel() {
     }
   };
 
-  // ── Image helpers ────────────────────────────────────────────
-  const addFiles = (incoming: FileList | File[]) => {
+  // ── Image helpers (Add form) ─────────────────────────────────
+  const addFiles = useCallback((incoming: FileList | File[]) => {
     setUploadError("");
     const arr = Array.from(incoming);
-    const slots = MAX_IMAGES - imageFiles.length;
+    const slots = MAX_IMAGES - imageItems.length;
     if (slots <= 0) { setUploadError(`Max ${MAX_IMAGES} images allowed.`); return; }
-    const newFiles: File[] = []; const newPreviews: string[] = [];
+    const newItems: ImageItem[] = [];
     for (const file of arr.slice(0, slots)) {
       if (!file.type.startsWith("image/")) { setUploadError("Only image files are supported."); continue; }
-      newFiles.push(file); newPreviews.push(URL.createObjectURL(file));
+      const preview = URL.createObjectURL(file);
+      newItems.push({ id: preview, preview, file });
     }
-    setImageFiles((prev) => [...prev, ...newFiles]);
-    setImagePreviews((prev) => [...prev, ...newPreviews]);
+    setImageItems((prev) => [...prev, ...newItems]);
     if (fileInputRef.current) fileInputRef.current.value = "";
-  };
+  }, [imageItems.length]);
 
-  const removeImage = (idx: number) => {
-    URL.revokeObjectURL(imagePreviews[idx]);
-    setImageFiles((prev) => prev.filter((_, i) => i !== idx));
-    setImagePreviews((prev) => prev.filter((_, i) => i !== idx));
-  };
+  const removeImage = useCallback((id: string) => {
+    setImageItems((prev) => {
+      const item = prev.find((it) => it.id === id);
+      if (item) URL.revokeObjectURL(item.preview);
+      return prev.filter((it) => it.id !== id);
+    });
+  }, []);
 
-  const clearImages = () => {
-    imagePreviews.forEach((p) => URL.revokeObjectURL(p));
-    setImageFiles([]); setImagePreviews([]); setUploadError("");
+  const clearImages = useCallback(() => {
+    setImageItems((prev) => { prev.forEach((it) => URL.revokeObjectURL(it.preview)); return []; });
+    setUploadError("");
     if (fileInputRef.current) fileInputRef.current.value = "";
-  };
+  }, []);
 
   const uploadToStorage = async (file: File): Promise<string> => {
     const ext = file.name.split(".").pop() ?? "jpg";
@@ -308,9 +309,13 @@ export function AdminPanel() {
     if (!price || !originalPrice) return;
     setSaving(true); setUploadError("");
     let imageUrls: string[] = [];
-    if (imageFiles.length > 0) {
-      try { setUploading(true); imageUrls = await Promise.all(imageFiles.map((f) => uploadToStorage(f))); setUploading(false); }
-      catch (err: unknown) {
+    if (imageItems.length > 0) {
+      try {
+        setUploading(true);
+        // Upload in display order so sequence is preserved
+        imageUrls = await Promise.all(imageItems.map((it) => uploadToStorage(it.file!)));
+        setUploading(false);
+      } catch (err: unknown) {
         setUploading(false); setSaving(false);
         const msg = err instanceof Error ? err.message : "Upload failed.";
         setUploadError(msg.toLowerCase().includes("bucket") ? 'Storage bucket missing. Go to Supabase → Storage → New bucket → name it "product-images" → set to Public.' : msg);
@@ -327,30 +332,38 @@ export function AdminPanel() {
   const openEdit = (p: Product) => {
     setEditProduct(p);
     setEditForm({ name: p.name, category: p.category, price: String(p.price), originalPrice: String(p.originalPrice), description: p.description, stock: String(p.stock) });
-    setEditExistingImages(p.images?.length ? p.images : [p.image]);
-    setEditImageFiles([]); setEditImagePreviews([]); setEditUploadError("");
+    // Build unified ImageItem array from existing URLs (no File attached)
+    const existingUrls = p.images?.length ? p.images : [p.image];
+    setEditImageItems(existingUrls.map((url) => ({ id: url, preview: url, file: undefined })));
+    setEditUploadError("");
   };
 
   const closeEdit = () => {
     setEditProduct(null);
-    editImagePreviews.forEach((u) => URL.revokeObjectURL(u));
-    setEditImageFiles([]); setEditImagePreviews([]);
+    // Revoke only blob URLs (new uploads), not existing Supabase URLs
+    setEditImageItems((prev) => { prev.filter((it) => it.file).forEach((it) => URL.revokeObjectURL(it.preview)); return []; });
   };
-
-  const removeEditExisting = (idx: number) => setEditExistingImages((prev) => prev.filter((_, i) => i !== idx));
 
   const addEditFiles = (incoming: FileList | File[]) => {
     const arr = Array.from(incoming);
-    const slots = MAX_IMAGES - editExistingImages.length - editImageFiles.length;
+    const slots = MAX_IMAGES - editImageItems.length;
     if (slots <= 0) { setEditUploadError(`Max ${MAX_IMAGES} images.`); return; }
-    const newFiles: File[] = []; const newPreviews: string[] = [];
+    const newItems: ImageItem[] = [];
     for (const file of arr.slice(0, slots)) {
       if (!file.type.startsWith("image/")) continue;
-      newFiles.push(file); newPreviews.push(URL.createObjectURL(file));
+      const preview = URL.createObjectURL(file);
+      newItems.push({ id: preview, preview, file });
     }
-    setEditImageFiles((prev) => [...prev, ...newFiles]);
-    setEditImagePreviews((prev) => [...prev, ...newPreviews]);
+    setEditImageItems((prev) => [...prev, ...newItems]);
     if (editFileRef.current) editFileRef.current.value = "";
+  };
+
+  const removeEditImage = (id: string) => {
+    setEditImageItems((prev) => {
+      const item = prev.find((it) => it.id === id);
+      if (item?.file) URL.revokeObjectURL(item.preview); // only revoke blob URLs
+      return prev.filter((it) => it.id !== id);
+    });
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
@@ -359,15 +372,22 @@ export function AdminPanel() {
     const price = Number(editForm.price); const originalPrice = Number(editForm.originalPrice);
     if (!price || !originalPrice) return;
     setEditSaving(true); setEditUploadError("");
-    let newUrls: string[] = [];
-    if (editImageFiles.length > 0) {
-      try { newUrls = await Promise.all(editImageFiles.map((f) => uploadToStorage(f))); }
-      catch (err: unknown) { setEditSaving(false); setEditUploadError(err instanceof Error ? err.message : "Upload failed."); return; }
+
+    // Upload new files (items that have a File attached), keep existing URLs as-is
+    let finalImages: string[];
+    try {
+      finalImages = await Promise.all(
+        editImageItems.map((it) => it.file ? uploadToStorage(it.file) : Promise.resolve(it.preview))
+      );
+    } catch (err: unknown) {
+      setEditSaving(false);
+      setEditUploadError(err instanceof Error ? err.message : "Upload failed.");
+      return;
     }
-    const allImages = [...editExistingImages, ...newUrls];
-    if (allImages.length === 0) allImages.push(`https://placehold.co/400x400/F3EEFB/9B6FD1?text=${encodeURIComponent(editForm.name)}`);
+
+    if (finalImages.length === 0) finalImages.push(`https://placehold.co/400x400/F3EEFB/9B6FD1?text=${encodeURIComponent(editForm.name)}`);
     const discount = Math.max(0, Math.round(((originalPrice - price) / originalPrice) * 100));
-    await updateProduct(editProduct.id, { name: editForm.name.trim(), category: editForm.category, price, originalPrice, discount, image: allImages[0], images: allImages, description: editForm.description.trim(), sizes: SIZES_BY_CATEGORY[editForm.category], stock: Math.max(0, Number(editForm.stock) || 0) });
+    await updateProduct(editProduct.id, { name: editForm.name.trim(), category: editForm.category, price, originalPrice, discount, image: finalImages[0], images: finalImages, description: editForm.description.trim(), sizes: SIZES_BY_CATEGORY[editForm.category], stock: Math.max(0, Number(editForm.stock) || 0) });
     setEditSaving(false); closeEdit();
     showToast("Product updated!");
   };
@@ -432,12 +452,22 @@ export function AdminPanel() {
                   <div><label className="label">Selling Price (₹)</label><input required type="number" min="1" value={form.price} onChange={(e) => set("price", e.target.value)} placeholder="799" className="input" /></div>
                   <div><label className="label">Original Price (₹)</label><input required type="number" min="1" value={form.originalPrice} onChange={(e) => set("originalPrice", e.target.value)} placeholder="1199" className="input" /></div>
                   <div className="sm:col-span-2">
-                    <label className="label"><Image className="w-3.5 h-3.5 inline mr-1" /> Product Images <span className="text-gray-400 font-normal normal-case ml-1">(up to {MAX_IMAGES} · first is cover)</span></label>
-                    {imagePreviews.length > 0 && (<div className="flex flex-wrap gap-3 mb-3">{imagePreviews.map((src, idx) => (<div key={idx} className="relative group w-20 h-20 shrink-0"><img src={src} alt={`Image ${idx + 1}`} className="w-full h-full rounded-xl object-cover border border-gray-100 bg-[#F3EEFB]" />{idx === 0 && <span className="absolute bottom-1 left-1 text-[10px] font-bold bg-[#9B6FD1] text-white px-1.5 py-0.5 rounded-full leading-none pointer-events-none">Cover</span>}<button type="button" onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"><X className="w-3 h-3" /></button></div>))}{imagePreviews.length < MAX_IMAGES && <button type="button" onClick={() => fileInputRef.current?.click()} className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-[#9B6FD1] hover:text-[#9B6FD1] transition-colors shrink-0"><Plus className="w-5 h-5" /><span className="text-[10px]">Add more</span></button>}</div>)}
-                    {imagePreviews.length === 0 && (<div onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={onDrop} onClick={() => fileInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-2 p-8 rounded-xl border-2 border-dashed cursor-pointer transition-all ${dragOver ? "border-[#9B6FD1] bg-[#F3EEFB]" : "border-gray-200 bg-gray-50 hover:border-[#9B6FD1] hover:bg-[#F3EEFB]"}`}><div className="w-10 h-10 rounded-xl bg-[#9B6FD1]/10 flex items-center justify-center"><Upload className="w-5 h-5 text-[#9B6FD1]" /></div><div className="text-center"><p className="text-sm font-medium text-gray-700">Drop images or <span className="text-[#9B6FD1]">browse</span></p><p className="text-xs text-gray-400 mt-0.5">PNG, JPG, WEBP · up to {MAX_IMAGES} images</p></div></div>)}
+                    <label className="label"><Image className="w-3.5 h-3.5 inline mr-1" /> Product Images <span className="text-gray-400 font-normal normal-case ml-1">(up to {MAX_IMAGES} · first is cover · drag to reorder)</span></label>
+                    {imageItems.length > 0 && (
+                      <div className="mb-3">
+                        <DraggableImageGrid
+                          items={imageItems}
+                          onReorder={setImageItems}
+                          onRemove={removeImage}
+                          onAddMore={imageItems.length < MAX_IMAGES ? () => fileInputRef.current?.click() : undefined}
+                          maxImages={MAX_IMAGES}
+                        />
+                      </div>
+                    )}
+                    {imageItems.length === 0 && (<div onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={onDrop} onClick={() => fileInputRef.current?.click()} className={`flex flex-col items-center justify-center gap-2 p-8 rounded-xl border-2 border-dashed cursor-pointer transition-all ${dragOver ? "border-[#9B6FD1] bg-[#F3EEFB]" : "border-gray-200 bg-gray-50 hover:border-[#9B6FD1] hover:bg-[#F3EEFB]"}`}><div className="w-10 h-10 rounded-xl bg-[#9B6FD1]/10 flex items-center justify-center"><Upload className="w-5 h-5 text-[#9B6FD1]" /></div><div className="text-center"><p className="text-sm font-medium text-gray-700">Drop images or <span className="text-[#9B6FD1]">browse</span></p><p className="text-xs text-gray-400 mt-0.5">PNG, JPG, WEBP · up to {MAX_IMAGES} images</p></div></div>)}
                     <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); }} />
                     {uploadError && <p className="text-red-500 text-xs mt-1.5">{uploadError}</p>}
-                    {uploading && <p className="text-[#9B6FD1] text-xs mt-1.5 flex items-center gap-1.5"><span className="w-3 h-3 border-2 border-[#9B6FD1] border-t-transparent rounded-full animate-spin inline-block" />Uploading {imageFiles.length} image{imageFiles.length > 1 ? "s" : ""}…</p>}
+                    {uploading && <p className="text-[#9B6FD1] text-xs mt-1.5 flex items-center gap-1.5"><span className="w-3 h-3 border-2 border-[#9B6FD1] border-t-transparent rounded-full animate-spin inline-block" />Uploading {imageItems.length} image{imageItems.length > 1 ? "s" : ""}…</p>}
                   </div>
                   <div className="sm:col-span-2"><label className="label">Description</label><textarea rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Describe this product…" className="input resize-none" /></div>
                   <div><label className="label">Stock Quantity</label><input required type="number" min="0" value={form.stock} onChange={(e) => set("stock", e.target.value)} placeholder="10" className="input" /><p className="text-[11px] text-gray-400 mt-1">Set to 0 to mark as Out of Stock</p></div>
@@ -790,11 +820,16 @@ export function AdminPanel() {
                   <div><label className="label">Selling Price (₹)</label><input required type="number" min="1" value={editForm.price} onChange={(e) => setE("price", e.target.value)} className="input" /></div>
                   <div><label className="label">Original Price (₹)</label><input required type="number" min="1" value={editForm.originalPrice} onChange={(e) => setE("originalPrice", e.target.value)} className="input" /></div>
                   <div className="sm:col-span-2">
-                    <label className="label"><Image className="w-3.5 h-3.5 inline mr-1" /> Product Images<span className="text-gray-400 font-normal normal-case ml-1">(first is cover · max {MAX_IMAGES})</span></label>
-                    <div className="flex flex-wrap gap-3 mb-3">
-                      {editExistingImages.map((src, idx) => (<div key={`existing-${idx}`} className="relative group w-20 h-20 shrink-0"><img src={src} alt={`Image ${idx + 1}`} className="w-full h-full rounded-xl object-cover border border-gray-100 bg-[#F3EEFB]" />{idx === 0 && <span className="absolute bottom-1 left-1 text-[10px] font-bold bg-[#9B6FD1] text-white px-1.5 py-0.5 rounded-full leading-none pointer-events-none">Cover</span>}<button type="button" onClick={() => removeEditExisting(idx)} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"><X className="w-3 h-3" /></button></div>))}
-                      {editImagePreviews.map((src, idx) => (<div key={`new-${idx}`} className="relative group w-20 h-20 shrink-0"><img src={src} alt={`New ${idx + 1}`} className="w-full h-full rounded-xl object-cover border-2 border-[#9B6FD1]/40 bg-[#F3EEFB]" /><span className="absolute bottom-1 left-1 text-[10px] font-bold bg-green-500 text-white px-1.5 py-0.5 rounded-full leading-none pointer-events-none">New</span><button type="button" onClick={() => { URL.revokeObjectURL(src); setEditImageFiles((p) => p.filter((_, i) => i !== idx)); setEditImagePreviews((p) => p.filter((_, i) => i !== idx)); }} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"><X className="w-3 h-3" /></button></div>))}
-                      {(editExistingImages.length + editImageFiles.length) < MAX_IMAGES && (<button type="button" onClick={() => editFileRef.current?.click()} className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-[#9B6FD1] hover:text-[#9B6FD1] transition-colors shrink-0"><Plus className="w-5 h-5" /><span className="text-[10px]">Add</span></button>)}
+                    <label className="label"><Image className="w-3.5 h-3.5 inline mr-1" /> Product Images<span className="text-gray-400 font-normal normal-case ml-1">(first is cover · max {MAX_IMAGES} · drag to reorder)</span></label>
+                    <div className="mb-3">
+                      <DraggableImageGrid
+                        items={editImageItems}
+                        onReorder={setEditImageItems}
+                        onRemove={removeEditImage}
+                        onAddMore={editImageItems.length < MAX_IMAGES ? () => editFileRef.current?.click() : undefined}
+                        maxImages={MAX_IMAGES}
+                        newBadge={false}
+                      />
                     </div>
                     <input ref={editFileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { if (e.target.files?.length) addEditFiles(e.target.files); }} />
                     {editUploadError && <p className="text-red-500 text-xs mt-1">{editUploadError}</p>}
