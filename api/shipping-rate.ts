@@ -1,10 +1,11 @@
-// .cjs extension forces CommonJS even when package.json has "type":"module"
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+
 const SR_BASE = "https://apiv2.shiprocket.in/v1/external";
 
-let cachedToken = null;
+let cachedToken: string | null = null;
 let tokenExpiry = 0;
 
-function fetchWithTimeout(url, options, timeoutMs) {
+function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   return fetch(url, { ...options, signal: controller.signal }).finally(() =>
@@ -12,7 +13,7 @@ function fetchWithTimeout(url, options, timeoutMs) {
   );
 }
 
-async function getToken() {
+async function getToken(): Promise<string> {
   const now = Date.now();
   if (cachedToken && now < tokenExpiry) return cachedToken;
 
@@ -37,15 +38,21 @@ async function getToken() {
   const data = await res.json();
   if (!data.token) throw new Error(`No token in response: ${JSON.stringify(data)}`);
 
-  cachedToken = data.token;
+  cachedToken = data.token as string;
   tokenExpiry = now + 9 * 24 * 60 * 60 * 1000;
   return cachedToken;
 }
 
-async function checkServiceability(token, pincode, cod, weight, orderValue) {
+async function checkServiceability(
+  token: string,
+  pincode: string,
+  cod: boolean,
+  weight: number,
+  orderValue: number
+) {
   const params = new URLSearchParams({
-    pickup_postcode: process.env.SHIPROCKET_PICKUP_PINCODE,
-    delivery_postcode: String(pincode),
+    pickup_postcode: process.env.SHIPROCKET_PICKUP_PINCODE!,
+    delivery_postcode: pincode,
     weight: String(weight),
     cod: cod ? "1" : "0",
     declared_value: String(orderValue),
@@ -59,7 +66,7 @@ async function checkServiceability(token, pincode, cod, weight, orderValue) {
   );
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -74,7 +81,12 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: "SHIPROCKET_PICKUP_PINCODE not set" });
   }
 
-  const { pincode, cod = false, weight = 0.5, orderValue = 0 } = req.body || {};
+  const { pincode, cod = false, weight = 0.5, orderValue = 0 } = (req.body as {
+    pincode: string;
+    cod: boolean;
+    weight: number;
+    orderValue: number;
+  }) || {};
 
   if (!pincode || !/^\d{6}$/.test(String(pincode))) {
     return res.status(400).json({ error: "Enter a valid 6-digit pincode" });
@@ -100,8 +112,12 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const available =
-      (srData && srData.data && srData.data.available_courier_companies) || [];
+    const available: Array<{
+      courier_name: string;
+      estimated_delivery_days: number;
+      freight_charge: number;
+      cod_charges?: number;
+    }> = srData?.data?.available_courier_companies ?? [];
 
     if (!available.length) {
       return res.status(200).json({
@@ -118,13 +134,14 @@ module.exports = async function handler(req, res) {
       courierName: best.courier_name,
       estimatedDays: best.estimated_delivery_days,
       shippingCharge: Math.round(best.freight_charge),
-      codCharge: cod ? Math.round(best.cod_charges || 0) : 0,
+      codCharge: cod ? Math.round(best.cod_charges ?? 0) : 0,
     });
   } catch (err) {
-    if (err.name === "AbortError") {
+    const e = err as Error;
+    if (e.name === "AbortError") {
       return res.status(504).json({ error: "Request timed out. Please try again." });
     }
-    console.error("[shipping-rate]", err.message);
-    return res.status(500).json({ error: err.message });
+    console.error("[shipping-rate]", e.message);
+    return res.status(500).json({ error: e.message });
   }
-};
+}
