@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ChevronLeft, ChevronRight, ShoppingBag, Zap, ZoomIn, X, ZoomOut } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, ShoppingBag, Zap, ZoomIn, X, ZoomOut, RotateCcw } from "lucide-react";
 import { Product } from "../data/products";
 import { Button } from "./ui/button";
 import { useCart } from "../context/CartContext";
@@ -403,6 +403,15 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
 
 
 
+
+                    {/* Return Policy */}
+                    <div className="rounded-2xl bg-[#F3EEFB] px-4 py-3 mb-4 space-y-1.5 text-xs text-gray-600">
+                      <p className="font-semibold text-gray-800 mb-1">Return Policy</p>
+                      <p className="flex items-center gap-2">
+                        <RotateCcw className="w-3.5 h-3.5 text-[#9B6FD1] shrink-0" />
+                        Received a defective or wrong item? We'll give you a full refund or replacement.
+                      </p>
+                    </div>
 
                     {product.stock > 0 && product.stock <= 2 && (
                       <p className="text-xs font-semibold text-red-500 mb-3">

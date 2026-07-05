@@ -1,4 +1,5 @@
 import { SiInstagram, SiFacebook, SiPinterest } from "react-icons/si";
+import { RotateCcw } from "lucide-react";
 
 export function Footer() {
   return (
@@ -13,6 +14,16 @@ export function Footer() {
             </p>
           </div>
 
+
+          <div>
+            <h4 className="font-semibold text-gray-900 mb-4">Returns</h4>
+            <ul className="space-y-2 text-sm text-gray-500">
+              <li className="flex items-center gap-2">
+                <RotateCcw className="w-4 h-4 text-[#9B6FD1] shrink-0" />
+                Defective or wrong item? We'll offer a full refund or replacement.
+              </li>
+            </ul>
+          </div>
 
           <div>
             <h4 className="font-semibold text-gray-900 mb-4">Follow Us</h4>
