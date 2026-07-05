@@ -233,12 +233,17 @@ export function CartDrawer() {
                               <Minus className="w-3.5 h-3.5" />
                             </button>
                             <span className="text-sm font-bold text-gray-800 w-6 text-center">{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item.product.id, 1)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-[#F3EEFB] text-gray-500 hover:text-[#9B6FD1] transition-colors" data-testid={`qty-increase-${item.product.id}`}>
+                            <button onClick={() => updateQuantity(item.product.id, 1)} disabled={item.quantity >= item.product.stock} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-[#F3EEFB] text-gray-500 hover:text-[#9B6FD1] transition-colors disabled:opacity-30 disabled:cursor-not-allowed" data-testid={`qty-increase-${item.product.id}`}>
                               <Plus className="w-3.5 h-3.5" />
                             </button>
                           </div>
                           <span className="font-bold text-gray-900 text-base">₹{item.product.price * item.quantity}</span>
                         </div>
+                        {item.quantity >= item.product.stock && (
+                          <p className="text-[11px] text-red-500 font-medium mt-1.5">
+                            Only {item.product.stock} in stock
+                          </p>
+                        )}
                       </div>
                       <button onClick={() => removeFromCart(item.product.id)} className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center text-gray-300 hover:text-red-400 transition-colors" data-testid={`btn-remove-${item.product.id}`} aria-label={`Remove ${item.product.name}`}>
                         <X className="w-4 h-4" />

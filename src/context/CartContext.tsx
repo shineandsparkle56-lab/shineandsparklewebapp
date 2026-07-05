@@ -29,6 +29,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setCart((prev) => {
       const existing = prev.find((item) => item.product.id === product.id);
       if (existing) {
+        // Don't exceed available stock
+        if (existing.quantity >= product.stock) return prev;
         return prev.map((item) =>
           item.product.id === product.id
             ? { ...item, quantity: item.quantity + 1 }
@@ -47,7 +49,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setCart((prev) =>
       prev.map((item) => {
         if (item.product.id === id) {
-          const newQuantity = Math.max(1, item.quantity + delta);
+          const newQuantity = Math.min(
+            item.product.stock,          // never exceed stock
+            Math.max(1, item.quantity + delta)
+          );
           return { ...item, quantity: newQuantity };
         }
         return item;

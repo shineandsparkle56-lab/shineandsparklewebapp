@@ -197,19 +197,27 @@ export function AdminPanel() {
       customer_state:   editOrderForm.customer_state.trim(),
       pincode:          editOrderForm.pincode.trim(),
       payment_mode:     editOrderForm.payment_mode,
-      status:           editOrderForm.status,
       subtotal,
       shipping_charge,
       cod_charge,
       grand_total,
     };
 
-    const { error } = await supabase.from("orders").update(patch).eq("id", editOrder.id);
+    // Try saving with status first; if the column doesn't exist yet, retry without it
+    let { error, count } = await supabase.from("orders").update({ ...patch, status: editOrderForm.status }, { count: "exact" }).eq("id", editOrder.id);
+    if (error?.message?.includes("status")) {
+      console.warn("'status' column missing in orders table — saving without it. Run: ALTER TABLE orders ADD COLUMN status TEXT NOT NULL DEFAULT 'pending';");
+      ({ error, count } = await supabase.from("orders").update(patch, { count: "exact" }).eq("id", editOrder.id));
+    }
     if (error) {
-      showToast("Failed to save order.", "error");
+      console.error("Update order error:", error);
+      showToast(`Failed to save order: ${error.message}`, "error");
+    } else if (count === 0) {
+      console.warn("Update matched 0 rows — RLS may be blocking UPDATE on orders table.");
+      showToast("Update blocked by database policy. Add an UPDATE policy on the orders table in Supabase.", "error");
     } else {
       setOrders((prev) =>
-        prev.map((o) => o.id === editOrder.id ? { ...o, ...patch } : o)
+        prev.map((o) => o.id === editOrder.id ? { ...o, ...patch, status: editOrderForm.status } : o)
       );
       showToast("Order updated!");
       closeEditOrder();
@@ -485,20 +493,37 @@ export function AdminPanel() {
               </div>
               {loading ? (<div className="flex items-center justify-center py-16 text-gray-400 text-sm gap-2"><div className="w-4 h-4 border-2 border-[#9B6FD1] border-t-transparent rounded-full animate-spin" />Loading from Supabase…</div>)
               : error ? (<div className="px-6 py-8 text-center"><p className="text-red-400 text-sm font-medium">Could not load products</p><p className="text-gray-400 text-xs mt-1">{error}</p></div>)
-              : (<div className="divide-y divide-gray-50">{products.length === 0 && <p className="text-center text-gray-400 text-sm py-10">No products yet. Add one above.</p>}{products.map((p) => (<div key={p.id} className="flex items-center gap-4 px-6 py-4">
-                  <div className="flex -space-x-2 shrink-0">{(p.images?.length ? p.images.slice(0, 3) : [p.image]).map((img, i) => (<img key={i} src={img} alt={p.name} className="w-12 h-12 rounded-xl object-cover bg-[#F3EEFB] border-2 border-white" style={{ zIndex: 3 - i }} />))}</div>
-                  <div className="flex-1 min-w-0"><p className="font-medium text-gray-800 text-sm truncate">{p.name}</p><p className="text-xs text-gray-400 capitalize">{p.category} · ₹{p.price}{p.images?.length > 1 && <span className="ml-1 text-[#9B6FD1]">· {p.images.length} photos</span>}</p></div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.stock === 0 ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>{p.stock === 0 ? "OUT OF STOCK" : `${p.stock} in stock`}</span>
+              : (<div className="divide-y divide-gray-50">{products.length === 0 && <p className="text-center text-gray-400 text-sm py-10">No products yet. Add one above.</p>}{products.map((p) => (
+                <div key={p.id} className="px-4 py-4 flex flex-col gap-3">
+                  {/* Row 1: images + name + action buttons */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex -space-x-2 shrink-0">
+                      {(p.images?.length ? p.images.slice(0, 3) : [p.image]).map((img, i) => (
+                        <img key={i} src={img} alt={p.name} className="w-11 h-11 rounded-xl object-cover bg-[#F3EEFB] border-2 border-white" style={{ zIndex: 3 - i }} />
+                      ))}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-800 text-sm truncate">{p.name}</p>
+                      <p className="text-xs text-gray-400 capitalize">{p.category} · ₹{p.price}{p.images?.length > 1 && <span className="ml-1 text-[#9B6FD1]">· {p.images.length} photos</span>}</p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button onClick={() => openEdit(p)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-[#9B6FD1] hover:bg-[#F3EEFB] transition-colors" title="Edit product"><Pencil className="w-4 h-4" /></button>
+                      <button onClick={() => setDeleteId(p.id)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors" title="Delete product"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  </div>
+                  {/* Row 2: stock badge + stepper */}
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${p.stock === 0 ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>
+                      {p.stock === 0 ? "OUT OF STOCK" : `${p.stock} in stock`}
+                    </span>
                     <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1">
                       <button type="button" onClick={() => updateStock(p.id, p.stock - 1)} disabled={p.stock === 0} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] disabled:opacity-30 transition-colors"><Minus className="w-3 h-3" /></button>
                       <span className="text-sm font-semibold text-gray-700 w-8 text-center">{p.stock}</span>
                       <button type="button" onClick={() => updateStock(p.id, p.stock + 1)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] transition-colors"><Plus className="w-3 h-3" /></button>
                     </div>
                   </div>
-                  <button onClick={() => openEdit(p)} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-[#9B6FD1] hover:bg-[#F3EEFB] transition-colors" title="Edit product"><Pencil className="w-4 h-4" /></button>
-                  <button onClick={() => setDeleteId(p.id)} className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors"><Trash2 className="w-4 h-4" /></button>
-                </div>))}</div>)}
+                </div>
+              ))}</div>)}
             </div>
           </>
         )}

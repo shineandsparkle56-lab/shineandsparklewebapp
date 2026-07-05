@@ -202,7 +202,6 @@ function ZoomLightbox({ src, alt, onClose }: ZoomLightboxProps) {
 // ── Main modal ────────────────────────────────────────────────
 export function ProductDetailModal({ product, onClose }: ProductDetailModalProps) {
   const { addToCart, setIsCartOpen } = useCart();
-  const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [addedFeedback, setAddedFeedback] = useState(false);
   const [activeImg, setActiveImg] = useState(0);
   const [zoomOpen, setZoomOpen] = useState(false);
@@ -219,7 +218,6 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
 
   const handleClose = () => {
     if (zoomOpen) { setZoomOpen(false); return; }
-    setSelectedSize(null);
     setAddedFeedback(false);
     setActiveImg(0);
     onClose();
@@ -368,11 +366,10 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                             key={i}
                             onClick={() => setActiveImg(i)}
                             aria-label={`View image ${i + 1}`}
-                            className={`w-14 h-14 rounded-xl overflow-hidden border-2 transition-all duration-200 flex-shrink-0 ${
-                              i === activeImg
-                                ? "border-[#9B6FD1] shadow-md scale-105"
-                                : "border-transparent opacity-60 hover:opacity-90 hover:border-[#9B6FD1]/40"
-                            }`}
+                            className={`w-14 h-14 rounded-xl overflow-hidden border-2 transition-all duration-200 flex-shrink-0 ${i === activeImg
+                              ? "border-[#9B6FD1] shadow-md scale-105"
+                              : "border-transparent opacity-60 hover:opacity-90 hover:border-[#9B6FD1]/40"
+                              }`}
                           >
                             <img src={img} alt={`Thumbnail ${i + 1}`} className="w-full h-full object-cover object-center" />
                           </button>
@@ -404,31 +401,13 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                       <p className="text-gray-500 text-sm leading-relaxed mb-6">{product.description}</p>
                     )}
 
-                    {(product.sizes.length > 1 || product.sizes[0] !== "One Size") && (
-                      <div className="mb-6">
-                        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-                          {product.category === "rings" ? "Ring Size"
-                            : product.category === "necklaces" ? "Chain Length"
-                            : product.category === "bracelets" ? "Bracelet Size"
-                            : "Size"}
-                        </p>
-                        <div className="flex flex-wrap gap-2" data-testid="size-selector">
-                          {product.sizes.map((size) => (
-                            <button
-                              key={size}
-                              onClick={() => setSelectedSize(size === selectedSize ? null : size)}
-                              data-testid={`size-option-${size}`}
-                              className={`px-4 py-2 rounded-full text-sm font-medium border transition-all duration-200 ${
-                                selectedSize === size
-                                  ? "bg-[#9B6FD1] border-[#9B6FD1] text-white shadow-md"
-                                  : "bg-white border-gray-200 text-gray-600 hover:border-[#9B6FD1] hover:text-[#9B6FD1]"
-                              }`}
-                            >
-                              {size}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+
+
+
+                    {product.stock > 0 && product.stock <= 2 && (
+                      <p className="text-xs font-semibold text-red-500 mb-3">
+                        Only {product.stock} left in stock!
+                      </p>
                     )}
 
                     <div className="flex flex-col sm:flex-row gap-3 md:mt-auto pt-2">
