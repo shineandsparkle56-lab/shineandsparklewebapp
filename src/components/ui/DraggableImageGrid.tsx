@@ -91,11 +91,11 @@ function ImageTile({
         <GripVertical className="w-3 h-3" />
       </div>
 
-      {/* Remove button */}
+      {/* Remove button — always visible */}
       <button
         type="button"
         onClick={() => onRemove(item.id)}
-        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100 z-20"
+        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow hover:bg-red-600 transition-colors z-20"
       >
         <X className="w-3 h-3" />
       </button>

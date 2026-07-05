@@ -16,7 +16,7 @@ import type { CartItem } from "../context/CartContext";
 import { DraggableImageGrid, ImageItem } from "../components/ui/DraggableImageGrid";
 
 const BUCKET = "product-images";
-const MAX_IMAGES = 5;
+const MAX_IMAGES = 6;
 const empty = { name: "", category: "", price: "", originalPrice: "", description: "", stock: "10" };
 
 type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
