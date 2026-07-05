@@ -45,7 +45,7 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
     const { data, error: err } = await supabase
       .from("products")
       .select("*")
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: false });
 
     if (err) { setError(err.message); setLoading(false); return; }
     setProducts((data ?? []).map(mapRow));
