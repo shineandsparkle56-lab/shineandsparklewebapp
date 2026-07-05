@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutGrid, List } from "lucide-react";
+import { LayoutGrid, List, ArrowUpDown, Check } from "lucide-react";
 import { useProducts } from "../context/ProductsContext";
 import { useCategories } from "../context/CategoriesContext";
 import { useScroll } from "../context/ScrollContext";
 import { ProductCard } from "./ProductCard";
 
 type ViewMode = "grid" | "list";
+type SortOrder = "default" | "low-high" | "high-low";
 
 // Navbar is h-20 (80px). Filter bar is ~48px. Total reserved = 128px.
 // We use CSS vars so the section padding always matches.
@@ -20,16 +21,35 @@ export function ProductGrid() {
   const { scrollingDown } = useScroll();
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("default");
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortRef = useRef<HTMLDivElement>(null);
+
+  // Close sort dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
+        setSortOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   const tabs = [
     { id: "all", label: "All" },
     ...categories.map((c) => ({ id: c.name, label: c.label })),
   ];
 
-  const filtered =
-    activeCategory === "all"
-      ? products
-      : products.filter((p) => p.category === activeCategory);
+  const filtered = activeCategory === "all"
+    ? products
+    : products.filter((p) => p.category === activeCategory);
+
+  const sorted = sortOrder === "low-high"
+    ? [...filtered].sort((a, b) => a.price - b.price)
+    : sortOrder === "high-low"
+    ? [...filtered].sort((a, b) => b.price - a.price)
+    : filtered;
 
   return (
     <>
@@ -72,6 +92,54 @@ export function ProductGrid() {
                   {tab.label}
                 </button>
               ))}
+            </div>
+
+            {/* ── Sort dropdown ── */}
+            <div className="relative shrink-0" ref={sortRef}>
+              <button
+                onClick={() => setSortOpen((o) => !o)}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all duration-200 ${
+                  sortOrder !== "default"
+                    ? "bg-[#9B6FD1] text-white shadow-md"
+                    : "bg-[#F3EEFB] text-gray-600 hover:text-[#9B6FD1]"
+                }`}
+                aria-label="Sort by price"
+              >
+                <ArrowUpDown className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden sm:inline">
+                  {sortOrder === "low-high" ? "Low to High" : sortOrder === "high-low" ? "High to Low" : "Sort"}
+                </span>
+              </button>
+
+              <AnimatePresence>
+                {sortOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 mt-2 w-44 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50"
+                  >
+                    {(["default", "low-high", "high-low"] as SortOrder[]).map((opt) => {
+                      const labels = { default: "Default", "low-high": "Price: Low to High", "high-low": "Price: High to Low" };
+                      return (
+                        <button
+                          key={opt}
+                          onClick={() => { setSortOrder(opt); setSortOpen(false); }}
+                          className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${
+                            sortOrder === opt
+                              ? "text-[#9B6FD1] font-semibold bg-[#F3EEFB]"
+                              : "text-gray-600 hover:bg-gray-50"
+                          }`}
+                        >
+                          {labels[opt]}
+                          {sortOrder === opt && <Check className="w-3.5 h-3.5 text-[#9B6FD1]" />}
+                        </button>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* ── View toggle — mobile only ── */}
@@ -137,7 +205,7 @@ export function ProductGrid() {
             <>
               <AnimatePresence mode="wait">
                 <motion.div
-                  key={`${activeCategory}-${viewMode}`}
+                  key={`${activeCategory}-${viewMode}-${sortOrder}`}
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
@@ -149,7 +217,7 @@ export function ProductGrid() {
                       : "grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4"
                   }
                 >
-                  {filtered.map((product, index) => (
+                  {sorted.map((product, index) => (
                     <ProductCard
                       key={product.id}
                       product={product}
@@ -160,7 +228,7 @@ export function ProductGrid() {
                 </motion.div>
               </AnimatePresence>
 
-              {filtered.length === 0 && (
+              {sorted.length === 0 && (
                 <p className="text-center text-gray-400 py-16">
                   No products in this category yet.
                 </p>
