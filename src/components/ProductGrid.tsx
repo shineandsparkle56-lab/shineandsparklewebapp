@@ -2,19 +2,11 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { LayoutGrid, List } from "lucide-react";
 import { useProducts } from "../context/ProductsContext";
+import { useCategories } from "../context/CategoriesContext";
 import { useScroll } from "../context/ScrollContext";
 import { ProductCard } from "./ProductCard";
 
-type Category = "all" | "rings" | "earrings" | "necklaces" | "bracelets";
 type ViewMode = "grid" | "list";
-
-const TABS: { id: Category; label: string }[] = [
-  { id: "all",       label: "All"       },
-  { id: "rings",     label: "Rings"     },
-  { id: "earrings",  label: "Earrings"  },
-  { id: "necklaces", label: "Necklaces" },
-  { id: "bracelets", label: "Bracelets" },
-];
 
 // Navbar is h-20 (80px). Filter bar is ~48px. Total reserved = 128px.
 // We use CSS vars so the section padding always matches.
@@ -24,9 +16,15 @@ const TOTAL_OFFSET = NAVBAR_H + FILTER_H; // 132px
 
 export function ProductGrid() {
   const { products, loading, error } = useProducts();
+  const { categories } = useCategories();
   const { scrollingDown } = useScroll();
-  const [activeCategory, setActiveCategory] = useState<Category>("all");
+  const [activeCategory, setActiveCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+
+  const tabs = [
+    { id: "all", label: "All" },
+    ...categories.map((c) => ({ id: c.name, label: c.label })),
+  ];
 
   const filtered =
     activeCategory === "all"
@@ -52,7 +50,7 @@ export function ProductGrid() {
           <div className="flex items-center gap-3">
             {/* ── Category chips — horizontal scroll, no wrap ── */}
             <div className="flex-1 flex items-center gap-2 overflow-x-auto scrollbar-none min-w-0">
-              {TABS.map((tab) => (
+              {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   data-testid={`filter-tab-${tab.id}`}

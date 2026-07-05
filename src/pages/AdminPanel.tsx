@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion";
 import {
   Plus, Trash2, LogOut, Package, Sparkles,
   ChevronDown, CheckCircle2, Upload, X, Image,
-  ShoppingBag, Download, FileText, Loader2, Minus, Pencil,
+  ShoppingBag, Download, FileText, Loader2, Minus, Pencil, Tag, GripVertical,
 } from "lucide-react";
 import { useProducts } from "../context/ProductsContext";
+import { useCategories } from "../context/CategoriesContext";
 import { Product } from "../data/products";
 import { supabase } from "../lib/supabase";
 import { generateOrderPDF } from "../utils/generateOrderPDF";
@@ -16,14 +17,7 @@ import { DraggableImageGrid, ImageItem } from "../components/ui/DraggableImageGr
 
 const BUCKET = "product-images";
 const MAX_IMAGES = 5;
-const CATEGORIES: Product["category"][] = ["rings", "earrings", "necklaces", "bracelets"];
-const SIZES_BY_CATEGORY: Record<Product["category"], string[]> = {
-  rings: ["5", "6", "7", "8", "9"],
-  earrings: ["One Size"],
-  necklaces: ["16 inch", "18 inch", "20 inch"],
-  bracelets: ['Small (6.5")', 'Medium (7")', 'Large (7.5")'],
-};
-const empty = { name: "", category: "rings" as Product["category"], price: "", originalPrice: "", description: "", stock: "10" };
+const empty = { name: "", category: "", price: "", originalPrice: "", description: "", stock: "10" };
 
 type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
 
@@ -68,11 +62,55 @@ interface EditOrderForm {
   cod_charge: string;
 }
 
+// ── Draggable category row ────────────────────────────────────
+function CategoryRow({ cat, onDelete }: { cat: import("../context/CategoriesContext").Category; onDelete: () => void }) {
+  const controls = useDragControls();
+  return (
+    <Reorder.Item
+      value={cat}
+      dragListener={false}
+      dragControls={controls}
+      className="px-6 py-4 flex items-center gap-3 bg-white border-b border-gray-50 last:border-0"
+    >
+      <button
+        onPointerDown={(e) => controls.start(e)}
+        className="cursor-grab active:cursor-grabbing touch-none text-gray-300 hover:text-[#9B6FD1] transition-colors shrink-0"
+        aria-label="Drag to reorder"
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
+      <div className="w-9 h-9 rounded-xl bg-[#F3EEFB] flex items-center justify-center shrink-0">
+        <Tag className="w-4 h-4 text-[#9B6FD1]" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-gray-800 text-sm">{cat.label}</p>
+        <p className="text-xs text-gray-400">slug: <span className="font-mono">{cat.name}</span></p>
+      </div>
+      <button
+        onClick={onDelete}
+        className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors"
+        title="Delete category"
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
+    </Reorder.Item>
+  );
+}
+
 export function AdminPanel() {
   const [, navigate] = useLocation();
   const { products, addProduct, updateProduct, deleteProduct, updateStock, loading, error } = useProducts();
-  const [activeTab, setActiveTab] = useState<"products" | "orders">("products");
+  const { categories, addCategory, deleteCategory, reorderCategories } = useCategories();
+  const [activeTab, setActiveTab] = useState<"products" | "orders" | "categories">("products");
   const [form, setForm] = useState(empty);
+
+  // Category management state
+  const [catName, setCatName] = useState("");
+  const [catLabel, setCatLabel] = useState("");
+  const [catSaving, setCatSaving] = useState(false);
+  const [catError, setCatError] = useState("");
+  const [deleteCatId, setDeleteCatId] = useState<number | null>(null);
+  const [deletingCat, setDeletingCat] = useState(false);
 
   // Multi-image state (Add form) — single array keeps files + previews in sync
   const [imageItems, setImageItems] = useState<ImageItem[]>([]);
@@ -112,6 +150,13 @@ export function AdminPanel() {
 
   useEffect(() => { if (!sessionStorage.getItem("sns_admin")) navigate("/admin"); }, [navigate]);
   useEffect(() => { return () => { imageItems.forEach((it) => URL.revokeObjectURL(it.preview)); }; }, []);
+
+  // Auto-select first category when categories load
+  useEffect(() => {
+    if (categories.length > 0 && !form.category) {
+      setForm((prev) => ({ ...prev, category: categories[0].name }));
+    }
+  }, [categories]);
 
   useEffect(() => {
     if (activeTab === "orders") fetchOrders();
@@ -273,6 +318,34 @@ export function AdminPanel() {
     }
   };
 
+  // ── Category handlers ────────────────────────────────────────
+  const handleAddCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!catName.trim() || !catLabel.trim()) return;
+    setCatSaving(true); setCatError("");
+    try {
+      await addCategory(catName, catLabel);
+      setCatName(""); setCatLabel("");
+      showToast("Category added!");
+    } catch (err: unknown) {
+      setCatError(err instanceof Error ? err.message : "Failed to add category.");
+    }
+    setCatSaving(false);
+  };
+
+  const handleDeleteCategory = async () => {
+    if (deleteCatId === null) return;
+    setDeletingCat(true);
+    try {
+      await deleteCategory(deleteCatId);
+      showToast("Category deleted.");
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Delete failed.", "error");
+    }
+    setDeletingCat(false);
+    setDeleteCatId(null);
+  };
+
   // ── Image helpers (Add form) ─────────────────────────────────
   const addFiles = useCallback((incoming: FileList | File[]) => {
     setUploadError("");
@@ -332,8 +405,8 @@ export function AdminPanel() {
     }
     if (imageUrls.length === 0) imageUrls = [`https://placehold.co/400x400/F3EEFB/9B6FD1?text=${encodeURIComponent(form.name)}`];
     const discount = Math.max(0, Math.round(((originalPrice - price) / originalPrice) * 100));
-    await addProduct({ name: form.name.trim(), category: form.category, price, originalPrice, discount, image: imageUrls[0], images: imageUrls, description: form.description.trim(), sizes: SIZES_BY_CATEGORY[form.category], stock: Math.max(0, Number(form.stock) || 0) });
-    setSaving(false); setForm(empty); clearImages();
+    await addProduct({ name: form.name.trim(), category: form.category, price, originalPrice, discount, image: imageUrls[0], images: imageUrls, description: form.description.trim(), sizes: [], stock: Math.max(0, Number(form.stock) || 0) });
+    setSaving(false); setForm({ ...empty, category: categories[0]?.name ?? "" }); clearImages();
     showToast("Product saved!");
   };
 
@@ -395,7 +468,7 @@ export function AdminPanel() {
 
     if (finalImages.length === 0) finalImages.push(`https://placehold.co/400x400/F3EEFB/9B6FD1?text=${encodeURIComponent(editForm.name)}`);
     const discount = Math.max(0, Math.round(((originalPrice - price) / originalPrice) * 100));
-    await updateProduct(editProduct.id, { name: editForm.name.trim(), category: editForm.category, price, originalPrice, discount, image: finalImages[0], images: finalImages, description: editForm.description.trim(), sizes: SIZES_BY_CATEGORY[editForm.category], stock: Math.max(0, Number(editForm.stock) || 0) });
+    await updateProduct(editProduct.id, { name: editForm.name.trim(), category: editForm.category, price, originalPrice, discount, image: finalImages[0], images: finalImages, description: editForm.description.trim(), sizes: [], stock: Math.max(0, Number(editForm.stock) || 0) });
     setEditSaving(false); closeEdit();
     showToast("Product updated!");
   };
@@ -435,7 +508,7 @@ export function AdminPanel() {
           </div>
         </div>
         <div className="max-w-5xl mx-auto px-4 flex gap-1 border-t border-gray-100">
-          {([["products", Package, "Products"], ["orders", ShoppingBag, "Orders"]] as const).map(([tab, Icon, label]) => (
+          {([["products", Package, "Products"], ["orders", ShoppingBag, "Orders"], ["categories", Tag, "Categories"]] as const).map(([tab, Icon, label]) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === tab ? "border-[#9B6FD1] text-[#9B6FD1]" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
               <Icon className="w-4 h-4" />{label}
@@ -456,7 +529,7 @@ export function AdminPanel() {
               <form onSubmit={handleSubmit} className="p-6 space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div className="sm:col-span-2"><label className="label">Product Name</label><input required value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Gold Lotus Ring" className="input" /></div>
-                  <div><label className="label">Category</label><div className="relative"><select value={form.category} onChange={(e) => set("category", e.target.value as Product["category"])} className="input appearance-none pr-8 capitalize">{CATEGORIES.map((c) => <option key={c} value={c} className="capitalize">{c}</option>)}</select><ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" /></div></div>
+                  <div><label className="label">Category</label><div className="relative"><select value={form.category} onChange={(e) => set("category", e.target.value)} className="input appearance-none pr-8 capitalize">{categories.map((c) => <option key={c.name} value={c.name} className="capitalize">{c.label}</option>)}</select><ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" /></div></div>
                   <div><label className="label">Selling Price (₹)</label><input required type="number" min="1" value={form.price} onChange={(e) => set("price", e.target.value)} placeholder="799" className="input" /></div>
                   <div><label className="label">Original Price (₹)</label><input required type="number" min="1" value={form.originalPrice} onChange={(e) => set("originalPrice", e.target.value)} placeholder="1199" className="input" /></div>
                   <div className="sm:col-span-2">
@@ -641,7 +714,117 @@ export function AdminPanel() {
             )}
           </div>
         )}
+
+        {/* ── Categories Tab ── */}
+        {activeTab === "categories" && (
+          <div className="space-y-6">
+            {/* Add Category */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+                <Plus className="w-5 h-5 text-[#9B6FD1]" />
+                <h2 className="font-semibold text-gray-800">Add New Category</h2>
+              </div>
+              <form onSubmit={handleAddCategory} className="p-6 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="label">Slug (internal name)</label>
+                    <input
+                      required
+                      value={catName}
+                      onChange={(e) => setCatName(e.target.value)}
+                      placeholder="e.g. pendants"
+                      className="input"
+                    />
+                    <p className="text-[11px] text-gray-400 mt-1">Lowercase, no spaces — used for filtering</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="label">Display Label</label>
+                    <input
+                      required
+                      value={catLabel}
+                      onChange={(e) => setCatLabel(e.target.value)}
+                      placeholder="e.g. Pendants"
+                      className="input"
+                    />
+                    <p className="text-[11px] text-gray-400 mt-1">Shown to customers on the storefront</p>
+                  </div>
+                </div>
+                {catError && <p className="text-red-500 text-xs">{catError}</p>}
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={catSaving}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-[#9B6FD1] text-white text-sm font-semibold rounded-xl hover:bg-[#8a5fc0] transition-colors disabled:opacity-60"
+                  >
+                    {catSaving
+                      ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving…</>
+                      : <><Plus className="w-4 h-4" />Add Category</>
+                    }
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Category List */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+                <Tag className="w-5 h-5 text-[#9B6FD1]" />
+                <h2 className="font-semibold text-gray-800">All Categories</h2>
+                <span className="ml-auto text-sm text-gray-400">{categories.length} total</span>
+              </div>
+              {categories.length === 0 ? (
+                <p className="text-center text-gray-400 text-sm py-10">No categories yet. Add one above.</p>
+              ) : (
+                <Reorder.Group
+                  axis="y"
+                  values={categories}
+                  onReorder={reorderCategories}
+                  className="divide-y divide-gray-50"
+                >
+                  {categories.map((cat) => (
+                    <CategoryRow
+                      key={cat.id}
+                      cat={cat}
+                      onDelete={() => setDeleteCatId(cat.id)}
+                    />
+                  ))}
+                </Reorder.Group>
+              )}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* ══════════════════════════════════════════════════════
+          DELETE CATEGORY MODAL
+      ══════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {deleteCatId !== null && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+            onClick={() => setDeleteCatId(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl p-6 max-w-xs w-full shadow-2xl"
+            >
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mb-4">
+                <Trash2 className="w-5 h-5 text-red-500" />
+              </div>
+              <h3 className="font-semibold text-gray-800 mb-1">Delete category?</h3>
+              <p className="text-sm text-gray-500 mb-5">Existing products in this category won't be deleted, but they'll no longer appear under a filter tab.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setDeleteCatId(null)} className="flex-1 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors">Cancel</button>
+                <button disabled={deletingCat} onClick={handleDeleteCategory} className="flex-1 py-2 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-colors disabled:opacity-60">
+                  {deletingCat ? "Deleting…" : "Delete"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ══════════════════════════════════════════════════════
           EDIT ORDER MODAL
@@ -840,7 +1023,7 @@ export function AdminPanel() {
               <form onSubmit={handleEditSubmit} className="p-6 space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div className="sm:col-span-2"><label className="label">Product Name</label><input required value={editForm.name} onChange={(e) => setE("name", e.target.value)} className="input" /></div>
-                  <div><label className="label">Category</label><div className="relative"><select value={editForm.category} onChange={(e) => setE("category", e.target.value as Product["category"])} className="input appearance-none pr-8 capitalize">{CATEGORIES.map((c) => <option key={c} value={c} className="capitalize">{c}</option>)}</select><ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" /></div></div>
+                  <div><label className="label">Category</label><div className="relative"><select value={editForm.category} onChange={(e) => setE("category", e.target.value)} className="input appearance-none pr-8 capitalize">{categories.map((c) => <option key={c.name} value={c.name} className="capitalize">{c.label}</option>)}</select><ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" /></div></div>
                   <div><label className="label">Stock Quantity</label><input required type="number" min="0" value={editForm.stock} onChange={(e) => setE("stock", e.target.value)} className="input" /></div>
                   <div><label className="label">Selling Price (₹)</label><input required type="number" min="1" value={editForm.price} onChange={(e) => setE("price", e.target.value)} className="input" /></div>
                   <div><label className="label">Original Price (₹)</label><input required type="number" min="1" value={editForm.originalPrice} onChange={(e) => setE("originalPrice", e.target.value)} className="input" /></div>
