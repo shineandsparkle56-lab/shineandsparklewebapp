@@ -9,11 +9,7 @@ import { ProductCard } from "./ProductCard";
 type ViewMode = "grid" | "list";
 type SortOrder = "default" | "low-high" | "high-low";
 
-// Navbar is h-20 (80px). Filter bar is ~48px. Total reserved = 128px.
-// We use CSS vars so the section padding always matches.
-const NAVBAR_H = 56;   // px — matches h-14 in Navbar
-const FILTER_H = 52;   // px — filter bar height including py
-const TOTAL_OFFSET = NAVBAR_H + FILTER_H; // 132px
+const NAVBAR_H = 56; // px — h-14
 
 export function ProductGrid() {
   const { products, loading, error } = useProducts();
@@ -60,42 +56,44 @@ export function ProductGrid() {
           so it exits the screen completely as a unit with the navbar.
       ── */}
       <div
-        className={`fixed left-0 right-0 z-30 bg-white border-b border-gray-100 shadow-sm transition-transform duration-300 ease-in-out ${
-          scrollingDown ? "-translate-y-[128px]" : "translate-y-0"
-        }`}
-        style={{ top: `${NAVBAR_H}px` }}
+        className="fixed left-0 right-0 z-30 bg-white border-b border-gray-100 shadow-sm transition-transform duration-300 ease-in-out"
+        style={{
+          top: `${NAVBAR_H}px`,
+          transform: scrollingDown ? `translateY(-${NAVBAR_H + 96}px)` : "translateY(0)",
+        }}
         data-testid="category-filter-bar"
       >
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center gap-3">
-            {/* ── Category chips — horizontal scroll, no wrap ── */}
-            <div className="flex-1 flex items-center gap-2 overflow-x-auto scrollbar-none min-w-0">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  data-testid={`filter-tab-${tab.id}`}
-                  onClick={() => setActiveCategory(tab.id)}
-                  className={`relative flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 focus:outline-none ${
-                    activeCategory === tab.id
-                      ? "text-white shadow-md"
-                      : "text-gray-500 bg-[#F3EEFB] hover:text-[#9B6FD1]"
-                  }`}
-                >
-                  {activeCategory === tab.id && (
-                    <motion.span
-                      layoutId="active-pill"
-                      className="absolute inset-0 rounded-full bg-[#9B6FD1]"
-                      style={{ zIndex: -1 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                    />
-                  )}
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+        <div className="container mx-auto px-4 py-2">
+          {/* Row 1 — Category chips */}
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-none mb-2">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                data-testid={`filter-tab-${tab.id}`}
+                onClick={() => setActiveCategory(tab.id)}
+                className={`relative flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 focus:outline-none ${
+                  activeCategory === tab.id
+                    ? "text-white shadow-md"
+                    : "text-gray-500 bg-[#F3EEFB] hover:text-[#9B6FD1]"
+                }`}
+              >
+                {activeCategory === tab.id && (
+                  <motion.span
+                    layoutId="active-pill"
+                    className="absolute inset-0 rounded-full bg-[#9B6FD1]"
+                    style={{ zIndex: -1 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
-            {/* ── Sort dropdown ── */}
-            <div className="relative shrink-0" ref={sortRef}>
+          {/* Row 2 — Sort + View toggle */}
+          <div className="flex items-center justify-between gap-2">
+            {/* Sort dropdown */}
+            <div className="relative" ref={sortRef}>
               <button
                 onClick={() => setSortOpen((o) => !o)}
                 className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all duration-200 ${
@@ -106,8 +104,8 @@ export function ProductGrid() {
                 aria-label="Sort by price"
               >
                 <ArrowUpDown className="w-3.5 h-3.5 shrink-0" />
-                <span className="hidden sm:inline">
-                  {sortOrder === "low-high" ? "Low to High" : sortOrder === "high-low" ? "High to Low" : "Sort"}
+                <span>
+                  {sortOrder === "low-high" ? "Low to High" : sortOrder === "high-low" ? "High to Low" : "Sort by Price"}
                 </span>
               </button>
 
@@ -118,7 +116,7 @@ export function ProductGrid() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 6, scale: 0.96 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute right-0 mt-2 w-44 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50"
+                    className="absolute left-0 mt-2 w-44 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50"
                   >
                     {(["default", "low-high", "high-low"] as SortOrder[]).map((opt) => {
                       const labels = { default: "Default", "low-high": "Price: Low to High", "high-low": "Price: High to Low" };
@@ -142,8 +140,8 @@ export function ProductGrid() {
               </AnimatePresence>
             </div>
 
-            {/* ── View toggle — mobile only ── */}
-            <div className="flex sm:hidden items-center gap-1 bg-[#F3EEFB] rounded-full p-1 shrink-0">
+            {/* View toggle */}
+            <div className="flex items-center gap-1 bg-[#F3EEFB] rounded-full p-1 shrink-0">
               <button
                 onClick={() => setViewMode("grid")}
                 aria-label="Grid view"
@@ -177,8 +175,7 @@ export function ProductGrid() {
       ── */}
       <section
         id="shop"
-        className="bg-white pb-20"
-        style={{ paddingTop: `${TOTAL_OFFSET + 16}px` }}
+        className="bg-white pb-20 pt-[120px]"
       >
         <div className="container mx-auto px-4">
 
