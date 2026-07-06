@@ -172,8 +172,8 @@ export function ProductGrid() {
               </AnimatePresence>
             </div>
 
-            {/* View toggle */}
-            <div className="flex items-center gap-1 bg-[#F3EEFB] rounded-full p-1 shrink-0">
+            {/* View toggle — mobile only */}
+            <div className="flex items-center gap-1 bg-[#F3EEFB] rounded-full p-1 shrink-0 sm:hidden">
               <button
                 onClick={() => setViewMode("grid")}
                 aria-label="Grid view"

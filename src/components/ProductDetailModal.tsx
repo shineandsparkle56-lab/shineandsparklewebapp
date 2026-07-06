@@ -208,7 +208,94 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
 
   const images = product?.images?.length ? product.images : product ? [product.image] : [];
 
-  useEffect(() => { setActiveImg(0); }, [product?.id]);
+  // ── Instagram swipe state ────────────────────────────────────
+  const dragStartX = useRef<number | null>(null);
+  const dragStartY = useRef<number | null>(null);
+  const [dragOffset, setDragOffset] = useState(0);
+  const isDragging = useRef(false);
+
+  // ── Instagram pinch-zoom state ───────────────────────────────
+  const [pinchZoom, setPinchZoom] = useState(1);
+  const [pinchOriginScreen, setPinchOriginScreen] = useState({ x: 0, y: 0 });
+  const [pinchPan, setPinchPan] = useState({ x: 0, y: 0 });
+  const [pinchRect, setPinchRect] = useState<DOMRect | null>(null);
+  const isPinching = pinchZoom > 1;
+  const pinchStartDist = useRef<number | null>(null);
+  const pinchStartMid = useRef({ x: 0, y: 0 });
+  const imgPanelRef = useRef<HTMLDivElement | null>(null);
+
+  const getPinchDist = (t: React.TouchList) =>
+    Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+
+  const getPinchMid = (t: React.TouchList) => ({
+    x: (t[0].clientX + t[1].clientX) / 2,
+    y: (t[0].clientY + t[1].clientY) / 2,
+  });
+
+  const onImgTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dist = getPinchDist(e.touches);
+      const mid = getPinchMid(e.touches);
+      pinchStartDist.current = dist;
+      pinchStartMid.current = mid;
+      setPinchOriginScreen(mid);
+      setPinchPan({ x: 0, y: 0 });
+      if (imgPanelRef.current) setPinchRect(imgPanelRef.current.getBoundingClientRect());
+      dragStartX.current = null;
+      return;
+    }
+    // Single touch → swipe
+    dragStartX.current = e.touches[0].clientX;
+    dragStartY.current = e.touches[0].clientY;
+    isDragging.current = false;
+    setDragOffset(0);
+  };
+
+  const onImgTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pinchStartDist.current !== null) {
+      const dist = getPinchDist(e.touches);
+      const mid = getPinchMid(e.touches);
+      const scale = Math.max(1, Math.min(3, dist / pinchStartDist.current));
+      const pan = {
+        x: mid.x - pinchStartMid.current.x,
+        y: mid.y - pinchStartMid.current.y,
+      };
+      setPinchZoom(scale);
+      setPinchPan(pan);
+      e.preventDefault();
+      return;
+    }
+    if (pinchZoom > 1) return;
+    if (dragStartX.current === null || dragStartY.current === null) return;
+    const dx = e.touches[0].clientX - dragStartX.current;
+    const dy = e.touches[0].clientY - dragStartY.current;
+    if (!isDragging.current) {
+      if (Math.abs(dx) < Math.abs(dy)) return;
+      isDragging.current = true;
+    }
+    const atStart = activeImg === 0 && dx > 0;
+    const atEnd = activeImg === images.length - 1 && dx < 0;
+    setDragOffset(atStart || atEnd ? dx * 0.25 : dx);
+  };
+
+  const onImgTouchEnd = () => {
+    if (pinchStartDist.current !== null) {
+      pinchStartDist.current = null;
+      setPinchZoom(1);
+      setPinchPan({ x: 0, y: 0 });
+      setPinchRect(null);
+      return;
+    }
+    if (!isDragging.current) { dragStartX.current = null; return; }
+    const THRESHOLD = 50;
+    if (dragOffset < -THRESHOLD && activeImg < images.length - 1) setActiveImg((p) => p + 1);
+    else if (dragOffset > THRESHOLD && activeImg > 0) setActiveImg((p) => p - 1);
+    setDragOffset(0);
+    setTimeout(() => { isDragging.current = false; }, 0);
+    dragStartX.current = null;
+  };
+
+  useEffect(() => { setActiveImg(0); setDragOffset(0); setPinchZoom(1); setPinchPan({ x: 0, y: 0 }); }, [product?.id]);
 
   useEffect(() => {
     if (product) document.body.style.overflow = "hidden";
@@ -225,7 +312,7 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (zoomOpen) return; // lightbox handles its own keys
+      if (zoomOpen) return;
       if (e.key === "Escape") handleClose();
       if (e.key === "ArrowLeft") setActiveImg((p) => (p - 1 + images.length) % images.length);
       if (e.key === "ArrowRight") setActiveImg((p) => (p + 1) % images.length);
@@ -256,6 +343,13 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
   const goNext = (e: React.MouseEvent) => {
     e.stopPropagation();
     setActiveImg((p) => (p + 1) % images.length);
+  };
+
+  // Strip translate: locked during pinch
+  const stripStyle: React.CSSProperties = {
+    transform: `translateX(calc(${-(activeImg * 100)}% + ${isPinching ? 0 : dragOffset}px))`,
+    transition: (dragOffset !== 0 && !isPinching) ? "none" : "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
+    willChange: "transform",
   };
 
   return (
@@ -309,51 +403,73 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                       </div>
                     )}
 
-                    {/* Main image — click to zoom */}
+                    {/* ── Main image: sliding strip + pinch zoom ── */}
                     <div
-                      className="aspect-square md:aspect-auto md:flex-1 md:min-h-0 relative overflow-hidden group cursor-zoom-in"
-                      onClick={() => setZoomOpen(true)}
-                      title="Click to zoom"
+                      ref={imgPanelRef}
+                      className="aspect-square md:aspect-auto md:flex-1 md:min-h-0 relative overflow-hidden select-none"
+                      style={{ touchAction: "pan-y" }}
+                      onTouchStart={onImgTouchStart}
+                      onTouchMove={onImgTouchMove}
+                      onTouchEnd={onImgTouchEnd}
                     >
-                      <AnimatePresence mode="sync">
-                        <motion.img
-                          key={activeImg}
-                          src={images[activeImg]}
-                          alt={`${product.name} – view ${activeImg + 1}`}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: 0.3 }}
-                          className="absolute inset-0 w-full h-full object-contain object-center"
-                          draggable={false}
-                        />
-                      </AnimatePresence>
+                      {/* Sliding strip */}
+                      <div
+                        className="absolute inset-0 flex"
+                        style={stripStyle}
+                        onClick={() => !isDragging.current && setZoomOpen(true)}
+                        role="button"
+                        aria-label="Zoom image"
+                        tabIndex={0}
+                        onKeyDown={(e) => e.key === "Enter" && setZoomOpen(true)}
+                      >
+                        {images.map((src, i) => (
+                          <div key={src} className="relative flex-shrink-0 w-full h-full">
+                            <img
+                              src={src}
+                              alt={`${product.name} – view ${i + 1}`}
+                              draggable={false}
+                              className="absolute inset-0 w-full h-full object-contain object-center"
+                            />
+                          </div>
+                        ))}
+                      </div>
 
-                      {/* Zoom hint overlay — shows on hover */}
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                      {/* Zoom hint — desktop hover */}
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none hidden md:flex">
                         <div className="bg-black/40 backdrop-blur-sm text-white rounded-full px-3 py-1.5 flex items-center gap-1.5 text-xs font-medium">
                           <ZoomIn className="w-3.5 h-3.5" />
                           Zoom
                         </div>
                       </div>
 
-                      {/* Prev / Next arrows */}
+                      {/* Prev / Next arrows — desktop only */}
                       {images.length > 1 && (
                         <>
                           <button
                             onClick={goPrev}
-                            className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 flex items-center justify-center rounded-full bg-white/80 hover:bg-white shadow-md transition-all"
+                            className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 items-center justify-center rounded-full bg-white/80 hover:bg-white shadow-md transition-all"
                             aria-label="Previous image"
                           >
                             <ChevronLeft className="w-5 h-5 text-gray-700" />
                           </button>
                           <button
                             onClick={goNext}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 flex items-center justify-center rounded-full bg-white/80 hover:bg-white shadow-md transition-all"
+                            className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 items-center justify-center rounded-full bg-white/80 hover:bg-white shadow-md transition-all"
                             aria-label="Next image"
                           >
                             <ChevronRight className="w-5 h-5 text-gray-700" />
                           </button>
+                          {/* Dots */}
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex gap-1">
+                            {images.map((_, i) => (
+                              <button
+                                key={i}
+                                onClick={(e) => { e.stopPropagation(); setActiveImg(i); }}
+                                className={`rounded-full transition-all duration-200 ${i === activeImg ? "w-4 h-1.5 bg-[#9B6FD1]" : "w-1.5 h-1.5 bg-white/70 hover:bg-white"}`}
+                                aria-label={`Image ${i + 1}`}
+                              />
+                            ))}
+                          </div>
                         </>
                       )}
                     </div>
@@ -377,6 +493,34 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                       </div>
                     )}
                   </div>
+
+                  {/* ── Instagram pinch-zoom overlay (inside modal z-stack) ── */}
+                  {isPinching && pinchRect && (
+                    <div
+                      className="fixed inset-0 z-[9999] pointer-events-none"
+                      style={{ background: "rgba(0,0,0,0.45)" }}
+                    >
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: pinchRect.left,
+                          top: pinchRect.top,
+                          width: pinchRect.width,
+                          height: pinchRect.height,
+                          transformOrigin: `${pinchOriginScreen.x - pinchRect.left}px ${pinchOriginScreen.y - pinchRect.top}px`,
+                          transform: `translate(${pinchPan.x}px, ${pinchPan.y}px) scale(${pinchZoom})`,
+                          overflow: "hidden",
+                          willChange: "transform",
+                        }}
+                      >
+                        <img
+                          src={images[activeImg]}
+                          alt={product.name}
+                          style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center", display: "block" }}
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   {/* ── DETAILS PANEL ── */}
                   <div className="flex flex-col p-6 sm:p-8 flex-1 min-h-0 overflow-y-auto">
