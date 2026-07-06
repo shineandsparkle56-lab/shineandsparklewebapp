@@ -11,6 +11,38 @@ type SortOrder = "default" | "low-high" | "high-low";
 
 const NAVBAR_H = 56; // px — h-14
 
+// ── Shimmer skeleton ─────────────────────────────────────────
+function SkeletonCard({ view }: { view: "grid" | "list" }) {
+  if (view === "list") {
+    return (
+      <div className="flex flex-col bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+        {/* Image placeholder */}
+        <div className="aspect-square bg-gray-200 shimmer" />
+        {/* Text placeholders */}
+        <div className="p-4 flex flex-col gap-3">
+          <div className="h-4 bg-gray-200 shimmer rounded-full w-3/4" />
+          <div className="h-4 bg-gray-200 shimmer rounded-full w-1/3" />
+          <div className="grid grid-cols-2 gap-2 mt-1">
+            <div className="h-9 bg-gray-200 shimmer rounded-full" />
+            <div className="h-9 bg-gray-200 shimmer rounded-full" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // grid view
+  return (
+    <div className="flex flex-col bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+      <div className="aspect-square bg-gray-200 shimmer" />
+      <div className="p-2.5 flex flex-col gap-2">
+        <div className="h-3 bg-gray-200 shimmer rounded-full w-4/5" />
+        <div className="h-3 bg-gray-200 shimmer rounded-full w-2/5" />
+        <div className="h-8 bg-gray-200 shimmer rounded-xl mt-1" />
+      </div>
+    </div>
+  );
+}
+
 export function ProductGrid() {
   const { products, loading, error } = useProducts();
   const { categories } = useCategories();
@@ -179,10 +211,16 @@ export function ProductGrid() {
       >
         <div className="container mx-auto px-4">
 
-          {/* Loading */}
+          {/* Loading — shimmer skeleton */}
           {loading && (
-            <div className="flex justify-center items-center py-24">
-              <div className="w-8 h-8 border-2 border-[#9B6FD1] border-t-transparent rounded-full animate-spin" />
+            <div className={
+              viewMode === "list"
+                ? "grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4"
+                : "grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4"
+            }>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <SkeletonCard key={i} view={viewMode} />
+              ))}
             </div>
           )}
 
