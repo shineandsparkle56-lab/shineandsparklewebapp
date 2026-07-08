@@ -49,7 +49,10 @@ export function Navbar() {
                   >
                     <X className="w-4 h-4" />
                   </button>
-                  <p className="font-serif text-2xl font-bold text-white leading-tight mb-1">Shine and Sparkle</p>
+                  <div className="flex items-center gap-3 mb-1">
+                    <img src="/logo.png" alt="Shine and Sparkle" className="h-12 w-auto object-contain rounded-xl bg-white/10 p-1" />
+                    <p className="font-serif text-2xl font-bold text-white leading-tight">Shine and Sparkle</p>
+                  </div>
                   <p className="text-white/70 text-xs tracking-widest uppercase">Premium Indian Jewelry</p>
                   <div className="flex gap-3 mt-5">
                     <button
@@ -96,8 +99,15 @@ export function Navbar() {
           </div>
 
           {/* Logo */}
-          <a href="/" className="font-serif text-lg md:text-xl font-bold text-primary tracking-tight whitespace-nowrap">
-            Shine and Sparkle
+          <a href="/" className="flex items-center gap-2" aria-label="Shine and Sparkle - Home">
+            <img
+              src="/logo.png"
+              alt="Shine and Sparkle"
+              className="h-10 w-auto object-contain"
+            />
+            <span className="font-serif text-lg md:text-xl font-bold text-primary tracking-tight whitespace-nowrap">
+              Shine and Sparkle
+            </span>
           </a>
         </div>
 

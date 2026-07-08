@@ -7,7 +7,10 @@ export function Footer() {
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
           <div className="md:col-span-2">
-            <h3 className="font-serif text-2xl text-primary mb-4">Shine and Sparkle</h3>
+            <a href="/" className="inline-flex items-center gap-3 mb-4">
+              <img src="/logo.png" alt="Shine and Sparkle" className="h-12 w-auto object-contain" />
+              <h3 className="font-serif text-2xl text-primary">Shine and Sparkle</h3>
+            </a>
             <p className="text-gray-500 max-w-sm leading-relaxed">
               Trendy Indian jewelry for every occasion — sourced from the best wholesale suppliers
               and brought straight to you at honest prices.
