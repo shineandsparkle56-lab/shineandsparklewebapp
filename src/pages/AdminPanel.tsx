@@ -641,7 +641,7 @@ export function AdminPanel() {
                               {new Date(order.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                             </span>
                             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${order.payment_mode === "cod" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
-                              {order.payment_mode === "cod" ? "COD" : "Prepaid"}
+                              {order.payment_mode === "cod" ? "COD" : "Online"}
                             </span>
                             {/* Status badge */}
                             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${sm.color}`}>
@@ -894,7 +894,7 @@ export function AdminPanel() {
                             : "bg-white border-gray-200 text-gray-600 hover:border-[#9B6FD1]/50"
                         }`}
                       >
-                        {mode === "prepaid" ? "Prepaid" : "Cash on Delivery"}
+                        {mode === "prepaid" ? "Online Payment" : "Cash on Delivery"}
                       </button>
                     ))}
                   </div>

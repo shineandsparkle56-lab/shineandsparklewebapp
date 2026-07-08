@@ -1,5 +1,17 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Product } from "../data/products";
+
+const CART_STORAGE_KEY = "sns_cart";
+
+function loadCart(): CartItem[] {
+  try {
+    const raw = localStorage.getItem(CART_STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as CartItem[];
+  } catch {
+    return [];
+  }
+}
 
 export const WHATSAPP_NUMBER = "919574024419";
 
@@ -22,8 +34,17 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(loadCart);
   const [isCartOpen, setIsCartOpen] = useState(false);
+
+  // Persist cart to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+    } catch {
+      // Ignore storage errors (private browsing quota, etc.)
+    }
+  }, [cart]);
 
   const addToCart = (product: Product) => {
     setCart((prev) => {
@@ -46,18 +67,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const updateQuantity = (id: number, delta: number) => {
-    setCart((prev) =>
-      prev.map((item) => {
+    setCart((prev) => {
+      return prev.reduce<CartItem[]>((acc, item) => {
         if (item.product.id === id) {
           const newQuantity = Math.min(
-            item.product.stock,          // never exceed stock
-            Math.max(1, item.quantity + delta)
+            item.product.stock,
+            item.quantity + delta
           );
-          return { ...item, quantity: newQuantity };
+          // Remove item if quantity drops to 0 or below
+          if (newQuantity <= 0) return acc;
+          return [...acc, { ...item, quantity: newQuantity }];
         }
-        return item;
-      })
-    );
+        return [...acc, item];
+      }, []);
+    });
   };
 
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
