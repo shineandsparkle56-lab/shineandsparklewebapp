@@ -18,8 +18,6 @@ import { AdminLogin } from "./pages/AdminLogin";
 import { AdminPanel } from "./pages/AdminPanel";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { TermsOfService } from "./pages/TermsOfService";
-import { useVisitorTracking } from "./hooks/useVisitorTracking";
-
 const queryClient = new QueryClient();
 
 // ── Shared page shell — Navbar + Footer + CartDrawer on every page ──
@@ -35,25 +33,8 @@ function PageShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Maps raw path strings to human-readable page names for the analytics log.
-function resolvePageName(path: string): string {
-  if (path === "/")               return "Home";
-  if (path === "/about")          return "About";
-  if (path === "/contact")        return "Contact";
-  if (path === "/privacy-policy") return "Privacy Policy";
-  if (path === "/terms-of-service") return "Terms of Service";
-  if (path === "/admin")          return "Admin Login";
-  if (path === "/admin/dashboard") return "Admin Dashboard";
-  return path;
-}
-
 function AppRouter() {
   const [path] = useLocation();
-
-  // Track every page view — admin routes are intentionally included so you
-  // can see how often the login page is hit, but you can filter them out in
-  // the Analytics tab if you prefer.
-  useVisitorTracking(resolvePageName(path));
 
   if (path === "/admin")           return <AdminLogin />;
   if (path === "/admin/dashboard") return <AdminPanel />;
