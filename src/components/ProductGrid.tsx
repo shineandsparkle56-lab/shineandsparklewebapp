@@ -1,24 +1,21 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { LayoutGrid, List, ArrowUpDown, Check } from "lucide-react";
-import { useProducts } from "../context/ProductsContext";
 import { useCategories } from "../context/CategoriesContext";
 import { useScroll } from "../context/ScrollContext";
+import { useInfiniteProducts, SortOrder } from "../hooks/useInfiniteProducts";
 import { ProductCard } from "./ProductCard";
 
 type ViewMode = "grid" | "list";
-type SortOrder = "default" | "low-high" | "high-low";
 
 const NAVBAR_H = 56; // px — h-14
 
-// ── Shimmer skeleton ─────────────────────────────────────────
+// ── Shimmer skeleton ──────────────────────────────────────────
 function SkeletonCard({ view }: { view: "grid" | "list" }) {
   if (view === "list") {
     return (
       <div className="flex flex-col bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
-        {/* Image placeholder */}
         <div className="aspect-square bg-gray-200 shimmer" />
-        {/* Text placeholders */}
         <div className="p-4 flex flex-col gap-3">
           <div className="h-4 bg-gray-200 shimmer rounded-full w-3/4" />
           <div className="h-4 bg-gray-200 shimmer rounded-full w-1/3" />
@@ -30,7 +27,6 @@ function SkeletonCard({ view }: { view: "grid" | "list" }) {
       </div>
     );
   }
-  // grid view
   return (
     <div className="flex flex-col bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
       <div className="aspect-square bg-gray-200 shimmer" />
@@ -43,17 +39,47 @@ function SkeletonCard({ view }: { view: "grid" | "list" }) {
   );
 }
 
+// ── Spinner shown while loading the next page ─────────────────
+function LoadMoreSpinner() {
+  return (
+    <div className="flex justify-center py-8">
+      <div className="w-6 h-6 border-2 border-[#9B6FD1] border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
 export function ProductGrid() {
-  const { products, loading, error } = useProducts();
   const { categories } = useCategories();
   const { scrollingDown } = useScroll();
+
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [sortOrder, setSortOrder] = useState<SortOrder>("default");
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
 
-  // Close sort dropdown on outside click
+  // ── Infinite scroll data ──────────────────────────────────────
+  const { products, loading, loadingMore, hasMore, error, loadMore } =
+    useInfiniteProducts(activeCategory, sortOrder);
+
+  // Keep a stable ref to loadMore so the observer callback never goes stale.
+  const loadMoreRef = useRef(loadMore);
+  useEffect(() => { loadMoreRef.current = loadMore; }, [loadMore]);
+
+  // Callback ref — called by React whenever the sentinel div mounts/unmounts.
+  // This avoids the race condition where the observer is set up before the
+  // sentinel element exists in the DOM.
+  const sentinelRef = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) loadMoreRef.current(); },
+      { rootMargin: "0px 0px 300px 0px", threshold: 0 }
+    );
+    observer.observe(el);
+    // Cleanup is handled by the element unmounting (React calls this with null).
+  }, []); // empty deps — stable forever, loadMore accessed via ref
+
+  // ── Sort dropdown — close on outside click ────────────────────
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
@@ -69,29 +95,21 @@ export function ProductGrid() {
     ...categories.map((c) => ({ id: c.name, label: c.label })),
   ];
 
-  const filtered = activeCategory === "all"
-    ? products
-    : products.filter((p) => p.category === activeCategory);
-
-  const sorted = sortOrder === "low-high"
-    ? [...filtered].sort((a, b) => a.price - b.price)
-    : sortOrder === "high-low"
-    ? [...filtered].sort((a, b) => b.price - a.price)
-    : filtered;
+  const gridClass =
+    viewMode === "list"
+      ? "grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4"
+      : "grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4";
 
   return (
     <>
-      {/* ── Fixed filter + view toggle bar ─────────────────────────────
-          Sits directly below the fixed navbar (top-20 = 80px).
-          Hides together with the navbar when scrollingDown.
-          Uses -translate-y-[152px] = navbar(80) + filter(52) + border(~20)
-          so it exits the screen completely as a unit with the navbar.
-      ── */}
+      {/* ── Fixed filter + view toggle bar ───────────────────────── */}
       <div
         className="fixed left-0 right-0 z-30 bg-white border-b border-gray-100 shadow-sm transition-transform duration-300 ease-in-out"
         style={{
           top: `${NAVBAR_H}px`,
-          transform: scrollingDown ? `translateY(-${NAVBAR_H + 96}px)` : "translateY(0)",
+          transform: scrollingDown
+            ? `translateY(-${NAVBAR_H + 96}px)`
+            : "translateY(0)",
         }}
         data-testid="category-filter-bar"
       >
@@ -137,7 +155,11 @@ export function ProductGrid() {
               >
                 <ArrowUpDown className="w-3.5 h-3.5 shrink-0" />
                 <span>
-                  {sortOrder === "low-high" ? "Low to High" : sortOrder === "high-low" ? "High to Low" : "Sort by Price"}
+                  {sortOrder === "low-high"
+                    ? "Low to High"
+                    : sortOrder === "high-low"
+                    ? "High to Low"
+                    : "Sort by Price"}
                 </span>
               </button>
 
@@ -150,23 +172,34 @@ export function ProductGrid() {
                     transition={{ duration: 0.15 }}
                     className="absolute left-0 mt-2 w-44 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50"
                   >
-                    {(["default", "low-high", "high-low"] as SortOrder[]).map((opt) => {
-                      const labels = { default: "Default", "low-high": "Price: Low to High", "high-low": "Price: High to Low" };
-                      return (
-                        <button
-                          key={opt}
-                          onClick={() => { setSortOrder(opt); setSortOpen(false); }}
-                          className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${
-                            sortOrder === opt
-                              ? "text-[#9B6FD1] font-semibold bg-[#F3EEFB]"
-                              : "text-gray-600 hover:bg-gray-50"
-                          }`}
-                        >
-                          {labels[opt]}
-                          {sortOrder === opt && <Check className="w-3.5 h-3.5 text-[#9B6FD1]" />}
-                        </button>
-                      );
-                    })}
+                    {(["default", "low-high", "high-low"] as SortOrder[]).map(
+                      (opt) => {
+                        const labels = {
+                          default: "Default",
+                          "low-high": "Price: Low to High",
+                          "high-low": "Price: High to Low",
+                        };
+                        return (
+                          <button
+                            key={opt}
+                            onClick={() => {
+                              setSortOrder(opt);
+                              setSortOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${
+                              sortOrder === opt
+                                ? "text-[#9B6FD1] font-semibold bg-[#F3EEFB]"
+                                : "text-gray-600 hover:bg-gray-50"
+                            }`}
+                          >
+                            {labels[opt]}
+                            {sortOrder === opt && (
+                              <Check className="w-3.5 h-3.5 text-[#9B6FD1]" />
+                            )}
+                          </button>
+                        );
+                      }
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -201,23 +234,13 @@ export function ProductGrid() {
         </div>
       </div>
 
-      {/* ── Main section ────────────────────────────────────────────────
-          Top padding = navbar + filter bar height so content starts
-          below both fixed bars even when they're visible.
-      ── */}
-      <section
-        id="shop"
-        className="bg-white pb-20 pt-[120px]"
-      >
+      {/* ── Main section ──────────────────────────────────────────── */}
+      <section id="shop" className="bg-white pb-20 pt-[120px]">
         <div className="container mx-auto px-4">
 
-          {/* Loading — shimmer skeleton */}
+          {/* First-page skeleton */}
           {loading && (
-            <div className={
-              viewMode === "list"
-                ? "grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4"
-                : "grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4"
-            }>
+            <div className={gridClass}>
               {Array.from({ length: 8 }).map((_, i) => (
                 <SkeletonCard key={i} view={viewMode} />
               ))}
@@ -227,15 +250,18 @@ export function ProductGrid() {
           {/* Error */}
           {!loading && error && (
             <div className="text-center py-16">
-              <p className="text-red-400 text-sm font-medium">Failed to load products</p>
+              <p className="text-red-400 text-sm font-medium">
+                Failed to load products
+              </p>
               <p className="text-gray-400 text-xs mt-1">{error}</p>
               <p className="text-gray-400 text-xs mt-2">
-                Make sure the <strong>products</strong> table exists in Supabase and RLS SELECT policy allows anon reads.
+                Make sure the <strong>products</strong> table exists in Supabase
+                and RLS SELECT policy allows anon reads.
               </p>
             </div>
           )}
 
-          {/* Products */}
+          {/* Products grid */}
           {!loading && !error && (
             <>
               <AnimatePresence mode="wait">
@@ -245,14 +271,9 @@ export function ProductGrid() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.25, ease: "easeInOut" }}
-                  className={
-                    // On desktop (sm+) always grid — toggle only applies on mobile
-                    viewMode === "list"
-                      ? "grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4"
-                      : "grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4"
-                  }
+                  className={gridClass}
                 >
-                  {sorted.map((product, index) => (
+                  {products.map((product, index) => (
                     <ProductCard
                       key={product.id}
                       product={product}
@@ -263,10 +284,25 @@ export function ProductGrid() {
                 </motion.div>
               </AnimatePresence>
 
-              {sorted.length === 0 && (
+              {products.length === 0 && (
                 <p className="text-center text-gray-400 py-16">
                   No products in this category yet.
                 </p>
+              )}
+
+              {/* Spinner while next page loads */}
+              {loadingMore && <LoadMoreSpinner />}
+
+              {/* End-of-list message */}
+              {!hasMore && products.length > 0 && (
+                <p className="text-center text-xs text-gray-300 py-6 tracking-wide">
+                  You've seen all products
+                </p>
+              )}
+
+              {/* Sentinel — callback ref so observer attaches the moment this mounts */}
+              {hasMore && !loadingMore && (
+                <div ref={sentinelRef} className="h-4 w-full" aria-hidden="true" />
               )}
             </>
           )}
