@@ -120,7 +120,10 @@ export function ProductGrid() {
               <button
                 key={tab.id}
                 data-testid={`filter-tab-${tab.id}`}
-                onClick={() => setActiveCategory(tab.id)}
+                onClick={() => {
+                  setActiveCategory(tab.id);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
                 className={`relative flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 focus:outline-none ${
                   activeCategory === tab.id
                     ? "text-white shadow-md"
@@ -185,6 +188,7 @@ export function ProductGrid() {
                             onClick={() => {
                               setSortOrder(opt);
                               setSortOpen(false);
+                              window.scrollTo({ top: 0, behavior: "smooth" });
                             }}
                             className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${
                               sortOrder === opt

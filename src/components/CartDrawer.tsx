@@ -67,10 +67,13 @@ export function CartDrawer() {
   }, []);
 
   const rawShippingCharge = shipping?.serviceable ? (shipping.shippingCharge ?? 0) : 0;
-  // Apply per-product shipping credits — never go below ₹0
+  const rawCodCharge = paymentMode === "cod" && shipping?.serviceable ? (shipping.codCharge ?? 0) : 0;
+  // Apply per-product shipping credits — first reduce shipping, then COD, never go below ₹0
   const shippingCharge = Math.max(0, rawShippingCharge - shippingCredit);
+  const creditRemainingAfterShipping = Math.max(0, shippingCredit - rawShippingCharge);
+  const codCharge = Math.max(0, rawCodCharge - creditRemainingAfterShipping);
   const shippingSaved = rawShippingCharge > 0 ? Math.min(shippingCredit, rawShippingCharge) : 0;
-  const codCharge = paymentMode === "cod" && shipping?.serviceable ? (shipping.codCharge ?? 0) : 0;
+  const codSaved = rawCodCharge > 0 ? Math.min(creditRemainingAfterShipping, rawCodCharge) : 0;
   const grandTotal = subtotal + shippingCharge + codCharge;
 
   const setC = (k: keyof CustomerInfo, v: string) =>
@@ -343,44 +346,71 @@ export function CartDrawer() {
                     </div>
 
                     {/* ── Shipping savings banner ── */}
-                    {shippingCredit > 0 && (
-                      <div className="mx-4 mb-3 rounded-2xl overflow-hidden border border-[#9B6FD1]/20 bg-gradient-to-br from-[#F3EEFB] to-white">
-                        <div className="px-4 pt-3 pb-2">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-1.5">
-                              <Truck className="w-4 h-4 text-[#9B6FD1]" />
-                              <span className="text-xs font-bold text-gray-700">Shipping Savings</span>
+                    {(() => {
+                      const FREE_THRESHOLD = 100;
+                      const pct = Math.min(100, Math.round((shippingCredit / FREE_THRESHOLD) * 100));
+                      const remaining = Math.max(0, FREE_THRESHOLD - shippingCredit);
+                      const isMaxed = pct >= 100;
+                      return (
+                        <div className="mx-4 mb-3 rounded-2xl overflow-hidden border border-[#9B6FD1]/20 bg-gradient-to-br from-[#F3EEFB] to-white">
+                          <div className="px-4 pt-3 pb-3">
+                            {/* Header row */}
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-1.5">
+                                <Truck className="w-4 h-4 text-[#9B6FD1]" />
+                                <span className="text-xs font-bold text-gray-700">
+                                  {shippingCredit > 0 ? "Shipping Savings" : "Earn Free Shipping"}
+                                </span>
+                              </div>
+                              {shippingCredit > 0 && (
+                                <span className="text-xs font-bold text-[#9B6FD1]">
+                                  ₹{shippingCredit} saved
+                                </span>
+                              )}
                             </div>
-                            <span className="text-xs font-bold text-[#9B6FD1]">
-                              ₹{shippingCredit} off shipping
-                            </span>
+
+                            {/* Progress bar */}
+                            <div className="h-2 rounded-full bg-[#9B6FD1]/15 overflow-hidden">
+                              <motion.div
+                                className="h-full rounded-full bg-gradient-to-r from-[#9B6FD1] to-[#c084fc]"
+                                initial={{ width: 0 }}
+                                animate={{ width: `${pct}%` }}
+                                transition={{ duration: 0.5, ease: "easeOut" }}
+                              />
+                            </div>
+
+                            {/* Status message */}
+                            <p className="text-[11px] text-gray-500 mt-1.5">
+                              {isMaxed
+                                ? "🎉 Your cart is fully covered — shipping & COD charges will be waived!"
+                                : shippingCredit > 0
+                                ? `₹${shippingCredit} of your shipping is already covered. Add more products to save even more!`
+                                : "Some products include free shipping credits. Add them to your cart to save on delivery!"}
+                            </p>
+
+                            {/* Browse more CTA — only when not maxed */}
+                            {!isMaxed && (
+                              <button
+                                onClick={() => {
+                                  setIsCartOpen(false);
+                                  // Small delay lets the drawer close before scrolling
+                                  setTimeout(() => {
+                                    const el = document.getElementById("products") ?? document.getElementById("shop");
+                                    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                  }, 300);
+                                }}
+                                className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-[#9B6FD1]/10 hover:bg-[#9B6FD1]/20 text-[#9B6FD1] text-xs font-semibold transition-colors"
+                              >
+                                <Sparkles className="w-3.5 h-3.5" />
+                                {shippingCredit > 0
+                                  ? `Browse more — save ₹${remaining} more on shipping`
+                                  : "Browse products with free shipping"}
+                              </button>
+                            )}
                           </div>
-                          {/* Progress bar — fills as credit grows toward a ₹100 "free shipping" goal */}
-                          {(() => {
-                            const FREE_THRESHOLD = 100; // ₹100 credit = effectively free for most pincodes
-                            const pct = Math.min(100, Math.round((shippingCredit / FREE_THRESHOLD) * 100));
-                            const remaining = Math.max(0, FREE_THRESHOLD - shippingCredit);
-                            return (
-                              <>
-                                <div className="h-2 rounded-full bg-[#9B6FD1]/15 overflow-hidden">
-                                  <motion.div
-                                    className="h-full rounded-full bg-gradient-to-r from-[#9B6FD1] to-[#c084fc]"
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${pct}%` }}
-                                    transition={{ duration: 0.5, ease: "easeOut" }}
-                                  />
-                                </div>
-                                <p className="text-[11px] text-gray-500 mt-1.5">
-                                  {pct >= 100
-                                    ? "🎉 You've unlocked maximum shipping savings!"
-                                    : `Add products worth ₹${remaining} more credit to maximise savings`}
-                                </p>
-                              </>
-                            );
-                          })()}
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </motion.div>
                 )}
 
@@ -440,7 +470,7 @@ export function CartDrawer() {
                                     <p className="text-sm font-semibold text-green-800">Delivery available</p>
                                     <p className="text-xs text-green-600">
                                       By {new Date(Date.now() + (shipping.estimatedDays ?? 0) * 86400000).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
-                                      {codCharge > 0 ? ` • COD: ₹${codCharge}` : ""}
+                                      {rawCodCharge > 0 ? ` • COD: ₹${codCharge}${codSaved > 0 ? ` (₹${codSaved} saved)` : ""}` : ""}
                                     </p>
                                   </div>
                                 </div>
@@ -502,14 +532,19 @@ export function CartDrawer() {
                     <MiniSummary />
 
                     {/* Delivery summary pill */}
-                    <div className="mx-4 mt-2 flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2">
-                      <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-                      <p className="text-xs text-green-700">
-                        <span className="font-semibold">Pincode {pincode}</span>
-                        {" "}· By {new Date(Date.now() + (shipping?.estimatedDays ?? 0) * 86400000).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
-                        {" "}· {paymentMode === "cod" ? "Cash on Delivery" : "Online Payment"}
-                        {shippingCharge > 0 ? ` · ₹${shippingCharge} shipping${shippingSaved > 0 ? ` (₹${shippingSaved} saved)` : ""}` : " · Free shipping"}
-                      </p>
+                    <div className="mx-4 mt-2 flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2.5">
+                      <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                      <div className="text-xs text-green-700 space-y-0.5">
+                        <p className="font-semibold">Delivering to PIN {pincode}</p>
+                        <p>
+                          Arrives by {new Date(Date.now() + (shipping?.estimatedDays ?? 0) * 86400000).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
+                          {" "}· {paymentMode === "cod" ? "Cash on Delivery" : "Online Payment"}
+                        </p>
+                        <p>
+                          {shippingCharge === 0 ? "🎉 Free shipping applied" : `Shipping ₹${shippingCharge}${shippingSaved > 0 ? ` (₹${shippingSaved} saved)` : ""}`}
+                          {(codCharge > 0 || codSaved > 0) && ` · COD ${codCharge === 0 ? "free" : `₹${codCharge}`}${codSaved > 0 ? ` (₹${codSaved} saved)` : ""}`}
+                        </p>
+                      </div>
                     </div>
 
                     <div className="mx-4 mt-3 bg-[#F3EEFB]/60 rounded-2xl p-4 space-y-3">
@@ -573,9 +608,20 @@ export function CartDrawer() {
                           )}
                         </div>
                       </div>
-                      {codCharge > 0 && (
+                      {(codCharge > 0 || codSaved > 0) && (
                         <div className="flex justify-between text-sm text-gray-500">
-                          <span>COD Charge</span><span>₹{codCharge}</span>
+                          <span>COD Charge</span>
+                          <div className="text-right">
+                            {codSaved > 0 && (
+                              <span className="line-through text-gray-300 text-xs mr-1">₹{rawCodCharge}</span>
+                            )}
+                            <span className={codCharge === 0 ? "text-green-600 font-semibold" : ""}>
+                              {codCharge === 0 ? "FREE" : `₹${codCharge}`}
+                            </span>
+                            {codSaved > 0 && (
+                              <span className="ml-1 text-[10px] text-green-600 font-semibold">-₹{codSaved}</span>
+                            )}
+                          </div>
                         </div>
                       )}
                     </>
