@@ -27,6 +27,7 @@ interface CartContextType {
   updateQuantity: (id: number, delta: number) => void;
   totalItems: number;
   subtotal: number;
+  shippingCredit: number; // total ₹ to subtract from shipping charge
   isCartOpen: boolean;
   setIsCartOpen: (isOpen: boolean) => void;
 }
@@ -88,6 +89,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
     (sum, item) => sum + item.product.price * item.quantity,
     0
   );
+  // Sum of shipping_credit × quantity for every item in cart
+  const shippingCredit = cart.reduce(
+    (sum, item) => sum + (item.product.shipping_credit ?? 0) * item.quantity,
+    0
+  );
 
   return (
     <CartContext.Provider
@@ -98,6 +104,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         updateQuantity,
         totalItems,
         subtotal,
+        shippingCredit,
         isCartOpen,
         setIsCartOpen,
       }}

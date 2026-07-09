@@ -27,8 +27,9 @@ function mapRow(row: Record<string, unknown>): Product {
       ? (row.images as string[])
       : [row.image as string],
     description: row.description as string,
-    sizes: row.sizes as string[],
     stock: typeof row.stock === "number" ? row.stock : 99,
+    shipping_credit: typeof row.shipping_credit === "number" ? row.shipping_credit : 0,
+    wholesale_price: typeof row.wholesale_price === "number" ? row.wholesale_price : 0,
   };
 }
 
@@ -64,8 +65,9 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
         image: p.image,
         images: p.images,
         description: p.description,
-        sizes: p.sizes,
         stock: p.stock,
+        shipping_credit: p.shipping_credit,
+        wholesale_price: p.wholesale_price,
       }])
       .select()
       .single();
@@ -86,8 +88,9 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
         image: p.image,
         images: p.images,
         description: p.description,
-        sizes: p.sizes,
         stock: p.stock,
+        shipping_credit: p.shipping_credit,
+        wholesale_price: p.wholesale_price,
       })
       .eq("id", id);
     if (err) throw new Error(err.message);

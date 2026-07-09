@@ -44,7 +44,7 @@ const STEP_LABELS: Record<Step, string> = {
 };
 
 export function CartDrawer() {
-  const { isCartOpen, setIsCartOpen, cart, removeFromCart, updateQuantity, subtotal, totalItems } = useCart();
+  const { isCartOpen, setIsCartOpen, cart, removeFromCart, updateQuantity, subtotal, totalItems, shippingCredit } = useCart();
 
   // Step state
   const [step, setStep] = useState<Step>(1);
@@ -66,7 +66,10 @@ export function CartDrawer() {
     setSheetContentEl(node);
   }, []);
 
-  const shippingCharge = shipping?.serviceable ? (shipping.shippingCharge ?? 0) : 0;
+  const rawShippingCharge = shipping?.serviceable ? (shipping.shippingCharge ?? 0) : 0;
+  // Apply per-product shipping credits — never go below ₹0
+  const shippingCharge = Math.max(0, rawShippingCharge - shippingCredit);
+  const shippingSaved = rawShippingCharge > 0 ? Math.min(shippingCredit, rawShippingCharge) : 0;
   const codCharge = paymentMode === "cod" && shipping?.serviceable ? (shipping.codCharge ?? 0) : 0;
   const grandTotal = subtotal + shippingCharge + codCharge;
 
@@ -338,6 +341,46 @@ export function CartDrawer() {
                         ))}
                       </AnimatePresence>
                     </div>
+
+                    {/* ── Shipping savings banner ── */}
+                    {shippingCredit > 0 && (
+                      <div className="mx-4 mb-3 rounded-2xl overflow-hidden border border-[#9B6FD1]/20 bg-gradient-to-br from-[#F3EEFB] to-white">
+                        <div className="px-4 pt-3 pb-2">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-1.5">
+                              <Truck className="w-4 h-4 text-[#9B6FD1]" />
+                              <span className="text-xs font-bold text-gray-700">Shipping Savings</span>
+                            </div>
+                            <span className="text-xs font-bold text-[#9B6FD1]">
+                              ₹{shippingCredit} off shipping
+                            </span>
+                          </div>
+                          {/* Progress bar — fills as credit grows toward a ₹100 "free shipping" goal */}
+                          {(() => {
+                            const FREE_THRESHOLD = 100; // ₹100 credit = effectively free for most pincodes
+                            const pct = Math.min(100, Math.round((shippingCredit / FREE_THRESHOLD) * 100));
+                            const remaining = Math.max(0, FREE_THRESHOLD - shippingCredit);
+                            return (
+                              <>
+                                <div className="h-2 rounded-full bg-[#9B6FD1]/15 overflow-hidden">
+                                  <motion.div
+                                    className="h-full rounded-full bg-gradient-to-r from-[#9B6FD1] to-[#c084fc]"
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${pct}%` }}
+                                    transition={{ duration: 0.5, ease: "easeOut" }}
+                                  />
+                                </div>
+                                <p className="text-[11px] text-gray-500 mt-1.5">
+                                  {pct >= 100
+                                    ? "🎉 You've unlocked maximum shipping savings!"
+                                    : `Add products worth ₹${remaining} more credit to maximise savings`}
+                                </p>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    )}
                   </motion.div>
                 )}
 
@@ -403,7 +446,15 @@ export function CartDrawer() {
                                 </div>
                                 <div className="text-right">
                                   <p className="text-xs text-gray-500">Shipping</p>
-                                  <p className="text-base font-bold text-[#9B6FD1]">₹{shipping.shippingCharge}</p>
+                                  {shippingSaved > 0 && (
+                                    <p className="text-xs line-through text-gray-400">₹{rawShippingCharge}</p>
+                                  )}
+                                  <p className={`text-base font-bold ${shippingCharge === 0 ? "text-green-600" : "text-[#9B6FD1]"}`}>
+                                    {shippingCharge === 0 ? "FREE" : `₹${shippingCharge}`}
+                                  </p>
+                                  {shippingSaved > 0 && shippingCharge > 0 && (
+                                    <p className="text-[10px] text-green-600 font-semibold">you save ₹{shippingSaved}</p>
+                                  )}
                                 </div>
                               </div>
                             ) : (
@@ -457,7 +508,7 @@ export function CartDrawer() {
                         <span className="font-semibold">Pincode {pincode}</span>
                         {" "}· By {new Date(Date.now() + (shipping?.estimatedDays ?? 0) * 86400000).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
                         {" "}· {paymentMode === "cod" ? "Cash on Delivery" : "Online Payment"}
-                        {shippingCharge > 0 ? ` · ₹${shippingCharge} shipping` : " · Free shipping"}
+                        {shippingCharge > 0 ? ` · ₹${shippingCharge} shipping${shippingSaved > 0 ? ` (₹${shippingSaved} saved)` : ""}` : " · Free shipping"}
                       </p>
                     </div>
 
@@ -510,7 +561,17 @@ export function CartDrawer() {
                     <>
                       <div className="flex justify-between text-sm text-gray-500">
                         <span>Shipping</span>
-                        <span className={shippingCharge === 0 ? "text-green-600 font-medium" : ""}>{shippingCharge === 0 ? "Free" : `₹${shippingCharge}`}</span>
+                        <div className="text-right">
+                          {shippingSaved > 0 && (
+                            <span className="line-through text-gray-300 text-xs mr-1">₹{rawShippingCharge}</span>
+                          )}
+                          <span className={shippingCharge === 0 ? "text-green-600 font-semibold" : ""}>
+                            {shippingCharge === 0 ? "FREE" : `₹${shippingCharge}`}
+                          </span>
+                          {shippingSaved > 0 && (
+                            <span className="ml-1 text-[10px] text-green-600 font-semibold">-₹{shippingSaved}</span>
+                          )}
+                        </div>
                       </div>
                       {codCharge > 0 && (
                         <div className="flex justify-between text-sm text-gray-500">

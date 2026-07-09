@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion";
 import {
   Plus, Trash2, LogOut, Package, Sparkles,
   ChevronDown, CheckCircle2, Upload, X, Image,
   ShoppingBag, Download, FileText, Loader2, Minus, Pencil, Tag, GripVertical,
+  Search, SlidersHorizontal,
 } from "lucide-react";
 import { useProducts } from "../context/ProductsContext";
 import { useCategories } from "../context/CategoriesContext";
@@ -17,7 +18,7 @@ import { DraggableImageGrid, ImageItem } from "../components/ui/DraggableImageGr
 
 const BUCKET = "product-images";
 const MAX_IMAGES = 6;
-const empty = { name: "", category: "", price: "", originalPrice: "", description: "", stock: "10" };
+const empty = { name: "", category: "", price: "", originalPrice: "", description: "", stock: "10", shipping_credit: "0", wholesale_price: "0" };
 
 type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
 
@@ -103,6 +104,20 @@ export function AdminPanel() {
   const { categories, addCategory, deleteCategory, reorderCategories } = useCategories();
   const [activeTab, setActiveTab] = useState<"products" | "orders" | "categories">("products");
   const [form, setForm] = useState(empty);
+
+  // ── Product list filters ──────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterCategory, setFilterCategory] = useState("all");
+  const [filterStock, setFilterStock] = useState<"all" | "in" | "out">("all");
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      const matchSearch = !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchCat = filterCategory === "all" || p.category === filterCategory;
+      const matchStock = filterStock === "all" || (filterStock === "in" ? p.stock > 0 : p.stock === 0);
+      return matchSearch && matchCat && matchStock;
+    });
+  }, [products, searchQuery, filterCategory, filterStock]);
 
   // Category management state
   const [catName, setCatName] = useState("");
@@ -287,8 +302,9 @@ export function AdminPanel() {
           image: i.product.image,
           images: i.product.images ?? [i.product.image],
           description: "",
-          sizes: [],
           stock: 99,
+          shipping_credit: 0,
+          wholesale_price: 0,
         },
         quantity: i.quantity,
       }));
@@ -405,14 +421,19 @@ export function AdminPanel() {
     }
     if (imageUrls.length === 0) imageUrls = [`https://placehold.co/400x400/F3EEFB/9B6FD1?text=${encodeURIComponent(form.name)}`];
     const discount = Math.max(0, Math.round(((originalPrice - price) / originalPrice) * 100));
-    await addProduct({ name: form.name.trim(), category: form.category, price, originalPrice, discount, image: imageUrls[0], images: imageUrls, description: form.description.trim(), sizes: [], stock: Math.max(0, Number(form.stock) || 0) });
-    setSaving(false); setForm({ ...empty, category: categories[0]?.name ?? "" }); clearImages();
-    showToast("Product saved!");
+    try {
+      await addProduct({ name: form.name.trim(), category: form.category, price, originalPrice, discount, image: imageUrls[0], images: imageUrls, description: form.description.trim(), stock: Math.max(0, Number(form.stock) || 0), shipping_credit: Math.max(0, Number(form.shipping_credit) || 0), wholesale_price: Math.max(0, Number(form.wholesale_price) || 0) });
+      setSaving(false); setForm({ ...empty, category: categories[0]?.name ?? "" }); clearImages();
+      showToast("Product saved!");
+    } catch (err: unknown) {
+      setSaving(false);
+      showToast(err instanceof Error ? err.message : "Failed to save product.", "error");
+    }
   };
 
   const openEdit = (p: Product) => {
     setEditProduct(p);
-    setEditForm({ name: p.name, category: p.category, price: String(p.price), originalPrice: String(p.originalPrice), description: p.description, stock: String(p.stock) });
+    setEditForm({ name: p.name, category: p.category, price: String(p.price), originalPrice: String(p.originalPrice), description: p.description, stock: String(p.stock), shipping_credit: String(p.shipping_credit ?? 0), wholesale_price: String(p.wholesale_price ?? 0) });
     // Build unified ImageItem array from existing URLs (no File attached)
     const existingUrls = p.images?.length ? p.images : [p.image];
     setEditImageItems(existingUrls.map((url) => ({ id: url, preview: url, file: undefined })));
@@ -468,9 +489,14 @@ export function AdminPanel() {
 
     if (finalImages.length === 0) finalImages.push(`https://placehold.co/400x400/F3EEFB/9B6FD1?text=${encodeURIComponent(editForm.name)}`);
     const discount = Math.max(0, Math.round(((originalPrice - price) / originalPrice) * 100));
-    await updateProduct(editProduct.id, { name: editForm.name.trim(), category: editForm.category, price, originalPrice, discount, image: finalImages[0], images: finalImages, description: editForm.description.trim(), sizes: [], stock: Math.max(0, Number(editForm.stock) || 0) });
-    setEditSaving(false); closeEdit();
-    showToast("Product updated!");
+    try {
+      await updateProduct(editProduct.id, { name: editForm.name.trim(), category: editForm.category, price, originalPrice, discount, image: finalImages[0], images: finalImages, description: editForm.description.trim(), stock: Math.max(0, Number(editForm.stock) || 0), shipping_credit: Math.max(0, Number(editForm.shipping_credit) || 0), wholesale_price: Math.max(0, Number(editForm.wholesale_price) || 0) });
+      setEditSaving(false); closeEdit();
+      showToast("Product updated!");
+    } catch (err: unknown) {
+      setEditSaving(false);
+      showToast(err instanceof Error ? err.message : "Failed to save product.", "error");
+    }
   };
 
   const setE = (k: keyof typeof empty, v: string) => setEditForm((prev) => ({ ...prev, [k]: v }));
@@ -552,6 +578,8 @@ export function AdminPanel() {
                   </div>
                   <div className="sm:col-span-2"><label className="label">Description</label><textarea rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Describe this product…" className="input resize-none" /></div>
                   <div><label className="label">Stock Quantity</label><input required type="number" min="0" value={form.stock} onChange={(e) => set("stock", e.target.value)} placeholder="10" className="input" /><p className="text-[11px] text-gray-400 mt-1">Set to 0 to mark as Out of Stock</p></div>
+                  <div><label className="label">Shipping Credit (₹)</label><input type="number" min="0" value={form.shipping_credit} onChange={(e) => set("shipping_credit", e.target.value)} placeholder="0" className="input" /><p className="text-[11px] text-gray-400 mt-1">₹ deducted from shipping when this product is in cart</p></div>
+                  <div><label className="label">Wholesale Price (₹)</label><input type="number" min="0" value={form.wholesale_price} onChange={(e) => set("wholesale_price", e.target.value)} placeholder="0" className="input" /><p className="text-[11px] text-gray-400 mt-1">Your cost price — only visible in admin panel</p></div>
                 </div>
                 <div className="flex justify-end pt-1"><button type="submit" disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-[#9B6FD1] text-white text-sm font-semibold rounded-xl hover:bg-[#8a5fc0] transition-colors disabled:opacity-60">{saving ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />{uploading ? "Uploading…" : "Saving…"}</> : <><Plus className="w-4 h-4" />Add Product</>}</button></div>
               </form>
@@ -559,44 +587,138 @@ export function AdminPanel() {
 
             {/* Product list */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              {/* List header */}
               <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
                 <Package className="w-5 h-5 text-[#9B6FD1]" />
                 <h2 className="font-semibold text-gray-800">All Products</h2>
-                <span className="ml-auto text-sm text-gray-400">{products.length} total</span>
+                <span className="ml-auto text-sm text-gray-400">
+                  {filteredProducts.length !== products.length
+                    ? `${filteredProducts.length} of ${products.length}`
+                    : `${products.length} total`}
+                </span>
               </div>
+
+              {!loading && !error && products.length > 0 && (
+                <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap gap-2">
+                  {/* Search */}
+                  <div className="relative flex-1 min-w-[160px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search products…"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-3 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#9B6FD1]/30 focus:border-[#9B6FD1] bg-gray-50"
+                    />
+                    {searchQuery && (
+                      <button onClick={() => setSearchQuery("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Category filter */}
+                  <div className="relative">
+                    <select
+                      value={filterCategory}
+                      onChange={(e) => setFilterCategory(e.target.value)}
+                      className="appearance-none pl-3 pr-7 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#9B6FD1]/30 focus:border-[#9B6FD1] bg-gray-50 capitalize"
+                    >
+                      <option value="all">All Categories</option>
+                      {categories.map((c) => (
+                        <option key={c.name} value={c.name} className="capitalize">{c.label}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+                  </div>
+
+                  {/* Stock filter */}
+                  <div className="flex rounded-xl border border-gray-200 overflow-hidden bg-gray-50 text-xs">
+                    {([["all", "All"], ["in", "In Stock"], ["out", "Out of Stock"]] as const).map(([val, label]) => (
+                      <button
+                        key={val}
+                        onClick={() => setFilterStock(val)}
+                        className={`px-3 py-2 font-medium transition-colors ${
+                          filterStock === val
+                            ? "bg-[#9B6FD1] text-white"
+                            : "text-gray-500 hover:text-gray-700"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Active filter count + clear */}
+                  {(searchQuery || filterCategory !== "all" || filterStock !== "all") && (
+                    <button
+                      onClick={() => { setSearchQuery(""); setFilterCategory("all"); setFilterStock("all"); }}
+                      className="flex items-center gap-1 px-3 py-2 text-xs text-red-500 hover:text-red-600 rounded-xl border border-red-200 hover:bg-red-50 transition-colors"
+                    >
+                      <X className="w-3 h-3" /> Clear filters
+                    </button>
+                  )}
+                </div>
+              )}
+
               {loading ? (<div className="flex items-center justify-center py-16 text-gray-400 text-sm gap-2"><div className="w-4 h-4 border-2 border-[#9B6FD1] border-t-transparent rounded-full animate-spin" />Loading from Supabase…</div>)
               : error ? (<div className="px-6 py-8 text-center"><p className="text-red-400 text-sm font-medium">Could not load products</p><p className="text-gray-400 text-xs mt-1">{error}</p></div>)
-              : (<div className="divide-y divide-gray-50">{products.length === 0 && <p className="text-center text-gray-400 text-sm py-10">No products yet. Add one above.</p>}{products.map((p) => (
-                <div key={p.id} className="px-4 py-4 flex flex-col gap-3">
-                  {/* Row 1: images + name + action buttons */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex -space-x-2 shrink-0">
-                      {(p.images?.length ? p.images.slice(0, 3) : [p.image]).map((img, i) => (
-                        <img key={i} src={img} alt={p.name} className="w-11 h-11 rounded-xl object-cover bg-[#F3EEFB] border-2 border-white" style={{ zIndex: 3 - i }} />
-                      ))}
+              : (
+                <div className="divide-y divide-gray-50">
+                  {filteredProducts.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-12 gap-2 text-center">
+                      <SlidersHorizontal className="w-8 h-8 text-gray-200" />
+                      <p className="text-gray-400 text-sm">{products.length === 0 ? "No products yet. Add one above." : "No products match your filters."}</p>
+                      {products.length > 0 && <button onClick={() => { setSearchQuery(""); setFilterCategory("all"); setFilterStock("all"); }} className="text-xs text-[#9B6FD1] hover:underline mt-1">Clear filters</button>}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-800 text-sm truncate">{p.name}</p>
-                      <p className="text-xs text-gray-400 capitalize">{p.category} · ₹{p.price}{p.images?.length > 1 && <span className="ml-1 text-[#9B6FD1]">· {p.images.length} photos</span>}</p>
+                  )}
+                  {filteredProducts.map((p) => (
+                    <div key={p.id} className="px-4 py-4 flex flex-col gap-3">
+                      {/* Row 1: images + name + action buttons */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex -space-x-2 shrink-0">
+                          {(p.images?.length ? p.images.slice(0, 3) : [p.image]).map((img, i) => (
+                            <img key={i} src={img} alt={p.name} className="w-11 h-11 rounded-xl object-cover bg-[#F3EEFB] border-2 border-white" style={{ zIndex: 3 - i }} />
+                          ))}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-800 text-sm truncate">{p.name}</p>
+                          <p className="text-xs text-gray-400 capitalize">
+                            {p.category} · ₹{p.price}
+                            {p.images?.length > 1 && <span className="ml-1 text-[#9B6FD1]">· {p.images.length} photos</span>}
+                            {p.wholesale_price > 0 && (() => {
+                              const margin = p.price - p.wholesale_price - (p.shipping_credit ?? 0);
+                              const marginPct = Math.round((margin / p.price) * 100);
+                              return (
+                                <span className={`ml-1 font-medium ${margin >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                                  · Cost ₹{p.wholesale_price}
+                                  {p.shipping_credit > 0 && ` · Ship Credit ₹${p.shipping_credit}`}
+                                  {" · "}Margin ₹{margin} ({marginPct}%)
+                                </span>
+                              );
+                            })()}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => openEdit(p)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-[#9B6FD1] hover:bg-[#F3EEFB] transition-colors" title="Edit product"><Pencil className="w-4 h-4" /></button>
+                          <button onClick={() => setDeleteId(p.id)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors" title="Delete product"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </div>
+                      {/* Row 2: stock badge + stepper */}
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${p.stock === 0 ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>
+                          {p.stock === 0 ? "OUT OF STOCK" : `${p.stock} in stock`}
+                        </span>
+                        <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1">
+                          <button type="button" onClick={() => updateStock(p.id, p.stock - 1)} disabled={p.stock === 0} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] disabled:opacity-30 transition-colors"><Minus className="w-3 h-3" /></button>
+                          <span className="text-sm font-semibold text-gray-700 w-8 text-center">{p.stock}</span>
+                          <button type="button" onClick={() => updateStock(p.id, p.stock + 1)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] transition-colors"><Plus className="w-3 h-3" /></button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button onClick={() => openEdit(p)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-[#9B6FD1] hover:bg-[#F3EEFB] transition-colors" title="Edit product"><Pencil className="w-4 h-4" /></button>
-                      <button onClick={() => setDeleteId(p.id)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors" title="Delete product"><Trash2 className="w-4 h-4" /></button>
-                    </div>
-                  </div>
-                  {/* Row 2: stock badge + stepper */}
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${p.stock === 0 ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>
-                      {p.stock === 0 ? "OUT OF STOCK" : `${p.stock} in stock`}
-                    </span>
-                    <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1">
-                      <button type="button" onClick={() => updateStock(p.id, p.stock - 1)} disabled={p.stock === 0} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] disabled:opacity-30 transition-colors"><Minus className="w-3 h-3" /></button>
-                      <span className="text-sm font-semibold text-gray-700 w-8 text-center">{p.stock}</span>
-                      <button type="button" onClick={() => updateStock(p.id, p.stock + 1)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] transition-colors"><Plus className="w-3 h-3" /></button>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))}</div>)}
+              )}
             </div>
           </>
         )}
@@ -1025,6 +1147,8 @@ export function AdminPanel() {
                   <div className="sm:col-span-2"><label className="label">Product Name</label><input required value={editForm.name} onChange={(e) => setE("name", e.target.value)} className="input" /></div>
                   <div><label className="label">Category</label><div className="relative"><select value={editForm.category} onChange={(e) => setE("category", e.target.value)} className="input appearance-none pr-8 capitalize">{categories.map((c) => <option key={c.name} value={c.name} className="capitalize">{c.label}</option>)}</select><ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" /></div></div>
                   <div><label className="label">Stock Quantity</label><input required type="number" min="0" value={editForm.stock} onChange={(e) => setE("stock", e.target.value)} className="input" /></div>
+                  <div><label className="label">Shipping Credit (₹)</label><input type="number" min="0" value={editForm.shipping_credit} onChange={(e) => setE("shipping_credit", e.target.value)} placeholder="0" className="input" /><p className="text-[11px] text-gray-400 mt-1">₹ off shipping per unit in cart</p></div>
+                  <div><label className="label">Wholesale Price (₹)</label><input type="number" min="0" value={editForm.wholesale_price} onChange={(e) => setE("wholesale_price", e.target.value)} placeholder="0" className="input" /><p className="text-[11px] text-gray-400 mt-1">Your cost price — only visible in admin panel</p></div>
                   <div><label className="label">Selling Price (₹)</label><input required type="number" min="1" value={editForm.price} onChange={(e) => setE("price", e.target.value)} className="input" /></div>
                   <div><label className="label">Original Price (₹)</label><input required type="number" min="1" value={editForm.originalPrice} onChange={(e) => setE("originalPrice", e.target.value)} className="input" /></div>
                   <div className="sm:col-span-2">

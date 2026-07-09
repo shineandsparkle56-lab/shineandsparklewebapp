@@ -20,8 +20,9 @@ function mapRow(row: Record<string, unknown>): Product {
         ? (row.images as string[])
         : [row.image as string],
     description: row.description as string,
-    sizes: row.sizes as string[],
     stock: typeof row.stock === "number" ? row.stock : 99,
+    shipping_credit: typeof row.shipping_credit === "number" ? row.shipping_credit : 0,
+    wholesale_price: typeof row.wholesale_price === "number" ? row.wholesale_price : 0,
   };
 }
 
