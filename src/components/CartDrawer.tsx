@@ -31,7 +31,8 @@ interface CustomerInfo {
 }
 
 function estimateWeight(totalItems: number): number {
-  return Math.max(0.5, parseFloat((totalItems * 0.1).toFixed(2)));
+  // Each product weighs 10 g (0.01 kg); Shiprocket minimum is 0.5 kg
+  return Math.max(0.5, parseFloat((totalItems * 0.01).toFixed(2)));
 }
 
 const INPUT_CLASS =
