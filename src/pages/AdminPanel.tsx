@@ -752,6 +752,24 @@ export function AdminPanel() {
               <div className="divide-y divide-gray-50">
                 {orders.map((order) => {
                   const sm = statusMeta(order.status);
+
+                  // Calculate total profit for this order by cross-referencing
+                  // order items with the full products list (which has wholesale_price
+                  // and shipping_credit — fields not stored on the order itself).
+                  const orderProfit = order.items.reduce((sum, item) => {
+                    const fullProduct = products.find((p) => p.id === item.product.id);
+                    if (!fullProduct || fullProduct.wholesale_price <= 0) return sum;
+                    const itemMargin =
+                      fullProduct.price -
+                      fullProduct.wholesale_price -
+                      (fullProduct.shipping_credit ?? 0);
+                    return sum + itemMargin * item.quantity;
+                  }, 0);
+                  // Only show profit if at least one item has wholesale_price set
+                  const hasWholesaleData = order.items.some(
+                    (item) => (products.find((p) => p.id === item.product.id)?.wholesale_price ?? 0) > 0
+                  );
+
                   return (
                     <div key={order.id} className="px-6 py-5">
                       <div className="flex items-start justify-between gap-4">
@@ -799,6 +817,11 @@ export function AdminPanel() {
                         {/* Right column: total + actions */}
                         <div className="shrink-0 flex flex-col items-end gap-2">
                           <p className="text-lg font-bold font-serif text-gray-900">₹{order.grand_total}</p>
+                          {hasWholesaleData && (
+                            <p className={`text-xs font-semibold px-2 py-0.5 rounded-full ${orderProfit >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"}`}>
+                              {orderProfit >= 0 ? "Profit" : "Loss"} ₹{Math.abs(orderProfit)}
+                            </p>
+                          )}
                           <div className="flex items-center gap-1.5">
                             {/* PDF */}
                             <button
