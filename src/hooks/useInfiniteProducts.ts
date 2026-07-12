@@ -58,12 +58,12 @@ export function useInfiniteProducts(category: string, sort: SortOrder) {
 
       // Server-side sort
       if (sort === "low-high") {
-        query = query.order("price", { ascending: true });
+        query = query.order("price", { ascending: true }).order("id", { ascending: true });
       } else if (sort === "high-low") {
-        query = query.order("price", { ascending: false });
+        query = query.order("price", { ascending: false }).order("id", { ascending: true });
       } else {
         // Default: newest first
-        query = query.order("created_at", { ascending: false });
+        query = query.order("created_at", { ascending: false }).order("id", { ascending: false });
       }
 
       const { data, error: err } = await query;
