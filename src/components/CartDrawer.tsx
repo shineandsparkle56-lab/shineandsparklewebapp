@@ -202,6 +202,8 @@ export function CartDrawer() {
             name: item.product.name,
             category: item.product.category,
             price: item.product.price,
+            wholesale_price: item.product.wholesale_price ?? 0,
+            shipping_credit: item.product.shipping_credit ?? 0,
             image: item.product.images?.length ? item.product.images[0] : item.product.image,
             images: item.product.images ?? [item.product.image],
           },

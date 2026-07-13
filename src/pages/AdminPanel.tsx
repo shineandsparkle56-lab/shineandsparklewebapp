@@ -23,9 +23,9 @@ const empty = { name: "", category: "", price: "", originalPrice: "", descriptio
 type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
 
 const ORDER_STATUSES: { value: OrderStatus; label: string; color: string }[] = [
-  { value: "pending",   label: "Pending",   color: "bg-yellow-100 text-yellow-700" },
+  { value: "pending", label: "Pending", color: "bg-yellow-100 text-yellow-700" },
   { value: "confirmed", label: "Confirmed", color: "bg-blue-100 text-blue-700" },
-  { value: "shipped",   label: "Shipped",   color: "bg-purple-100 text-purple-700" },
+  { value: "shipped", label: "Shipped", color: "bg-purple-100 text-purple-700" },
   { value: "delivered", label: "Delivered", color: "bg-green-100 text-green-700" },
   { value: "cancelled", label: "Cancelled", color: "bg-red-100 text-red-600" },
 ];
@@ -33,7 +33,7 @@ const ORDER_STATUSES: { value: OrderStatus; label: string; color: string }[] = [
 // ── Order type ───────────────────────────────────────────────
 interface OrderRow {
   id: number;
-  items: { product: { id: number; name: string; category: string; price: number; image: string; images: string[] }; quantity: number }[];
+  items: { product: { id: number; name: string; category: string; price: number; wholesale_price: number; shipping_credit: number; image: string; images: string[] }; quantity: number }[];
   subtotal: number;
   shipping_charge: number;
   cod_charge: number;
@@ -220,17 +220,17 @@ export function AdminPanel() {
   const openEditOrder = (order: OrderRow) => {
     setEditOrder(order);
     setEditOrderForm({
-      customer_name:    order.customer_name    ?? "",
-      customer_mobile:  order.customer_mobile  ?? "",
+      customer_name: order.customer_name ?? "",
+      customer_mobile: order.customer_mobile ?? "",
       customer_address: order.customer_address ?? "",
-      customer_city:    order.customer_city    ?? "",
-      customer_state:   order.customer_state   ?? "",
-      pincode:          order.pincode          ?? "",
-      payment_mode:     order.payment_mode     ?? "prepaid",
-      status:           order.status           ?? "pending",
-      subtotal:         String(order.subtotal),
-      shipping_charge:  String(order.shipping_charge),
-      cod_charge:       String(order.cod_charge),
+      customer_city: order.customer_city ?? "",
+      customer_state: order.customer_state ?? "",
+      pincode: order.pincode ?? "",
+      payment_mode: order.payment_mode ?? "prepaid",
+      status: order.status ?? "pending",
+      subtotal: String(order.subtotal),
+      shipping_charge: String(order.shipping_charge),
+      cod_charge: String(order.cod_charge),
     });
   };
 
@@ -244,19 +244,19 @@ export function AdminPanel() {
     if (!editOrder || !editOrderForm) return;
     setSavingOrder(true);
 
-    const subtotal       = Number(editOrderForm.subtotal)       || 0;
+    const subtotal = Number(editOrderForm.subtotal) || 0;
     const shipping_charge = Number(editOrderForm.shipping_charge) || 0;
-    const cod_charge      = Number(editOrderForm.cod_charge)      || 0;
-    const grand_total     = subtotal + shipping_charge + (editOrderForm.payment_mode === "cod" ? cod_charge : 0);
+    const cod_charge = Number(editOrderForm.cod_charge) || 0;
+    const grand_total = subtotal + shipping_charge + (editOrderForm.payment_mode === "cod" ? cod_charge : 0);
 
     const patch = {
-      customer_name:    editOrderForm.customer_name.trim(),
-      customer_mobile:  editOrderForm.customer_mobile.trim(),
+      customer_name: editOrderForm.customer_name.trim(),
+      customer_mobile: editOrderForm.customer_mobile.trim(),
       customer_address: editOrderForm.customer_address.trim(),
-      customer_city:    editOrderForm.customer_city.trim(),
-      customer_state:   editOrderForm.customer_state.trim(),
-      pincode:          editOrderForm.pincode.trim(),
-      payment_mode:     editOrderForm.payment_mode,
+      customer_city: editOrderForm.customer_city.trim(),
+      customer_state: editOrderForm.customer_state.trim(),
+      pincode: editOrderForm.pincode.trim(),
+      payment_mode: editOrderForm.payment_mode,
       subtotal,
       shipping_charge,
       cod_charge,
@@ -309,16 +309,16 @@ export function AdminPanel() {
         quantity: i.quantity,
       }));
       const meta: OrderMeta = {
-        customerName:    order.customer_name,
-        customerMobile:  order.customer_mobile,
+        customerName: order.customer_name,
+        customerMobile: order.customer_mobile,
         customerAddress: order.customer_address,
-        customerCity:    order.customer_city,
-        customerState:   order.customer_state,
-        pincode:         order.pincode,
-        paymentMode:     order.payment_mode,
-        shippingCharge:  order.shipping_charge,
-        codCharge:       order.cod_charge,
-        grandTotal:      order.grand_total,
+        customerCity: order.customer_city,
+        customerState: order.customer_state,
+        pincode: order.pincode,
+        paymentMode: order.payment_mode,
+        shippingCharge: order.shipping_charge,
+        codCharge: order.cod_charge,
+        grandTotal: order.grand_total,
       };
       const blob = await generateOrderPDF(cartItems, order.subtotal, meta);
       const url = URL.createObjectURL(blob);
@@ -638,11 +638,10 @@ export function AdminPanel() {
                       <button
                         key={val}
                         onClick={() => setFilterStock(val)}
-                        className={`px-3 py-2 font-medium transition-colors ${
-                          filterStock === val
-                            ? "bg-[#9B6FD1] text-white"
-                            : "text-gray-500 hover:text-gray-700"
-                        }`}
+                        className={`px-3 py-2 font-medium transition-colors ${filterStock === val
+                          ? "bg-[#9B6FD1] text-white"
+                          : "text-gray-500 hover:text-gray-700"
+                          }`}
                       >
                         {label}
                       </button>
@@ -662,63 +661,72 @@ export function AdminPanel() {
               )}
 
               {loading ? (<div className="flex items-center justify-center py-16 text-gray-400 text-sm gap-2"><div className="w-4 h-4 border-2 border-[#9B6FD1] border-t-transparent rounded-full animate-spin" />Loading from Supabase…</div>)
-              : error ? (<div className="px-6 py-8 text-center"><p className="text-red-400 text-sm font-medium">Could not load products</p><p className="text-gray-400 text-xs mt-1">{error}</p></div>)
-              : (
-                <div className="divide-y divide-gray-50">
-                  {filteredProducts.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-12 gap-2 text-center">
-                      <SlidersHorizontal className="w-8 h-8 text-gray-200" />
-                      <p className="text-gray-400 text-sm">{products.length === 0 ? "No products yet. Add one above." : "No products match your filters."}</p>
-                      {products.length > 0 && <button onClick={() => { setSearchQuery(""); setFilterCategory("all"); setFilterStock("all"); }} className="text-xs text-[#9B6FD1] hover:underline mt-1">Clear filters</button>}
+                : error ? (<div className="px-6 py-8 text-center"><p className="text-red-400 text-sm font-medium">Could not load products</p><p className="text-gray-400 text-xs mt-1">{error}</p></div>)
+                  : (
+                    <div className="divide-y divide-gray-50">
+                      {filteredProducts.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-12 gap-2 text-center">
+                          <SlidersHorizontal className="w-8 h-8 text-gray-200" />
+                          <p className="text-gray-400 text-sm">{products.length === 0 ? "No products yet. Add one above." : "No products match your filters."}</p>
+                          {products.length > 0 && <button onClick={() => { setSearchQuery(""); setFilterCategory("all"); setFilterStock("all"); }} className="text-xs text-[#9B6FD1] hover:underline mt-1">Clear filters</button>}
+                        </div>
+                      )}
+                      {filteredProducts.map((p) => (
+                        <div key={p.id} className="px-4 py-4 flex flex-col gap-3">
+                          {/* Row 1: images + name + action buttons */}
+                          <div className="flex items-center gap-3">
+                            <div className="flex -space-x-2 shrink-0">
+                              {(p.images?.length ? p.images.slice(0, 3) : [p.image]).map((img, i) => (
+                                <img key={i} src={img} alt={p.name} className="w-11 h-11 rounded-xl object-cover bg-[#F3EEFB] border-2 border-white" style={{ zIndex: 3 - i }} />
+                              ))}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-gray-800 text-sm truncate">{p.name}</p>
+                              <p className="text-xs text-gray-400 capitalize">
+                                {p.category} · ₹{p.price}
+                                {p.images?.length > 1 && <span className="ml-1 text-[#9B6FD1]">· {p.images.length} photos</span>}
+                              </p>
+                              {p.wholesale_price > 0 && (() => {
+                                const margin = p.price - p.wholesale_price - (p.shipping_credit ?? 0);
+                                const marginPct = Math.round((margin / p.price) * 100);
+                                const positive = margin >= 0;
+                                return (
+                                  <div className="flex flex-wrap items-center gap-1 mt-1">
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-500">
+                                      Cost ₹{p.wholesale_price}
+                                    </span>
+                                    {p.shipping_credit > 0 && (
+                                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-500">
+                                        Ship Credit ₹{p.shipping_credit}
+                                      </span>
+                                    )}
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${positive ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"}`}>
+                                      Margin ₹{margin} ({marginPct}%)
+                                    </span>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button onClick={() => openEdit(p)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-[#9B6FD1] hover:bg-[#F3EEFB] transition-colors" title="Edit product"><Pencil className="w-4 h-4" /></button>
+                              <button onClick={() => setDeleteId(p.id)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors" title="Delete product"><Trash2 className="w-4 h-4" /></button>
+                            </div>
+                          </div>
+                          {/* Row 2: stock badge + stepper */}
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${p.stock === 0 ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>
+                              {p.stock === 0 ? "OUT OF STOCK" : `${p.stock} in stock`}
+                            </span>
+                            <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1">
+                              <button type="button" onClick={() => updateStock(p.id, p.stock - 1)} disabled={p.stock === 0} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] disabled:opacity-30 transition-colors"><Minus className="w-3 h-3" /></button>
+                              <span className="text-sm font-semibold text-gray-700 w-8 text-center">{p.stock}</span>
+                              <button type="button" onClick={() => updateStock(p.id, p.stock + 1)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] transition-colors"><Plus className="w-3 h-3" /></button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
-                  {filteredProducts.map((p) => (
-                    <div key={p.id} className="px-4 py-4 flex flex-col gap-3">
-                      {/* Row 1: images + name + action buttons */}
-                      <div className="flex items-center gap-3">
-                        <div className="flex -space-x-2 shrink-0">
-                          {(p.images?.length ? p.images.slice(0, 3) : [p.image]).map((img, i) => (
-                            <img key={i} src={img} alt={p.name} className="w-11 h-11 rounded-xl object-cover bg-[#F3EEFB] border-2 border-white" style={{ zIndex: 3 - i }} />
-                          ))}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-gray-800 text-sm truncate">{p.name}</p>
-                          <p className="text-xs text-gray-400 capitalize">
-                            {p.category} · ₹{p.price}
-                            {p.images?.length > 1 && <span className="ml-1 text-[#9B6FD1]">· {p.images.length} photos</span>}
-                            {p.wholesale_price > 0 && (() => {
-                              const margin = p.price - p.wholesale_price - (p.shipping_credit ?? 0);
-                              const marginPct = Math.round((margin / p.price) * 100);
-                              return (
-                                <span className={`ml-1 font-medium ${margin >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                                  · Cost ₹{p.wholesale_price}
-                                  {p.shipping_credit > 0 && ` · Ship Credit ₹${p.shipping_credit}`}
-                                  {" · "}Margin ₹{margin} ({marginPct}%)
-                                </span>
-                              );
-                            })()}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => openEdit(p)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-[#9B6FD1] hover:bg-[#F3EEFB] transition-colors" title="Edit product"><Pencil className="w-4 h-4" /></button>
-                          <button onClick={() => setDeleteId(p.id)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors" title="Delete product"><Trash2 className="w-4 h-4" /></button>
-                        </div>
-                      </div>
-                      {/* Row 2: stock badge + stepper */}
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${p.stock === 0 ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>
-                          {p.stock === 0 ? "OUT OF STOCK" : `${p.stock} in stock`}
-                        </span>
-                        <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1">
-                          <button type="button" onClick={() => updateStock(p.id, p.stock - 1)} disabled={p.stock === 0} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] disabled:opacity-30 transition-colors"><Minus className="w-3 h-3" /></button>
-                          <span className="text-sm font-semibold text-gray-700 w-8 text-center">{p.stock}</span>
-                          <button type="button" onClick={() => updateStock(p.id, p.stock + 1)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] transition-colors"><Plus className="w-3 h-3" /></button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </>
         )}
@@ -752,23 +760,6 @@ export function AdminPanel() {
               <div className="divide-y divide-gray-50">
                 {orders.map((order) => {
                   const sm = statusMeta(order.status);
-
-                  // Calculate total profit for this order by cross-referencing
-                  // order items with the full products list (which has wholesale_price
-                  // and shipping_credit — fields not stored on the order itself).
-                  const orderProfit = order.items.reduce((sum, item) => {
-                    const fullProduct = products.find((p) => p.id === item.product.id);
-                    if (!fullProduct || fullProduct.wholesale_price <= 0) return sum;
-                    const itemMargin =
-                      fullProduct.price -
-                      fullProduct.wholesale_price -
-                      (fullProduct.shipping_credit ?? 0);
-                    return sum + itemMargin * item.quantity;
-                  }, 0);
-                  // Only show profit if at least one item has wholesale_price set
-                  const hasWholesaleData = order.items.some(
-                    (item) => (products.find((p) => p.id === item.product.id)?.wholesale_price ?? 0) > 0
-                  );
 
                   return (
                     <div key={order.id} className="px-6 py-5">
@@ -812,16 +803,32 @@ export function AdminPanel() {
                             {order.shipping_charge > 0 && <span>Shipping: <strong className="text-gray-700">₹{order.shipping_charge}</strong></span>}
                             {order.cod_charge > 0 && <span>COD: <strong className="text-gray-700">₹{order.cod_charge}</strong></span>}
                           </div>
+                          {/* Profit row — only shown when wholesale_price is present on items */}
+                          {(() => {
+                            const hasData = order.items.some((i) => (i.product.wholesale_price ?? 0) > 0);
+                            if (!hasData) return null;
+                            const itemsCost = order.items.reduce((sum, i) => {
+                              const cost = (i.product.wholesale_price ?? 0) + (i.product.shipping_credit ?? 0);
+                              return sum + cost * i.quantity;
+                            }, 0);
+                            const profit = order.grand_total - itemsCost;
+                            const profitPct = order.grand_total > 0 ? Math.round((profit / order.grand_total) * 100) : 0;
+                            const positive = profit >= 0;
+                            return (
+                              <div className={`mt-2 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${positive ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
+                                <span>{positive ? "📈" : "📉"} Est. Profit:</span>
+                                <span className="font-bold">₹{profit}</span>
+                                <span className="font-normal opacity-70">({profitPct}%)</span>
+                                <span className="ml-auto font-normal opacity-60 text-[10px]">Cost ₹{itemsCost}</span>
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         {/* Right column: total + actions */}
                         <div className="shrink-0 flex flex-col items-end gap-2">
                           <p className="text-lg font-bold font-serif text-gray-900">₹{order.grand_total}</p>
-                          {hasWholesaleData && (
-                            <p className={`text-xs font-semibold px-2 py-0.5 rounded-full ${orderProfit >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"}`}>
-                              {orderProfit >= 0 ? "Profit" : "Loss"} ₹{Math.abs(orderProfit)}
-                            </p>
-                          )}
+
                           <div className="flex items-center gap-1.5">
                             {/* PDF */}
                             <button
@@ -1012,11 +1019,10 @@ export function AdminPanel() {
                         key={s.value}
                         type="button"
                         onClick={() => setOF("status", s.value)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border-2 transition-all ${
-                          editOrderForm.status === s.value
-                            ? `${s.color} border-current`
-                            : "bg-white border-gray-200 text-gray-500 hover:border-gray-300"
-                        }`}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border-2 transition-all ${editOrderForm.status === s.value
+                          ? `${s.color} border-current`
+                          : "bg-white border-gray-200 text-gray-500 hover:border-gray-300"
+                          }`}
                       >
                         {s.label}
                       </button>
@@ -1033,11 +1039,10 @@ export function AdminPanel() {
                         key={mode}
                         type="button"
                         onClick={() => setOF("payment_mode", mode)}
-                        className={`py-2 rounded-xl text-sm font-semibold border-2 transition-all ${
-                          editOrderForm.payment_mode === mode
-                            ? "bg-[#9B6FD1] border-[#9B6FD1] text-white"
-                            : "bg-white border-gray-200 text-gray-600 hover:border-[#9B6FD1]/50"
-                        }`}
+                        className={`py-2 rounded-xl text-sm font-semibold border-2 transition-all ${editOrderForm.payment_mode === mode
+                          ? "bg-[#9B6FD1] border-[#9B6FD1] text-white"
+                          : "bg-white border-gray-200 text-gray-600 hover:border-[#9B6FD1]/50"
+                          }`}
                       >
                         {mode === "prepaid" ? "Online Payment" : "Cash on Delivery"}
                       </button>
