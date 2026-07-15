@@ -347,7 +347,9 @@ export async function generateOrderPDF(
   });
 
   // ── ORDER TOTALS ──────────────────────────────────────────────
+  const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
   const totalRows: [string, string, boolean][] = [
+    ["Total Items", `${totalQty} item${totalQty !== 1 ? "s" : ""}`, false],
     ["Subtotal", rs(subtotal), false],
   ];
   if (meta.shippingCharge && meta.shippingCharge > 0)
