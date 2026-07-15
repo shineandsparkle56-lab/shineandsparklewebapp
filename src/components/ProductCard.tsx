@@ -19,6 +19,7 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
   const stockMsgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const images = product.images?.length ? product.images : [product.image];
   const outOfStock = product.stock === 0;
+  const isNew = !!product.created_at && (Date.now() - new Date(product.created_at).getTime()) < 3 * 24 * 60 * 60 * 1000;
 
   const handleAddToCart = () => {
     const added = addToCart(product);
@@ -230,6 +231,9 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
             {product.discount > 0 && !outOfStock && (
               <div className="absolute top-3 left-3 z-10 bg-[#9B6FD1] text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow pointer-events-none">{product.discount}% OFF</div>
             )}
+            {isNew && !outOfStock && (
+              <div className="absolute top-3 right-3 z-10 bg-emerald-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow pointer-events-none">New</div>
+            )}
             {outOfStock && (
               <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
                 <span className="bg-black/70 text-white text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider">Out of Stock</span>
@@ -350,6 +354,9 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
           {product.discount > 0 && !outOfStock && (
             <div className="absolute top-2 left-2 z-10 bg-[#9B6FD1] text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider pointer-events-none">{product.discount}% OFF</div>
           )}
+          {isNew && !outOfStock && (
+            <div className="absolute top-2 right-2 z-10 bg-emerald-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider pointer-events-none">New</div>
+          )}
           {outOfStock && (
             <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
               <span className="bg-black/70 text-white text-[9px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">Out of Stock</span>
@@ -434,6 +441,9 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
 
           {product.discount > 0 && !outOfStock && (
             <div className="absolute top-4 left-4 z-10 bg-[#9B6FD1] text-white text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider shadow-md pointer-events-none">{product.discount}% OFF</div>
+          )}
+          {isNew && !outOfStock && (
+            <div className="absolute top-4 right-4 z-10 bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider shadow-md pointer-events-none">New</div>
           )}
           {outOfStock && (
             <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">

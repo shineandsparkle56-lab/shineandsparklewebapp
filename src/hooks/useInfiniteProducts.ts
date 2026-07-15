@@ -23,6 +23,7 @@ function mapRow(row: Record<string, unknown>): Product {
     stock: typeof row.stock === "number" ? row.stock : 99,
     shipping_credit: typeof row.shipping_credit === "number" ? row.shipping_credit : 0,
     wholesale_price: typeof row.wholesale_price === "number" ? row.wholesale_price : 0,
+    created_at: row.created_at as string | undefined,
   };
 }
 

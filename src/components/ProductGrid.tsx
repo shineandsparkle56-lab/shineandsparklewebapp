@@ -4,6 +4,7 @@ import { LayoutGrid, List, ArrowUpDown, Check } from "lucide-react";
 import { useCategories } from "../context/CategoriesContext";
 import { useScroll } from "../context/ScrollContext";
 import { useInfiniteProducts, SortOrder } from "../hooks/useInfiniteProducts";
+import { useNewCategories } from "../hooks/useNewCategories";
 import { ProductCard } from "./ProductCard";
 
 type ViewMode = "grid" | "list";
@@ -51,6 +52,7 @@ function LoadMoreSpinner() {
 export function ProductGrid() {
   const { categories } = useCategories();
   const { scrollingDown } = useScroll();
+  const newCategories = useNewCategories();
 
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -117,29 +119,33 @@ export function ProductGrid() {
           {/* Row 1 — Category chips */}
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-none mb-2">
             {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                data-testid={`filter-tab-${tab.id}`}
-                onClick={() => {
-                  setActiveCategory(tab.id);
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
-                className={`relative flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 focus:outline-none ${
-                  activeCategory === tab.id
-                    ? "text-white shadow-md"
-                    : "text-gray-500 bg-[#F3EEFB] hover:text-[#9B6FD1]"
-                }`}
-              >
-                {activeCategory === tab.id && (
-                  <motion.span
-                    layoutId="active-pill"
-                    className="absolute inset-0 rounded-full bg-[#9B6FD1]"
-                    style={{ zIndex: -1 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  />
+              <div key={tab.id} className="relative flex-shrink-0 pt-1 pr-1">
+                <button
+                  data-testid={`filter-tab-${tab.id}`}
+                  onClick={() => {
+                    setActiveCategory(tab.id);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className={`relative px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 focus:outline-none ${
+                    activeCategory === tab.id
+                      ? "text-white shadow-md"
+                      : "text-gray-500 bg-[#F3EEFB] hover:text-[#9B6FD1]"
+                  }`}
+                >
+                  {activeCategory === tab.id && (
+                    <motion.span
+                      layoutId="active-pill"
+                      className="absolute inset-0 rounded-full bg-[#9B6FD1]"
+                      style={{ zIndex: -1 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                  {tab.label}
+                </button>
+                {newCategories.has(tab.id) && (
+                  <span className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white pointer-events-none" />
                 )}
-                {tab.label}
-              </button>
+              </div>
             ))}
           </div>
 

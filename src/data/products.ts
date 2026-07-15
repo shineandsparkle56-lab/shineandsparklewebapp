@@ -11,4 +11,5 @@ export interface Product {
   stock: number;          // 0 = out of stock
   shipping_credit: number; // ₹ discount applied to shipping per unit in cart (0 = no credit)
   wholesale_price: number; // admin-only cost price — never shown to customers
+  created_at?: string;    // ISO timestamp — used to show "New" badge
 }
