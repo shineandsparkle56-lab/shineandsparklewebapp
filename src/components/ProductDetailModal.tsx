@@ -203,6 +203,8 @@ function ZoomLightbox({ src, alt, onClose }: ZoomLightboxProps) {
 export function ProductDetailModal({ product, onClose }: ProductDetailModalProps) {
   const { addToCart, setIsCartOpen } = useCart();
   const [addedFeedback, setAddedFeedback] = useState(false);
+  const [stockMsg, setStockMsg] = useState(false);
+  const stockMsgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeImg, setActiveImg] = useState(0);
   const [zoomOpen, setZoomOpen] = useState(false);
 
@@ -323,9 +325,15 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
 
   const handleAddToCart = () => {
     if (!product) return;
-    addToCart(product);
-    setAddedFeedback(true);
-    setTimeout(() => setAddedFeedback(false), 1800);
+    const added = addToCart(product);
+    if (added) {
+      setAddedFeedback(true);
+      setTimeout(() => setAddedFeedback(false), 1800);
+    } else {
+      setStockMsg(true);
+      if (stockMsgTimer.current) clearTimeout(stockMsgTimer.current);
+      stockMsgTimer.current = setTimeout(() => setStockMsg(false), 2500);
+    }
   };
 
   const handleBuyNow = () => {
@@ -590,6 +598,11 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                         </>
                       )}
                     </div>
+                    {stockMsg && (
+                      <p className="text-xs text-amber-600 font-medium text-center mt-2">
+                        Max {product.stock} in stock - can't add more
+                      </p>
+                    )}
                   </div>
                 </motion.div>
               </div>

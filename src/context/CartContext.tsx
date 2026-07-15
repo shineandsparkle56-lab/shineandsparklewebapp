@@ -22,7 +22,7 @@ export interface CartItem {
 
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (product: Product) => void;
+  addToCart: (product: Product) => boolean; // returns false if stock limit reached
   removeFromCart: (id: number) => void;
   updateQuantity: (id: number, delta: number) => void;
   totalItems: number;
@@ -47,12 +47,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [cart]);
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product): boolean => {
+    let hitLimit = false;
     setCart((prev) => {
       const existing = prev.find((item) => item.product.id === product.id);
       if (existing) {
         // Don't exceed available stock
-        if (existing.quantity >= product.stock) return prev;
+        if (existing.quantity >= product.stock) {
+          hitLimit = true;
+          return prev;
+        }
         return prev.map((item) =>
           item.product.id === product.id
             ? { ...item, quantity: item.quantity + 1 }
@@ -61,6 +65,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
       return [...prev, { product, quantity: 1 }];
     });
+    return !hitLimit;
   };
 
   const removeFromCart = (id: number) => {

@@ -15,8 +15,19 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
   const { addToCart, setIsCartOpen } = useCart();
   const [modalOpen, setModalOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
+  const [stockMsg, setStockMsg] = useState(false);
+  const stockMsgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const images = product.images?.length ? product.images : [product.image];
   const outOfStock = product.stock === 0;
+
+  const handleAddToCart = () => {
+    const added = addToCart(product);
+    if (!added) {
+      setStockMsg(true);
+      if (stockMsgTimer.current) clearTimeout(stockMsgTimer.current);
+      stockMsgTimer.current = setTimeout(() => setStockMsg(false), 2500);
+    }
+  };
 
   // ── Swipe state (list view) ──────────────────────────────────
   const dragStartX = useRef<number | null>(null);
@@ -235,9 +246,14 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Button variant="outline" className="border-[#9B6FD1] text-[#9B6FD1] hover:bg-[#9B6FD1]/5 rounded-full text-sm disabled:opacity-40" onClick={() => addToCart(product)} disabled={outOfStock} data-testid={`btn-add-to-cart-${product.id}`}>Add to Cart</Button>
+              <Button variant="outline" className="border-[#9B6FD1] text-[#9B6FD1] hover:bg-[#9B6FD1]/5 rounded-full text-sm disabled:opacity-40" onClick={handleAddToCart} disabled={outOfStock} data-testid={`btn-add-to-cart-${product.id}`}>Add to Cart</Button>
               <Button className="bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white rounded-full text-sm shadow-md disabled:opacity-40" onClick={handleBuyNow} disabled={outOfStock} data-testid={`btn-buy-now-${product.id}`}>Buy Now</Button>
             </div>
+            {stockMsg && (
+              <p className="text-xs text-amber-600 font-medium text-center mt-1">
+                Max {product.stock} in stock - can't add more
+              </p>
+            )}
           </div>
         </div>
 
@@ -349,11 +365,16 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
               {product.originalPrice > product.price && <span className="text-[10px] text-gray-400 line-through">₹{product.originalPrice}</span>}
             </div>
           </div>
-          <button onClick={() => addToCart(product)} disabled={outOfStock}
+          <button onClick={handleAddToCart} disabled={outOfStock}
             className="w-full py-1.5 rounded-xl text-xs font-semibold border-2 border-[#9B6FD1] text-[#9B6FD1] hover:bg-[#9B6FD1] hover:text-white transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
             data-testid={`btn-add-to-cart-${product.id}`}>
             {outOfStock ? "Out of Stock" : "+ Add to Cart"}
           </button>
+          {stockMsg && (
+            <p className="text-[10px] text-amber-600 font-medium text-center leading-tight">
+              Max {product.stock} in stock
+            </p>
+          )}
         </div>
       </div>
 
@@ -434,9 +455,14 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
             {outOfStock && <span className="text-xs font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Out of Stock</span>}
           </div>
           <div className="mt-auto grid grid-cols-2 gap-3">
-            <Button variant="outline" className="w-full border-[#9B6FD1] text-[#9B6FD1] hover:bg-[#9B6FD1]/5 rounded-full disabled:opacity-40 disabled:cursor-not-allowed" onClick={() => addToCart(product)} disabled={outOfStock} data-testid={`btn-add-to-cart-${product.id}`}>Add to Cart</Button>
+            <Button variant="outline" className="w-full border-[#9B6FD1] text-[#9B6FD1] hover:bg-[#9B6FD1]/5 rounded-full disabled:opacity-40 disabled:cursor-not-allowed" onClick={handleAddToCart} disabled={outOfStock} data-testid={`btn-add-to-cart-${product.id}`}>Add to Cart</Button>
             <Button className="w-full bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white rounded-full shadow-md hover:shadow-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed" onClick={handleBuyNow} disabled={outOfStock} data-testid={`btn-buy-now-${product.id}`}>Buy Now</Button>
           </div>
+          {stockMsg && (
+            <p className="text-xs text-amber-600 font-medium text-center mt-2">
+              Max {product.stock} in stock - can't add more
+            </p>
+          )}
         </div>
       </div>
 

@@ -51,6 +51,9 @@ export function useInfiniteProducts(category: string, sort: SortOrder) {
         .select("*")
         .range(from, from + PAGE_SIZE - 1);
 
+      // Hide out-of-stock items
+      query = query.gt("stock", 0);
+
       // Server-side category filter
       if (category !== "all") {
         query = query.eq("category", category);
