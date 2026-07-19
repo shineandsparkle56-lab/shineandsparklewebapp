@@ -373,17 +373,19 @@ export function AdminPanel() {
             </button>
           </div>
         </div>
-        <div className="max-w-5xl mx-auto px-4 flex gap-1 border-t border-gray-100">
-          {([["products", Package, "Products"], ["orders", ShoppingBag, "Orders"], ["categories", Tag, "Categories"], ["post", ImageIcon, "Post"]] as const).map(([tab, Icon, label]) => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === tab ? "border-[#9B6FD1] text-[#9B6FD1]" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-              <Icon className="w-4 h-4" />{label}
-            </button>
-          ))}
+        <div className="max-w-5xl mx-auto overflow-x-auto scrollbar-none border-t border-gray-100">
+          <div className="flex gap-1 px-4 min-w-max">
+            {([["products", Package, "Products"], ["orders", ShoppingBag, "Orders"], ["categories", Tag, "Categories"], ["post", ImageIcon, "Post"]] as const).map(([tab, Icon, label]) => (
+              <button key={tab} onClick={() => setActiveTab(tab)}
+                className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === tab ? "border-[#9B6FD1] text-[#9B6FD1]" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+                <Icon className="w-4 h-4" />{label}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+      <div className="max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-8">
 
         {/* ══ PRODUCTS TAB ══════════════════════════════════════ */}
         {activeTab === "products" && (
@@ -555,95 +557,105 @@ export function AdminPanel() {
                 {orders.map((order) => {
                   const sm = statusMeta(order.status);
                   return (
-                    <div key={order.id} className="px-6 py-5">
-                      <div className="flex items-start justify-between gap-4">
-                        {/* Left: order info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2 mb-2">
-                            <span className="text-xs font-bold text-[#9B6FD1] bg-[#F3EEFB] px-2 py-0.5 rounded-full">#{order.id}</span>
-                            <span className="text-xs text-gray-400">{new Date(order.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${order.payment_mode === "cod" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
-                              {order.payment_mode === "cod" ? "COD" : "Online"}
-                            </span>
-                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${sm.color}`}>{sm.label}</span>
-                          </div>
-                          <div className="flex flex-wrap gap-2 mb-3">
-                            {order.items.map((item, i) => (
-                              <div key={i} className="flex items-center gap-1.5 bg-gray-50 rounded-xl px-2 py-1">
-                                <img src={item.product.image} alt={item.product.name} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
-                                <span className="text-xs text-gray-700 font-medium max-w-[100px] truncate">{item.product.name}</span>
-                                <span className="text-xs text-gray-400">×{item.quantity}</span>
-                              </div>
-                            ))}
-                          </div>
-                          <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-                            {order.customer_name && <span className="w-full text-gray-700 font-medium">{order.customer_name} · {order.customer_mobile}</span>}
-                            {order.customer_address && <span className="w-full text-gray-500">{order.customer_address}, {order.customer_city}, {order.customer_state} — {order.pincode}</span>}
-                            <span>Subtotal: <strong className="text-gray-700">₹{order.subtotal}</strong></span>
-                            {order.shipping_charge > 0 && <span>Shipping: <strong className="text-gray-700">₹{order.shipping_charge}</strong></span>}
-                            {order.cod_charge > 0 && <span>COD: <strong className="text-gray-700">₹{order.cod_charge}</strong></span>}
-                          </div>
-                          {/* Profit row */}
-                          {order.items.some((i) => (i.product.wholesale_price ?? 0) > 0) && (() => {
-                            const cost   = order.items.reduce((s, i) => s + ((i.product.wholesale_price ?? 0) + (i.product.shipping_credit ?? 0)) * i.quantity, 0);
-                            const profit = order.grand_total - cost;
-                            const pct    = order.grand_total > 0 ? Math.round((profit / order.grand_total) * 100) : 0;
-                            return (
-                              <div className={`mt-2 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${profit >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
-                                <span>{profit >= 0 ? "📈" : "📉"} Est. Profit:</span>
-                                <span className="font-bold">₹{profit}</span>
-                                <span className="font-normal opacity-70">({pct}%)</span>
-                                <span className="ml-auto font-normal opacity-60 text-[10px]">Cost ₹{cost}</span>
-                              </div>
-                            );
-                          })()}
-
-                          {/* Stock deduction toggle */}
-                          <div className="mt-2 flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-gray-50 border border-gray-100 text-xs">
-                            <span className="text-gray-600 font-medium">Deduct stock from products</span>
-                            <button
-                              onClick={() => handleToggleStockDeduction(order)}
-                              title={order.stock_deducted ? "Stock deducted — click to restore" : "Click to deduct order qty from product stock"}
-                              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${order.stock_deducted ? "bg-emerald-500" : "bg-gray-300"}`}
-                              role="switch"
-                              aria-checked={!!order.stock_deducted}
-                            >
-                              <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 ${order.stock_deducted ? "translate-x-4" : "translate-x-0"}`} />
-                            </button>
-                          </div>
+                    <div key={order.id} className="px-4 py-4">
+                      {/* Top row: order meta + grand total */}
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-xs font-bold text-[#9B6FD1] bg-[#F3EEFB] px-2 py-0.5 rounded-full">#{order.id}</span>
+                          <span className="text-xs text-gray-400">{new Date(order.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${order.payment_mode === "cod" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
+                            {order.payment_mode === "cod" ? "COD" : "Online"}
+                          </span>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${sm.color}`}>{sm.label}</span>
                         </div>
+                        <p className="text-base font-bold font-serif text-gray-900 shrink-0">₹{order.grand_total}</p>
+                      </div>
 
-                        {/* Right: total + actions */}
-                        <div className="shrink-0 flex flex-col items-end gap-2">
-                          <p className="text-lg font-bold font-serif text-gray-900">₹{order.grand_total}</p>
-                          {/* Shiprocket ID badge — shown persistently after push */}
-                          {order.sr_order_id && (
-                            <span className="text-[10px] font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">
-                              SR #{order.sr_order_id}
-                            </span>
-                          )}
-                          <div className="flex items-center gap-1.5">
-                            <button onClick={() => handleDownloadPDF(order)} disabled={downloadingId === order.id} title="Download PDF"
-                              className="flex items-center gap-1 px-2.5 py-1.5 bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white text-xs font-semibold rounded-xl transition-colors disabled:opacity-60">
-                              {downloadingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} PDF
-                            </button>
-                            <button onClick={() => handlePushToShiprocket(order)}
-                              disabled={pushingId === order.id || !!order.sr_order_id}
-                              title={order.sr_order_id ? `Already pushed — SR #${order.sr_order_id}` : "Push to Shiprocket"}
-                              className={`flex items-center gap-1 px-2.5 py-1.5 text-white text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${order.sr_order_id ? "bg-orange-300" : "bg-orange-500 hover:bg-orange-600"}`}>
-                              {pushingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
-                              {order.sr_order_id ? "Shipped" : "Ship"}
-                            </button>
-                            <button onClick={() => setEditOrder(order)} title="Edit order"
-                              className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-400 hover:text-[#9B6FD1] hover:bg-[#F3EEFB] transition-colors border border-gray-200">
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => setDeleteOrderId(order.id)} title="Delete order"
-                              className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors border border-gray-200">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                      {/* Action buttons row */}
+                      <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                        {order.sr_order_id && (
+                          <span className="text-[10px] font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">
+                            SR #{order.sr_order_id}
+                          </span>
+                        )}
+                        <button onClick={() => handleDownloadPDF(order)} disabled={downloadingId === order.id} title="Download PDF"
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white text-xs font-semibold rounded-xl transition-colors disabled:opacity-60">
+                          {downloadingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} PDF
+                        </button>
+                        <button onClick={() => handlePushToShiprocket(order)}
+                          disabled={pushingId === order.id || !!order.sr_order_id}
+                          title={order.sr_order_id ? `Already pushed — SR #${order.sr_order_id}` : "Push to Shiprocket"}
+                          className={`flex items-center gap-1 px-2.5 py-1.5 text-white text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${order.sr_order_id ? "bg-orange-300" : "bg-orange-500 hover:bg-orange-600"}`}>
+                          {pushingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
+                          {order.sr_order_id ? "Shipped" : "Ship"}
+                        </button>
+                        <button onClick={() => setEditOrder(order)} title="Edit order"
+                          className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-400 hover:text-[#9B6FD1] hover:bg-[#F3EEFB] transition-colors border border-gray-200">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => setDeleteOrderId(order.id)} title="Delete order"
+                          className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors border border-gray-200">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Items */}
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {order.items.map((item, i) => (
+                          <div key={i} className="flex items-center gap-1.5 bg-gray-50 rounded-xl px-2 py-1">
+                            <img src={item.product.image} alt={item.product.name} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
+                            <span className="text-xs text-gray-700 font-medium max-w-[100px] truncate">{item.product.name}</span>
+                            <span className="text-xs text-gray-400">×{item.quantity}</span>
                           </div>
-                        </div>
+                        ))}
+                      </div>
+
+                      {/* Customer + totals */}
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 mb-2">
+                        {order.customer_name && <span className="w-full text-gray-700 font-medium">{order.customer_name} · {order.customer_mobile}</span>}
+                        {order.customer_address && <span className="w-full text-gray-500">{order.customer_address}, {order.customer_city}, {order.customer_state} — {order.pincode}</span>}
+                        <span>Subtotal: <strong className="text-gray-700">₹{order.subtotal}</strong></span>
+                        {order.shipping_charge > 0 && <span>Shipping: <strong className="text-gray-700">₹{order.shipping_charge}</strong></span>}
+                        {order.cod_charge > 0 && <span>COD: <strong className="text-gray-700">₹{order.cod_charge}</strong></span>}
+                      </div>
+
+                      {/* Profit row */}
+                      {order.items.some((i) => (i.product.wholesale_price ?? 0) > 0) && (() => {
+                        const wholesaleCost  = order.items.reduce((s, i) => s + (i.product.wholesale_price ?? 0) * i.quantity, 0);
+                        const shipCreditCost = order.items.reduce((s, i) => s + (i.product.shipping_credit ?? 0) * i.quantity, 0);
+                        const itemsCost      = wholesaleCost + shipCreditCost;
+                        const shippingCost   = order.shipping_charge ?? 0;
+                        const codCost        = order.payment_mode === "cod" ? (order.cod_charge ?? 0) : 0;
+                        const cost           = itemsCost + shippingCost + codCost;
+                        const profit         = order.grand_total - cost;
+                        const pct            = order.grand_total > 0 ? Math.round((profit / order.grand_total) * 100) : 0;
+                        return (
+                          <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 rounded-xl text-xs font-semibold mb-2 ${profit >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
+                            <span>{profit >= 0 ? "📈" : "📉"} Est. Profit:</span>
+                            <span className="font-bold">₹{profit}</span>
+                            <span className="font-normal opacity-70">({pct}%)</span>
+                            <span className="ml-auto font-normal opacity-60 text-[10px] flex flex-wrap gap-x-2">
+                              <span>Wholesale ₹{wholesaleCost}</span>
+                              {shipCreditCost > 0 && <span>+ Ship Credit ₹{shipCreditCost}</span>}
+                              <span className="font-semibold">= ₹{itemsCost}</span>
+                              <span>+ Courier ₹{shippingCost}</span>
+                              {codCost > 0 && <span>+ COD ₹{codCost}</span>}
+                              <span className="font-semibold">= Total Cost ₹{cost}</span>
+                            </span>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Stock deduction toggle */}
+                      <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-gray-50 border border-gray-100 text-xs">
+                        <span className="text-gray-600 font-medium">Deduct stock from products</span>
+                        <button
+                          onClick={() => handleToggleStockDeduction(order)}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${order.stock_deducted ? "bg-emerald-500" : "bg-gray-300"}`}
+                          role="switch" aria-checked={!!order.stock_deducted}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 ${order.stock_deducted ? "translate-x-4" : "translate-x-0"}`} />
+                        </button>
                       </div>
 
                       {/* Shiprocket result panel */}
