@@ -4,7 +4,7 @@ import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion
 import {
   Plus, Trash2, LogOut, Package, Sparkles, ChevronDown, CheckCircle2,
   Upload, X, Image, ShoppingBag, Download, FileText, Loader2, Minus,
-  Pencil, Tag, GripVertical, Search, SlidersHorizontal, Truck, ImageIcon,
+  Pencil, Tag, GripVertical, Search, SlidersHorizontal, Truck, ImageIcon, BarChart3,
 } from "lucide-react";
 import { useProducts } from "../context/ProductsContext";
 import { useCategories } from "../context/CategoriesContext";
@@ -17,11 +17,13 @@ import { DraggableImageGrid } from "../components/ui/DraggableImageGrid";
 import { useImageItems } from "../hooks/useImageItems";
 import { useToast } from "../hooks/useToast";
 import { pushToShiprocket, saveSrIds, buildShiprocketItems, estimateWeight } from "../lib/shiprocket";
+import { compressToWebP } from "../utils/compressToWebP";
 import { EditProductModal } from "../components/admin/EditProductModal";
 import { EditOrderModal } from "../components/admin/EditOrderModal";
 import type { OrderRow, OrderStatus } from "../components/admin/EditOrderModal";
 import { ORDER_STATUSES } from "../components/admin/EditOrderModal";
 import { PostEditor } from "../components/admin/PostEditor";
+import { ReportTab } from "../components/admin/ReportTab";
 
 const BUCKET = "product-images";
 const MAX_IMAGES = 6;
@@ -87,10 +89,13 @@ function CategoryRow({ cat, onDelete }: { cat: import("../context/CategoriesCont
 }
 
 // ── Storage helper ───────────────────────────────────────────
-async function uploadToStorage(file: File): Promise<string> {
-  const ext = file.name.split(".").pop() ?? "jpg";
-  const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, { cacheControl: "3600", upsert: false });
+async function uploadToStorage(file: File, productName?: string): Promise<string> {
+  const compressed = await compressToWebP(file, { name: productName });
+  const slug = productName
+    ? productName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+    : "product";
+  const path = `${Date.now()}-${slug}.webp`;
+  const { error } = await supabase.storage.from(BUCKET).upload(path, compressed, { cacheControl: "3600", upsert: false });
   if (error) throw new Error(error.message);
   return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
@@ -106,7 +111,7 @@ export function AdminPanel() {
   const toast = useToast();
 
   // Tab
-  const [activeTab, setActiveTab] = useState<"products" | "orders" | "categories" | "post">("products");
+  const [activeTab, setActiveTab] = useState<"products" | "orders" | "categories" | "post" | "report">("products");
 
   // Add-product form
   const [form, setForm] = useState(EMPTY_FORM);
@@ -290,7 +295,7 @@ export function AdminPanel() {
     if (img.items.length > 0) {
       try {
         img.setUploading(true);
-        imageUrls = await Promise.all(img.items.map((it) => uploadToStorage(it.file!)));
+        imageUrls = await Promise.all(img.items.map((it) => uploadToStorage(it.file!, form.name.trim())));
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Upload failed.";
         img.setError(msg.toLowerCase().includes("bucket")
@@ -375,7 +380,7 @@ export function AdminPanel() {
         </div>
         <div className="max-w-5xl mx-auto overflow-x-auto scrollbar-none border-t border-gray-100">
           <div className="flex gap-1 px-4 min-w-max">
-            {([["products", Package, "Products"], ["orders", ShoppingBag, "Orders"], ["categories", Tag, "Categories"], ["post", ImageIcon, "Post"]] as const).map(([tab, Icon, label]) => (
+            {([["products", Package, "Products"], ["orders", ShoppingBag, "Orders"], ["categories", Tag, "Categories"], ["post", ImageIcon, "Post"], ["report", BarChart3, "Report"]] as const).map(([tab, Icon, label]) => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === tab ? "border-[#9B6FD1] text-[#9B6FD1]" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
                 <Icon className="w-4 h-4" />{label}
@@ -631,7 +636,7 @@ export function AdminPanel() {
                         const pct            = order.grand_total > 0 ? Math.round((profit / order.grand_total) * 100) : 0;
                         return (
                           <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 rounded-xl text-xs font-semibold mb-2 ${profit >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
-                            <span>{profit >= 0 ? "📈" : "📉"} Est. Profit:</span>
+                            <span>Est. Profit:</span>
                             <span className="font-bold">₹{profit}</span>
                             <span className="font-normal opacity-70">({pct}%)</span>
                             <span className="ml-auto font-normal opacity-60 text-[10px] flex flex-wrap gap-x-2">
@@ -726,6 +731,9 @@ export function AdminPanel() {
 
         {/* ══ POST EDITOR TAB ═══════════════════════════════════ */}
         {activeTab === "post" && <PostEditor />}
+
+        {/* ══ REPORT TAB ════════════════════════════════════════ */}
+        {activeTab === "report" && <ReportTab />}
       </div>
 
       {/* ══ MODALS ════════════════════════════════════════════════ */}

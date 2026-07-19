@@ -7,6 +7,7 @@ import { useProducts } from "../../context/ProductsContext";
 import { supabase } from "../../lib/supabase";
 import { useImageItems } from "../../hooks/useImageItems";
 import { DraggableImageGrid } from "../ui/DraggableImageGrid";
+import { compressToWebP } from "../../utils/compressToWebP";
 
 const BUCKET = "product-images";
 const MAX_IMAGES = 6;
@@ -20,10 +21,13 @@ interface Props {
 
 type FormKey = "name" | "category" | "price" | "originalPrice" | "description" | "stock" | "shipping_credit" | "wholesale_price";
 
-async function uploadFile(file: File): Promise<string> {
-  const ext = file.name.split(".").pop() ?? "jpg";
-  const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, { cacheControl: "3600", upsert: false });
+async function uploadFile(file: File, productName?: string): Promise<string> {
+  const compressed = await compressToWebP(file, { name: productName });
+  const slug = productName
+    ? productName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+    : "product";
+  const path = `${Date.now()}-${slug}.webp`;
+  const { error } = await supabase.storage.from(BUCKET).upload(path, compressed, { cacheControl: "3600", upsert: false });
   if (error) throw new Error(error.message);
   return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
@@ -72,7 +76,7 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
     let finalImages: string[];
     try {
       finalImages = await Promise.all(
-        img.items.map((it) => it.file ? uploadFile(it.file) : Promise.resolve(it.preview))
+        img.items.map((it) => it.file ? uploadFile(it.file, form.name.trim()) : Promise.resolve(it.preview))
       );
     } catch (err) {
       img.setError(err instanceof Error ? err.message : "Upload failed.");
