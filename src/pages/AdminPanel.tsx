@@ -4,7 +4,7 @@ import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion
 import {
   Plus, Trash2, LogOut, Package, Sparkles, ChevronDown, CheckCircle2,
   Upload, X, Image, ShoppingBag, Download, FileText, Loader2, Minus,
-  Pencil, Tag, GripVertical, Search, SlidersHorizontal, Truck, ImageIcon, BarChart3,
+  Pencil, Tag, GripVertical, Search, SlidersHorizontal, Truck, ImageIcon, BarChart3, Printer,
 } from "lucide-react";
 import { useProducts } from "../context/ProductsContext";
 import { useCategories } from "../context/CategoriesContext";
@@ -24,6 +24,7 @@ import type { OrderRow, OrderStatus } from "../components/admin/EditOrderModal";
 import { ORDER_STATUSES } from "../components/admin/EditOrderModal";
 import { PostEditor } from "../components/admin/PostEditor";
 import { ReportTab } from "../components/admin/ReportTab";
+import { ShiprocketPDFPrinter } from "../components/admin/ShiprocketPDFPrinter";
 
 const BUCKET = "product-images";
 const MAX_IMAGES = 6;
@@ -111,7 +112,7 @@ export function AdminPanel() {
   const toast = useToast();
 
   // Tab
-  const [activeTab, setActiveTab] = useState<"products" | "orders" | "categories" | "post" | "report">("products");
+  const [activeTab, setActiveTab] = useState<"products" | "orders" | "categories" | "post" | "report" | "label">("products");
 
   // Add-product form
   const [form, setForm] = useState(EMPTY_FORM);
@@ -380,7 +381,7 @@ export function AdminPanel() {
         </div>
         <div className="max-w-5xl mx-auto overflow-x-auto scrollbar-none border-t border-gray-100">
           <div className="flex gap-1 px-4 min-w-max">
-            {([["products", Package, "Products"], ["orders", ShoppingBag, "Orders"], ["categories", Tag, "Categories"], ["post", ImageIcon, "Post"], ["report", BarChart3, "Report"]] as const).map(([tab, Icon, label]) => (
+            {([["products", Package, "Products"], ["orders", ShoppingBag, "Orders"], ["categories", Tag, "Categories"], ["post", ImageIcon, "Post"], ["report", BarChart3, "Report"], ["label", Printer, "Label Print"]] as const).map(([tab, Icon, label]) => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === tab ? "border-[#9B6FD1] text-[#9B6FD1]" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
                 <Icon className="w-4 h-4" />{label}
@@ -734,6 +735,9 @@ export function AdminPanel() {
 
         {/* ══ REPORT TAB ════════════════════════════════════════ */}
         {activeTab === "report" && <ReportTab />}
+
+        {/* ══ LABEL PRINT TAB ═══════════════════════════════════ */}
+        {activeTab === "label" && <ShiprocketPDFPrinter />}
       </div>
 
       {/* ══ MODALS ════════════════════════════════════════════════ */}
