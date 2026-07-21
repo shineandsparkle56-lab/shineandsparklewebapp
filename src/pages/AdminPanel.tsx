@@ -4,7 +4,7 @@ import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion
 import {
   Plus, Trash2, LogOut, Package, Sparkles, ChevronDown, CheckCircle2,
   Upload, X, Image, ShoppingBag, Download, FileText, Loader2, Minus,
-  Pencil, Tag, GripVertical, Search, SlidersHorizontal, Truck, ImageIcon, BarChart3, Printer,
+  Pencil, Tag, GripVertical, Search, SlidersHorizontal, Truck, ImageIcon, BarChart3, Printer, Zap,
 } from "lucide-react";
 import { useProducts } from "../context/ProductsContext";
 import { useCategories } from "../context/CategoriesContext";
@@ -20,6 +20,8 @@ import { pushToShiprocket, saveSrIds, buildShiprocketItems, estimateWeight } fro
 import { compressToWebP } from "../utils/compressToWebP";
 import { EditProductModal } from "../components/admin/EditProductModal";
 import { EditOrderModal } from "../components/admin/EditOrderModal";
+import { AddOrderModal } from "../components/admin/AddOrderModal";
+import { QuickAddOrderModal } from "../components/admin/QuickAddOrderModal";
 import type { OrderRow, OrderStatus } from "../components/admin/EditOrderModal";
 import { ORDER_STATUSES } from "../components/admin/EditOrderModal";
 import { PostEditor } from "../components/admin/PostEditor";
@@ -145,6 +147,8 @@ export function AdminPanel() {
   const [deleteOrderId, setDeleteOrderId] = useState<number | null>(null);
   const [deletingOrder, setDeletingOrder] = useState(false);
   const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
+  const [addOrderOpen, setAddOrderOpen] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   // Shiprocket
   const [pushingId, setPushingId] = useState<number | null>(null);
@@ -547,7 +551,21 @@ export function AdminPanel() {
                 <h2 className="font-semibold text-gray-800">Placed Orders</h2>
                 <span className="text-sm text-gray-400">{orders.length} total</span>
               </div>
-              <button onClick={fetchOrders} className="text-xs text-[#9B6FD1] hover:underline">Refresh</button>
+              <div className="flex items-center gap-2">
+                <button onClick={fetchOrders} className="text-xs text-[#9B6FD1] hover:underline">Refresh</button>
+                <button
+                  onClick={() => setQuickAddOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-gray-50 text-[#9B6FD1] text-xs font-semibold rounded-xl border border-[#9B6FD1]/40 transition-colors"
+                >
+                  <Zap className="w-3.5 h-3.5" /> Quick Add
+                </button>
+                <button
+                  onClick={() => setAddOrderOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white text-xs font-semibold rounded-xl transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Order
+                </button>
+              </div>
             </div>
 
             {ordersLoading ? (
@@ -747,6 +765,28 @@ export function AdminPanel() {
         product={editProduct}
         onClose={() => setEditProduct(null)}
         onSaved={(msg) => toast.show(msg)}
+        onError={(msg) => toast.show(msg, "error")}
+      />
+
+      {/* Quick Add Order */}
+      <QuickAddOrderModal
+        open={quickAddOpen}
+        onClose={() => setQuickAddOpen(false)}
+        onCreated={(order) => {
+          setOrders((prev) => [order, ...prev]);
+          toast.show("Order created!");
+        }}
+        onError={(msg) => toast.show(msg, "error")}
+      />
+
+      {/* Add Order */}
+      <AddOrderModal
+        open={addOrderOpen}
+        onClose={() => setAddOrderOpen(false)}
+        onCreated={(order) => {
+          setOrders((prev) => [order, ...prev]);
+          toast.show("Order created!");
+        }}
         onError={(msg) => toast.show(msg, "error")}
       />
 

@@ -85,3 +85,30 @@ create policy "anyone can read orders"
 -- ALTER TABLE products ADD COLUMN IF NOT EXISTS stock integer NOT NULL DEFAULT 0;
 -- ─────────────────────────────────────────────
 -- (Already included in the create table if you're starting fresh)
+
+-- ─────────────────────────────────────────────
+-- 5. Report data table (Charges + Investment Stocks)
+--    One row per month, keyed by "YYYY-MM".
+--    charges and investments are stored as JSONB arrays:
+--    [ { "id": "...", "label": "...", "amount": "..." }, ... ]
+-- ─────────────────────────────────────────────
+create table if not exists report_data (
+  month      text primary key,          -- "YYYY-MM"
+  charges    jsonb not null default '[]',
+  investments jsonb not null default '[]',
+  updated_at  timestamptz not null default now()
+);
+
+alter table report_data enable row level security;
+
+create policy "anyone can read report_data"
+  on report_data for select using (true);
+
+create policy "anyone can insert report_data"
+  on report_data for insert with check (true);
+
+create policy "anyone can update report_data"
+  on report_data for update using (true) with check (true);
+
+create policy "anyone can delete report_data"
+  on report_data for delete using (true);

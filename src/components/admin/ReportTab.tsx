@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, BarChart3, TrendingUp, TrendingDown, RefreshCw, IndianRupee } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Plus, Trash2, BarChart3, TrendingUp, TrendingDown, RefreshCw, IndianRupee, Package } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { useProducts } from "../../context/ProductsContext";
 
 // ── Types ─────────────────────────────────────────────────────
 interface SaleEntry  { name: string; amount: number }
@@ -12,17 +13,11 @@ interface ReportData {
   month:       string; // "YYYY-MM"
 }
 
-// ── Persistence helpers ───────────────────────────────────────
-function storageKey(month: string) { return `sns_report_${month}`; }
-
-function loadData(month: string): ReportData {
-  try {
-    const raw = localStorage.getItem(storageKey(month));
-    if (raw) return JSON.parse(raw) as ReportData;
-  } catch { /* ignore */ }
+// ── Defaults ─────────────────────────────────────────────────
+function defaultData(month: string): ReportData {
   return {
     month,
-    charges:     [
+    charges: [
       { id: "shipping", label: "Shipping fees", amount: "" },
       { id: "ads",      label: "Ads",           amount: "" },
       { id: "other",    label: "Other",          amount: "" },
@@ -30,16 +25,12 @@ function loadData(month: string): ReportData {
       { id: "tap",      label: "Tap",            amount: "" },
     ],
     investments: [
-      { id: "ruchi",  label: "Ruchi creation",       amount: "" },
-      { id: "sanjay", label: "Sanjay imitation",      amount: "" },
-      { id: "shiv",   label: "Shiv sakti imitation",  amount: "" },
-      { id: "jay",    label: "Jay ambe",              amount: "" },
+      { id: "ruchi",  label: "Ruchi creation",      amount: "" },
+      { id: "sanjay", label: "Sanjay imitation",     amount: "" },
+      { id: "shiv",   label: "Shiv sakti imitation", amount: "" },
+      { id: "jay",    label: "Jay ambe",             amount: "" },
     ],
   };
-}
-
-function saveData(data: ReportData) {
-  localStorage.setItem(storageKey(data.month), JSON.stringify(data));
 }
 
 function newEntry(): ManualEntry {
@@ -68,15 +59,47 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
 
 // ── Component ─────────────────────────────────────────────────
 export function ReportTab() {
-  const [month, setMonth]       = useState(currentMonth());
-  const [data, setData]         = useState<ReportData>(() => loadData(currentMonth()));
-  const [sales, setSales]       = useState<SaleEntry[]>([]);
-  const [loading, setLoading]   = useState(false);
+  const { products } = useProducts();
+  const [month, setMonth]           = useState(currentMonth());
+  const [data, setData]             = useState<ReportData>(() => defaultData(currentMonth()));
+  const [sales, setSales]           = useState<SaleEntry[]>([]);
+  const [loading, setLoading]       = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
 
-  // Reload data when month changes
-  useEffect(() => { setData(loadData(month)); }, [month]);
+  // Track whether the current data was loaded from DB (skip first-save until loaded)
+  const isLoadedRef = useRef(false);
+  // Debounce timer ref
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Fetch orders for selected month from Supabase
+  // ── Load report data from Supabase when month changes ────────
+  const fetchReportData = useCallback(async (m: string) => {
+    setReportLoading(true);
+    isLoadedRef.current = false;
+
+    const { data: row, error } = await supabase
+      .from("report_data")
+      .select("charges, investments")
+      .eq("month", m)
+      .maybeSingle();
+
+    if (!error && row) {
+      setData({
+        month:       m,
+        charges:     (row.charges     as ManualEntry[]) ?? [],
+        investments: (row.investments as ManualEntry[]) ?? [],
+      });
+    } else {
+      // No row yet — use defaults so the UI isn't empty
+      setData(defaultData(m));
+    }
+
+    isLoadedRef.current = true;
+    setReportLoading(false);
+  }, []);
+
+  useEffect(() => { fetchReportData(month); }, [month, fetchReportData]);
+
+  // ── Fetch orders for selected month from Supabase ────────────
   const fetchSales = useCallback(async () => {
     setLoading(true);
     const from = `${month}-01`;
@@ -99,8 +122,31 @@ export function ReportTab() {
 
   useEffect(() => { fetchSales(); }, [fetchSales]);
 
-  // Persist whenever data changes
-  useEffect(() => { saveData(data); }, [data]);
+  // ── Debounced upsert to Supabase whenever data changes ───────
+  useEffect(() => {
+    // Don't save until the initial load for this month is complete
+    if (!isLoadedRef.current) return;
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+
+    saveTimerRef.current = setTimeout(async () => {
+      await supabase
+        .from("report_data")
+        .upsert(
+          {
+            month:       data.month,
+            charges:     data.charges,
+            investments: data.investments,
+            updated_at:  new Date().toISOString(),
+          },
+          { onConflict: "month" }
+        );
+    }, 800); // 800 ms debounce
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [data]);
 
   // ── Updaters ─────────────────────────────────────────────────
   const updateCharge = (id: string, field: "label" | "amount", val: string) =>
@@ -127,6 +173,24 @@ export function ReportTab() {
   const totalInvestment = data.investments.reduce((s, e) => s + toNum(e.amount), 0);
   const netProfit       = totalSale - totalCharges - totalInvestment;
 
+  // ── Stock potential (live from products) ─────────────────────
+  // Only products with wholesale_price set are included (otherwise profit is unknown)
+  const productsWithCost = products.filter((p) => p.wholesale_price > 0 && p.stock > 0);
+  // Potential revenue if every in-stock unit sells at current price
+  const stockPotentialRevenue = productsWithCost.reduce(
+    (s, p) => s + p.price * p.stock, 0
+  );
+  // Wholesale cost of all remaining in-stock units
+  const stockWholesaleCost = productsWithCost.reduce(
+    (s, p) => s + p.wholesale_price * p.stock, 0
+  );
+  // Net gain from selling all remaining stock
+  const stockPotentialProfit = stockPotentialRevenue - stockWholesaleCost;
+  // Grand final: current actual profit + what you'd make if all stock sold
+  const finalIfAllSold = netProfit + stockPotentialProfit;
+  // Total in-stock units across all products
+  const totalStockUnits = productsWithCost.reduce((s, p) => s + p.stock, 0);
+
   return (
     <div className="space-y-6">
 
@@ -152,7 +216,7 @@ export function ReportTab() {
         </div>
 
         {/* ── Summary cards ── */}
-        <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <StatCard label="Total Sale"       value={`₹${totalSale}`}       color="bg-[#F3EEFB] text-[#6B35C2]" />
           <StatCard label="Total Charges"    value={`₹${totalCharges}`}    color="bg-orange-50 text-orange-700" />
           <StatCard label="Stock Investment" value={`₹${totalInvestment}`} color="bg-blue-50 text-blue-700" />
@@ -161,6 +225,12 @@ export function ReportTab() {
             value={`₹${netProfit}`}
             sub={totalSale > 0 ? `${Math.round((netProfit / totalSale) * 100)}% margin` : undefined}
             color={netProfit >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}
+          />
+          <StatCard
+            label="Final if All Sold"
+            value={`₹${finalIfAllSold}`}
+            sub={totalStockUnits > 0 ? `${totalStockUnits} units left` : "no costed stock"}
+            color={finalIfAllSold >= 0 ? "bg-teal-50 text-teal-700" : "bg-red-50 text-red-600"}
           />
         </div>
       </div>
@@ -212,7 +282,12 @@ export function ReportTab() {
               <span className="text-xs font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">Total ₹{totalCharges}</span>
             </div>
             <div className="p-4 space-y-2">
-              {data.charges.map((c) => (
+              {reportLoading ? (
+                <div className="flex items-center justify-center py-6 gap-2 text-gray-400 text-sm">
+                  <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+                  Loading…
+                </div>
+              ) : data.charges.map((c) => (
                 <div key={c.id} className="flex items-center gap-2">
                   <input
                     value={c.label}
@@ -236,10 +311,12 @@ export function ReportTab() {
                   </button>
                 </div>
               ))}
+              {!reportLoading && (
               <button onClick={addCharge}
                 className="flex items-center gap-1.5 text-xs text-[#9B6FD1] hover:text-[#8a5fc0] font-medium mt-1">
                 <Plus className="w-3.5 h-3.5" /> Add charge
               </button>
+              )}
             </div>
           </div>
 
@@ -253,7 +330,12 @@ export function ReportTab() {
               <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">Total ₹{totalInvestment}</span>
             </div>
             <div className="p-4 space-y-2">
-              {data.investments.map((inv) => (
+              {reportLoading ? (
+                <div className="flex items-center justify-center py-6 gap-2 text-gray-400 text-sm">
+                  <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                  Loading…
+                </div>
+              ) : data.investments.map((inv) => (
                 <div key={inv.id} className="flex items-center gap-2">
                   <input
                     value={inv.label}
@@ -277,10 +359,12 @@ export function ReportTab() {
                   </button>
                 </div>
               ))}
+              {!reportLoading && (
               <button onClick={addInvestment}
                 className="flex items-center gap-1.5 text-xs text-[#9B6FD1] hover:text-[#8a5fc0] font-medium mt-1">
                 <Plus className="w-3.5 h-3.5" /> Add supplier
               </button>
+              )}
             </div>
           </div>
 
@@ -291,6 +375,7 @@ export function ReportTab() {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
         <h3 className="font-semibold text-gray-800 text-sm mb-3">Summary — {formatMonth(month)}</h3>
         <div className="space-y-1.5 text-sm">
+          {/* Actual this month */}
           <div className="flex justify-between text-gray-600">
             <span>Total Sale</span><span className="font-semibold text-gray-900">₹{totalSale}</span>
           </div>
@@ -302,9 +387,41 @@ export function ReportTab() {
           </div>
           <div className="h-px bg-gray-100 my-2" />
           <div className="flex justify-between font-bold text-base">
-            <span className="text-gray-800">Net Profit</span>
+            <span className="text-gray-800">Net Profit (so far)</span>
             <span className={netProfit >= 0 ? "text-emerald-600" : "text-red-500"}>₹{netProfit}</span>
           </div>
+
+          {/* Stock forecast */}
+          {totalStockUnits > 0 && (
+            <>
+              <div className="h-px bg-gray-100 my-2" />
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide pt-1">
+                If all {totalStockUnits} remaining stock units sell
+              </p>
+              <div className="flex justify-between text-gray-600">
+                <span>+ Stock Revenue</span>
+                <span className="font-semibold text-gray-900">₹{stockPotentialRevenue}</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>− Stock Wholesale Cost</span>
+                <span className="font-semibold text-purple-600">₹{stockWholesaleCost}</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>= Stock Potential Profit</span>
+                <span className={`font-semibold ${stockPotentialProfit >= 0 ? "text-teal-600" : "text-red-500"}`}>
+                  ₹{stockPotentialProfit}
+                </span>
+              </div>
+              <div className="h-px bg-gray-100 my-2" />
+              <div className="flex justify-between font-bold text-base">
+                <span className="text-gray-800">Final Profit (all sold)</span>
+                <span className={finalIfAllSold >= 0 ? "text-teal-600" : "text-red-500"}>₹{finalIfAllSold}</span>
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">
+                Net Profit ₹{netProfit} + Stock Profit ₹{stockPotentialProfit} = ₹{finalIfAllSold}
+              </p>
+            </>
+          )}
         </div>
       </div>
 
