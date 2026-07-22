@@ -174,10 +174,12 @@ export function ReportTab() {
   const netProfit       = totalSale - totalCharges - totalInvestment;
 
   // ── Stock potential (live from products) ─────────────────────
-  // Remaining sell value = sum of (selling price × stock) for all in-stock products
+  // Net revenue per unit = price - shipping_credit
+  // (shipping_credit is absorbed by seller, reducing what customer pays for shipping)
+  // Matches SQL: SUM((price - shipping_credit) * stock)
   const stockPotentialRevenue = products
     .filter((p) => p.stock > 0)
-    .reduce((s, p) => s + p.price * p.stock, 0);
+    .reduce((s, p) => s + (p.price - p.shipping_credit) * p.stock, 0);
 
   // Total in-stock units (for display)
   const totalStockUnits = products
@@ -290,27 +292,29 @@ export function ReportTab() {
                   Loading…
                 </div>
               ) : data.charges.map((c) => (
-                <div key={c.id} className="flex items-center gap-2">
+                <div key={c.id} className="flex flex-wrap items-center gap-2">
                   <input
                     value={c.label}
                     onChange={(e) => updateCharge(c.id, "label", e.target.value)}
                     placeholder="Label"
-                    className="flex-1 text-sm px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#9B6FD1]/20 focus:border-[#9B6FD1]"
+                    className="flex-1 min-w-0 text-sm px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#9B6FD1]/20 focus:border-[#9B6FD1]"
                   />
-                  <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden focus-within:border-[#9B6FD1] focus-within:ring-2 focus-within:ring-[#9B6FD1]/20 w-28 shrink-0">
-                    <span className="pl-2.5 text-gray-400 text-sm select-none">₹</span>
-                    <input
-                      type="number" min="0"
-                      value={c.amount}
-                      onChange={(e) => updateCharge(c.id, "amount", e.target.value)}
-                      placeholder="0"
-                      className="flex-1 py-2 pr-2.5 text-sm text-gray-800 outline-none bg-transparent"
-                    />
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden focus-within:border-[#9B6FD1] focus-within:ring-2 focus-within:ring-[#9B6FD1]/20 w-28">
+                      <span className="pl-2.5 text-gray-400 text-sm select-none">₹</span>
+                      <input
+                        type="number" min="0"
+                        value={c.amount}
+                        onChange={(e) => updateCharge(c.id, "amount", e.target.value)}
+                        placeholder="0"
+                        className="flex-1 py-2 pr-2.5 text-sm text-gray-800 outline-none bg-transparent w-0"
+                      />
+                    </div>
+                    <button onClick={() => removeCharge(c.id)}
+                      className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <button onClick={() => removeCharge(c.id)}
-                    className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors shrink-0">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
                 </div>
               ))}
               {!reportLoading && (
@@ -338,27 +342,29 @@ export function ReportTab() {
                   Loading…
                 </div>
               ) : data.investments.map((inv) => (
-                <div key={inv.id} className="flex items-center gap-2">
+                <div key={inv.id} className="flex flex-wrap items-center gap-2">
                   <input
                     value={inv.label}
                     onChange={(e) => updateInvestment(inv.id, "label", e.target.value)}
                     placeholder="Supplier name"
-                    className="flex-1 text-sm px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#9B6FD1]/20 focus:border-[#9B6FD1]"
+                    className="flex-1 min-w-0 text-sm px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#9B6FD1]/20 focus:border-[#9B6FD1]"
                   />
-                  <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden focus-within:border-[#9B6FD1] focus-within:ring-2 focus-within:ring-[#9B6FD1]/20 w-28 shrink-0">
-                    <span className="pl-2.5 text-gray-400 text-sm select-none">₹</span>
-                    <input
-                      type="number" min="0"
-                      value={inv.amount}
-                      onChange={(e) => updateInvestment(inv.id, "amount", e.target.value)}
-                      placeholder="0"
-                      className="flex-1 py-2 pr-2.5 text-sm text-gray-800 outline-none bg-transparent"
-                    />
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden focus-within:border-[#9B6FD1] focus-within:ring-2 focus-within:ring-[#9B6FD1]/20 w-28">
+                      <span className="pl-2.5 text-gray-400 text-sm select-none">₹</span>
+                      <input
+                        type="number" min="0"
+                        value={inv.amount}
+                        onChange={(e) => updateInvestment(inv.id, "amount", e.target.value)}
+                        placeholder="0"
+                        className="flex-1 py-2 pr-2.5 text-sm text-gray-800 outline-none bg-transparent w-0"
+                      />
+                    </div>
+                    <button onClick={() => removeInvestment(inv.id)}
+                      className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <button onClick={() => removeInvestment(inv.id)}
-                    className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors shrink-0">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
                 </div>
               ))}
               {!reportLoading && (
