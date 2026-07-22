@@ -174,22 +174,24 @@ export function ReportTab() {
   const netProfit       = totalSale - totalCharges - totalInvestment;
 
   // ── Stock potential (live from products) ─────────────────────
-  // Only products with wholesale_price set are included (otherwise profit is unknown)
-  const productsWithCost = products.filter((p) => p.wholesale_price > 0 && p.stock > 0);
-  // Potential revenue if every in-stock unit sells at current price
-  const stockPotentialRevenue = productsWithCost.reduce(
-    (s, p) => s + p.price * p.stock, 0
-  );
-  // Wholesale cost of all remaining in-stock units
-  const stockWholesaleCost = productsWithCost.reduce(
-    (s, p) => s + p.wholesale_price * p.stock, 0
-  );
-  // Net gain from selling all remaining stock
-  const stockPotentialProfit = stockPotentialRevenue - stockWholesaleCost;
-  // Grand final: current actual profit + what you'd make if all stock sold
-  const finalIfAllSold = netProfit + stockPotentialProfit;
-  // Total in-stock units across all products
-  const totalStockUnits = productsWithCost.reduce((s, p) => s + p.stock, 0);
+  // Remaining sell value = sum of (selling price × stock) for all in-stock products
+  const stockPotentialRevenue = products
+    .filter((p) => p.stock > 0)
+    .reduce((s, p) => s + p.price * p.stock, 0);
+
+  // Total in-stock units (for display)
+  const totalStockUnits = products
+    .filter((p) => p.stock > 0)
+    .reduce((s, p) => s + p.stock, 0);
+
+  // ── Final profit if all remaining stock sells ─────────────────
+  // Your formula:
+  //   Total revenue = already sold + remaining stock sell price
+  //   Total cost    = stock investment (what you paid suppliers) + charges
+  //   Final profit  = total revenue − total cost
+  const totalRevenueIfAllSold = totalSale + stockPotentialRevenue;
+  const totalCost             = totalInvestment + totalCharges;
+  const finalIfAllSold        = totalRevenueIfAllSold - totalCost;
 
   return (
     <div className="space-y-6">
@@ -229,8 +231,8 @@ export function ReportTab() {
           <StatCard
             label="Final if All Sold"
             value={`₹${finalIfAllSold}`}
-            sub={totalStockUnits > 0 ? `${totalStockUnits} units left` : "no costed stock"}
-            color={finalIfAllSold >= 0 ? "bg-teal-50 text-teal-700" : "bg-red-50 text-red-600"}
+            sub={totalStockUnits > 0 ? `${totalStockUnits} units in stock` : "no stock left"}
+            color={finalIfAllSold >= 0 ? "bg-teal-50 text-teal-700" : "bg-amber-50 text-amber-700"}
           />
         </div>
       </div>
@@ -375,52 +377,54 @@ export function ReportTab() {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
         <h3 className="font-semibold text-gray-800 text-sm mb-3">Summary — {formatMonth(month)}</h3>
         <div className="space-y-1.5 text-sm">
-          {/* Actual this month */}
+
+          {/* Already sold */}
           <div className="flex justify-between text-gray-600">
-            <span>Total Sale</span><span className="font-semibold text-gray-900">₹{totalSale}</span>
+            <span>Total Sale (so far)</span>
+            <span className="font-semibold text-gray-900">₹{totalSale}</span>
           </div>
-          <div className="flex justify-between text-gray-600">
-            <span>− Charges</span><span className="font-semibold text-orange-600">₹{totalCharges}</span>
+          {totalStockUnits > 0 && (
+            <div className="flex justify-between text-gray-600">
+              <span>+ Remaining Stock Sell Value ({totalStockUnits} units)</span>
+              <span className="font-semibold text-gray-900">₹{stockPotentialRevenue}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-gray-500 font-medium">
+            <span>= Total Revenue if all sold</span>
+            <span className="text-gray-800">₹{totalRevenueIfAllSold}</span>
           </div>
-          <div className="flex justify-between text-gray-600">
-            <span>− Stock Investment</span><span className="font-semibold text-blue-600">₹{totalInvestment}</span>
-          </div>
+
           <div className="h-px bg-gray-100 my-2" />
+
+          <div className="flex justify-between text-gray-600">
+            <span>− Stock Investment</span>
+            <span className="font-semibold text-blue-600">₹{totalInvestment}</span>
+          </div>
+          <div className="flex justify-between text-gray-600">
+            <span>− Charges</span>
+            <span className="font-semibold text-orange-600">₹{totalCharges}</span>
+          </div>
+          <div className="flex justify-between text-gray-500 font-medium">
+            <span>= Total Cost</span>
+            <span className="text-gray-800">₹{totalCost}</span>
+          </div>
+
+          <div className="h-px bg-gray-100 my-2" />
+
           <div className="flex justify-between font-bold text-base">
             <span className="text-gray-800">Net Profit (so far)</span>
             <span className={netProfit >= 0 ? "text-emerald-600" : "text-red-500"}>₹{netProfit}</span>
           </div>
-
-          {/* Stock forecast */}
           {totalStockUnits > 0 && (
-            <>
-              <div className="h-px bg-gray-100 my-2" />
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide pt-1">
-                If all {totalStockUnits} remaining stock units sell
-              </p>
-              <div className="flex justify-between text-gray-600">
-                <span>+ Stock Revenue</span>
-                <span className="font-semibold text-gray-900">₹{stockPotentialRevenue}</span>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>− Stock Wholesale Cost</span>
-                <span className="font-semibold text-purple-600">₹{stockWholesaleCost}</span>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>= Stock Potential Profit</span>
-                <span className={`font-semibold ${stockPotentialProfit >= 0 ? "text-teal-600" : "text-red-500"}`}>
-                  ₹{stockPotentialProfit}
-                </span>
-              </div>
-              <div className="h-px bg-gray-100 my-2" />
-              <div className="flex justify-between font-bold text-base">
-                <span className="text-gray-800">Final Profit (all sold)</span>
-                <span className={finalIfAllSold >= 0 ? "text-teal-600" : "text-red-500"}>₹{finalIfAllSold}</span>
-              </div>
-              <p className="text-[11px] text-gray-400 mt-1">
-                Net Profit ₹{netProfit} + Stock Profit ₹{stockPotentialProfit} = ₹{finalIfAllSold}
-              </p>
-            </>
+            <div className="flex justify-between font-bold text-base">
+              <span className="text-gray-800">Final Profit (if all stock sells)</span>
+              <span className={finalIfAllSold >= 0 ? "text-teal-600" : "text-amber-600"}>₹{finalIfAllSold}</span>
+            </div>
+          )}
+          {totalStockUnits > 0 && (
+            <p className="text-[11px] text-gray-400 pt-0.5">
+              ₹{totalRevenueIfAllSold} revenue − ₹{totalCost} cost = ₹{finalIfAllSold}
+            </p>
           )}
         </div>
       </div>
