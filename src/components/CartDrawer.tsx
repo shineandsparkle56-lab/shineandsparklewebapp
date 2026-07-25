@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Minus, Plus, X, ShoppingBag, MessageCircle,
@@ -44,8 +44,11 @@ const STEP_LABELS: Record<Step, string> = {
   3: "Details",
 };
 
+import { useSettings } from "../hooks/useSettings";
+
 export function CartDrawer() {
   const { isCartOpen, setIsCartOpen, cart, removeFromCart, updateQuantity, subtotal, totalItems, shippingCredit } = useCart();
+  const { codEnabled } = useSettings();
 
   // Step state
   const [step, setStep] = useState<Step>(1);
@@ -61,6 +64,11 @@ export function CartDrawer() {
   const [rateError, setRateError] = useState("");
   const [checkingOut, setCheckingOut] = useState(false);
   const pincodeRef = useRef<HTMLInputElement>(null);
+
+  // If admin disables COD while cart is open, fall back to prepaid
+  useEffect(() => {
+    if (!codEnabled) setPaymentMode("prepaid");
+  }, [codEnabled]);
 
   const [sheetContentEl, setSheetContentEl] = useState<HTMLElement | null>(null);
   const onSheetContent = useCallback((node: HTMLElement | null) => {
@@ -509,7 +517,8 @@ export function CartDrawer() {
                         </div>
                       )}
 
-                      {/* Payment mode */}
+                      {/* Payment mode — only shown when COD is enabled */}
+                      {codEnabled && (
                       <div>
                         <label className="text-xs font-semibold text-gray-500 mb-1.5 block">Payment Method</label>
                         <div className="grid grid-cols-2 gap-2">
@@ -525,6 +534,7 @@ export function CartDrawer() {
                           ))}
                         </div>
                       </div>
+                      )}
                     </div>
                   </motion.div>
                 )}

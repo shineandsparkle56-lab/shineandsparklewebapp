@@ -112,3 +112,29 @@ create policy "anyone can update report_data"
 
 create policy "anyone can delete report_data"
   on report_data for delete using (true);
+
+-- ─────────────────────────────────────────────
+-- 6. App settings table
+--    One row per key, e.g. key='cod_enabled', value='true'/'false'
+-- ─────────────────────────────────────────────
+create table if not exists app_settings (
+  key        text primary key,
+  value      text not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table app_settings enable row level security;
+
+create policy "anyone can read app_settings"
+  on app_settings for select using (true);
+
+create policy "anyone can insert app_settings"
+  on app_settings for insert with check (true);
+
+create policy "anyone can update app_settings"
+  on app_settings for update using (true) with check (true);
+
+-- Seed default: COD enabled
+insert into app_settings (key, value)
+values ('cod_enabled', 'true')
+on conflict (key) do nothing;

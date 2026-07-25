@@ -4,7 +4,7 @@ import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion
 import {
   Plus, Trash2, LogOut, Package, Sparkles, ChevronDown, CheckCircle2,
   Upload, X, Image, ShoppingBag, Download, FileText, Loader2, Minus,
-  Pencil, Tag, GripVertical, Search, SlidersHorizontal, Truck, ImageIcon, BarChart3, Printer, Zap,
+  Pencil, Tag, GripVertical, Search, SlidersHorizontal, Truck, ImageIcon, BarChart3, Printer, Zap, Settings,
 } from "lucide-react";
 import { useProducts } from "../context/ProductsContext";
 import { useCategories } from "../context/CategoriesContext";
@@ -27,6 +27,7 @@ import { ORDER_STATUSES } from "../components/admin/EditOrderModal";
 import { PostEditor } from "../components/admin/PostEditor";
 import { ReportTab } from "../components/admin/ReportTab";
 import { ShiprocketPDFPrinter } from "../components/admin/ShiprocketPDFPrinter";
+import { useSettings } from "../hooks/useSettings";
 
 const BUCKET = "product-images";
 const MAX_IMAGES = 6;
@@ -114,7 +115,7 @@ export function AdminPanel() {
   const toast = useToast();
 
   // Tab
-  const [activeTab, setActiveTab] = useState<"products" | "orders" | "categories" | "post" | "report" | "label">("products");
+  const [activeTab, setActiveTab] = useState<"products" | "orders" | "categories" | "post" | "report" | "label" | "settings">("products");
 
   // Add-product form
   const [form, setForm] = useState(EMPTY_FORM);
@@ -153,6 +154,9 @@ export function AdminPanel() {
   // Shiprocket
   const [pushingId, setPushingId] = useState<number | null>(null);
   const [srResult, setSrResult] = useState<SrResult>(null);
+
+  // Settings
+  const { codEnabled, setCodEnabled, loading: settingsLoading } = useSettings();
 
   // ── Auth guard ───────────────────────────────────────────────
   useEffect(() => { if (!sessionStorage.getItem("sns_admin")) navigate("/admin"); }, [navigate]);
@@ -385,7 +389,7 @@ export function AdminPanel() {
         </div>
         <div className="max-w-5xl mx-auto overflow-x-auto scrollbar-none border-t border-gray-100">
           <div className="flex gap-1 px-4 min-w-max">
-            {([["products", Package, "Products"], ["orders", ShoppingBag, "Orders"], ["categories", Tag, "Categories"], ["post", ImageIcon, "Post"], ["report", BarChart3, "Report"], ["label", Printer, "Label Print"]] as const).map(([tab, Icon, label]) => (
+            {([["products", Package, "Products"], ["orders", ShoppingBag, "Orders"], ["categories", Tag, "Categories"], ["post", ImageIcon, "Post"], ["report", BarChart3, "Report"], ["label", Printer, "Label Print"], ["settings", Settings, "Settings"]] as const).map(([tab, Icon, label]) => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === tab ? "border-[#9B6FD1] text-[#9B6FD1]" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
                 <Icon className="w-4 h-4" />{label}
@@ -756,6 +760,43 @@ export function AdminPanel() {
 
         {/* ══ LABEL PRINT TAB ═══════════════════════════════════ */}
         {activeTab === "label" && <ShiprocketPDFPrinter />}
+
+        {/* ══ SETTINGS TAB ══════════════════════════════════════ */}
+        {activeTab === "settings" && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+              <Settings className="w-5 h-5 text-[#9B6FD1]" />
+              <h2 className="font-semibold text-gray-800">Store Settings</h2>
+            </div>
+            <div className="p-6 space-y-4">
+              {/* COD toggle */}
+              <div className="flex items-center justify-between gap-4 p-4 rounded-2xl border border-gray-100 bg-gray-50">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">Cash on Delivery (COD)</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {codEnabled
+                      ? "COD is enabled — customers can choose Online or COD at checkout."
+                      : "COD is disabled — customers can only pay online at checkout."}
+                  </p>
+                </div>
+                <button
+                  disabled={settingsLoading}
+                  onClick={() => setCodEnabled(!codEnabled)}
+                  className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${codEnabled ? "bg-emerald-500" : "bg-gray-300"}`}
+                  role="switch"
+                  aria-checked={codEnabled}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-6 w-6 rounded-full bg-white shadow-md transform transition-transform duration-200 ${codEnabled ? "translate-x-5" : "translate-x-0"}`}
+                  />
+                </button>
+              </div>
+              <p className="text-xs text-gray-400">
+                Changes take effect immediately for all customers.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ══ MODALS ════════════════════════════════════════════════ */}
