@@ -172,10 +172,11 @@ export async function generateOrderPDF(
 ): Promise<Blob> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
 
-  // Pre-fetch all images
+  // Pre-fetch all images — use variant image when available, else base product image
   const imageDataUrls = await Promise.all(
     cart.map((item) => toDataURL(
-      item.product.images?.length ? item.product.images[0] : item.product.image
+      item.variantImage
+        || (item.product.images?.length ? item.product.images[0] : item.product.image)
     ))
   );
 
@@ -325,14 +326,29 @@ export async function generateOrderPDF(
     const nameLines = doc.splitTextToSize(item.product.name, COL_QTY - COL_TEXT - 4);
     doc.text(nameLines.slice(0, 2) as string[], COL_TEXT, rowY + 9);
 
+    // Variant label (Gold, Silver, etc.) — shown right below the name
+    const variantY = rowY + (nameLines.length > 1 ? 17 : 15);
+    if (item.variantLabel) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7);
+      doc.setTextColor(...PURPLE);
+      doc.text(item.variantLabel, COL_TEXT, variantY);
+    }
+
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(...GREY);
-    doc.text(item.product.category.toUpperCase(), COL_TEXT, rowY + 17);
+    doc.text(item.product.category.toUpperCase(), COL_TEXT, item.variantLabel ? variantY + 5 : rowY + 17);
+
+    // Use variant price if set, otherwise product base price
+    const variant = item.variantId
+      ? item.product.variants?.find((v) => v.id === item.variantId)
+      : undefined;
+    const itemPrice = variant?.price ?? item.product.price;
 
     doc.setFontSize(8);
     doc.setTextColor(110, 80, 160);
-    doc.text(rs(item.product.price) + " each", COL_TEXT, rowY + 24);
+    doc.text(rs(itemPrice) + " each", COL_TEXT, item.variantLabel ? variantY + 11 : rowY + 24);
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
@@ -341,7 +357,7 @@ export async function generateOrderPDF(
 
     doc.setFontSize(11);
     doc.setTextColor(...PURPLE);
-    doc.text(rs(item.product.price * item.quantity), COL_PRICE, rowY + 14, { align: "right" });
+    doc.text(rs(itemPrice * item.quantity), COL_PRICE, rowY + 14, { align: "right" });
 
     y += ROW_H + 2;
   });

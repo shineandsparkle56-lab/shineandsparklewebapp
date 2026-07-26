@@ -7,6 +7,16 @@ export function FloatingCart() {
   const { cart, totalItems, subtotal, setIsCartOpen } = useCart();
   const prevCount = useRef(totalItems);
   const [pulse, setPulse] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  // Watch for product detail modal open/close via body attribute
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setModalOpen(document.body.hasAttribute("data-modal-open"));
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ["data-modal-open"] });
+    return () => observer.disconnect();
+  }, []);
 
   // Pulse animation whenever a new item is added
   useEffect(() => {
@@ -21,7 +31,7 @@ export function FloatingCart() {
 
   return (
     <AnimatePresence>
-      {totalItems > 0 && (
+      {totalItems > 0 && !modalOpen && (
         <motion.div
           key="floating-cart"
           initial={{ y: 120, opacity: 0 }}

@@ -138,3 +138,19 @@ create policy "anyone can update app_settings"
 insert into app_settings (key, value)
 values ('cod_enabled', 'true')
 on conflict (key) do nothing;
+
+-- ─────────────────────────────────────────────
+-- 7. Product variants column
+--    Each variant: { id, label, image, stock, price? }
+--    If variants array is empty → product has no variants (existing behaviour).
+-- ─────────────────────────────────────────────
+ALTER TABLE products
+  ADD COLUMN IF NOT EXISTS variants jsonb NOT NULL DEFAULT '[]';
+
+-- ─────────────────────────────────────────────
+-- 8. Base variant label column
+--    Human-readable name for the implicit "base" option
+--    when a product has variants (e.g. "Gold", "Original").
+-- ─────────────────────────────────────────────
+ALTER TABLE products
+  ADD COLUMN IF NOT EXISTS base_variant_label text;

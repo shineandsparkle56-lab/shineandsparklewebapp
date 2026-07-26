@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, ChevronLeft, ChevronRight, ShoppingBag, Zap, ZoomIn, X, ZoomOut, RotateCcw } from "lucide-react";
-import { Product } from "../data/products";
+import { Product, variantCover } from "../data/products";
 import { Button } from "./ui/button";
 import { useCart } from "../context/CartContext";
 
@@ -208,7 +208,44 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
   const [activeImg, setActiveImg] = useState(0);
   const [zoomOpen, setZoomOpen] = useState(false);
 
-  const images = product?.images?.length ? product.images : product ? [product.image] : [];
+  // ── Variant state ─────────────────────────────────────────────
+  const hasVariants = (product?.variants?.length ?? 0) > 0;
+
+  // Build a unified list: base product first (as "__base"), then real variants.
+  // This ensures the main product images / stock always appear as a selectable option.
+  const allVariants = hasVariants && product ? [
+    {
+      id: "__base",
+      label: product.base_variant_label || "Default",
+      images: product.images?.length ? product.images : [product.image],
+      stock: product.stock,
+      price: undefined as number | undefined,
+    },
+    ...(product.variants ?? []),
+  ] : [];
+
+  const [selectedVariantId, setSelectedVariantId] = useState<string | undefined>(
+    () => product?.variants?.length ? "__base" : undefined
+  );
+
+  const selectedVariant = allVariants.find((v) => v.id === selectedVariantId);
+
+  // Reset when product changes — always start on the base option
+  useEffect(() => {
+    if (product?.variants?.length) setSelectedVariantId("__base");
+    else setSelectedVariantId(undefined);
+  }, [product?.id]);
+
+  // Derived values — use variant overrides when available
+  const displayPrice   = selectedVariant?.price ?? product?.price ?? 0;
+  const displayStock   = selectedVariant ? selectedVariant.stock : (product?.stock ?? 0);
+  const outOfStock     = displayStock === 0;
+
+  // Build image list — use selected variant's images
+  const baseImages = product?.images?.length ? product.images : product ? [product.image] : [];
+  const images = (selectedVariant && selectedVariant.id !== "__base" && selectedVariant.images?.length)
+    ? selectedVariant.images
+    : baseImages;
 
   // ── Instagram swipe state ────────────────────────────────────
   const dragStartX = useRef<number | null>(null);
@@ -297,12 +334,20 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
     dragStartX.current = null;
   };
 
-  useEffect(() => { setActiveImg(0); setDragOffset(0); setPinchZoom(1); setPinchPan({ x: 0, y: 0 }); }, [product?.id]);
+  useEffect(() => { setActiveImg(0); setDragOffset(0); setPinchZoom(1); setPinchPan({ x: 0, y: 0 }); }, [product?.id, selectedVariantId]);
 
   useEffect(() => {
-    if (product) document.body.style.overflow = "hidden";
-    else document.body.style.overflow = "";
-    return () => { document.body.style.overflow = ""; };
+    if (product) {
+      document.body.style.overflow = "hidden";
+      document.body.setAttribute("data-modal-open", "1");
+    } else {
+      document.body.style.overflow = "";
+      document.body.removeAttribute("data-modal-open");
+    }
+    return () => {
+      document.body.style.overflow = "";
+      document.body.removeAttribute("data-modal-open");
+    };
   }, [product]);
 
   const handleClose = () => {
@@ -325,7 +370,10 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
 
   const handleAddToCart = () => {
     if (!product) return;
-    const added = addToCart(product);
+    if (hasVariants && !selectedVariantId) return;
+    // "__base" means the default product — no variant id sent to cart
+    const varId = selectedVariantId === "__base" ? undefined : selectedVariantId;
+    const added = addToCart(product, varId);
     if (added) {
       setAddedFeedback(true);
       setTimeout(() => setAddedFeedback(false), 1800);
@@ -338,7 +386,9 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
 
   const handleBuyNow = () => {
     if (!product) return;
-    addToCart(product);
+    if (hasVariants && !selectedVariantId) return;
+    const varId = selectedVariantId === "__base" ? undefined : selectedVariantId;
+    addToCart(product, varId);
     handleClose();
     setIsCartOpen(true);
   };
@@ -482,9 +532,9 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                       )}
                     </div>
 
-                    {/* Thumbnail strip */}
+                    {/* Thumbnail strip — desktop only (mobile uses swipe) */}
                     {images.length > 1 && (
-                      <div className="flex gap-2 px-4 py-3 justify-center bg-[#F3EEFB] flex-shrink-0">
+                      <div className="hidden sm:flex gap-2 px-4 py-3 justify-center bg-[#F3EEFB] flex-shrink-0">
                         {images.map((img, i) => (
                           <button
                             key={i}
@@ -539,22 +589,76 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                       {product.name}
                     </h2>
                     <div className="flex flex-wrap items-baseline gap-2 mb-5">
-                      <span className="text-2xl font-bold text-gray-900">₹{product.price}</span>
-                      {product.originalPrice > product.price && (
+                      <span className="text-2xl font-bold text-gray-900">₹{displayPrice}</span>
+                      {product.originalPrice > displayPrice && (
                         <>
                           <span className="text-base text-gray-400 line-through">₹{product.originalPrice}</span>
                           <span className="text-sm font-semibold text-emerald-600">
-                            Save ₹{product.originalPrice - product.price}
+                            Save ₹{product.originalPrice - displayPrice}
                           </span>
                         </>
                       )}
                     </div>
+
+                    {/* ── Variant selector ── */}
+                    {hasVariants && allVariants.length > 0 && (
+                      <div className="mb-5">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                          {selectedVariant
+                            ? <>Colour / Design: <span className="text-[#9B6FD1] normal-case">{selectedVariant.label}</span></>
+                            : "Select Colour / Design"}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {allVariants.map((v) => {
+                            const isSelected = v.id === selectedVariantId;
+                            const isSoldOut  = v.stock === 0;
+                            const cover = v.images?.[0] ?? "";
+                            return (
+                              <button
+                                key={v.id}
+                                onClick={() => !isSoldOut && setSelectedVariantId(v.id)}
+                                disabled={isSoldOut}
+                                className={`relative flex flex-col items-center gap-1 p-1.5 rounded-2xl border-2 transition-all duration-200 ${
+                                  isSelected
+                                    ? "border-[#9B6FD1] shadow-md shadow-[#9B6FD1]/20"
+                                    : isSoldOut
+                                    ? "border-gray-100 opacity-40 cursor-not-allowed"
+                                    : "border-gray-200 hover:border-[#9B6FD1]/50"
+                                }`}
+                              >
+                                {cover ? (
+                                  <img src={cover} alt={v.label}
+                                    className="w-14 h-14 rounded-xl object-cover" />
+                                ) : (
+                                  <div className="w-14 h-14 rounded-xl bg-[#F3EEFB] flex items-center justify-center text-[#9B6FD1] text-xs font-bold">
+                                    {v.label.slice(0, 2)}
+                                  </div>
+                                )}
+                                <span className="text-[10px] font-semibold text-gray-700 px-1 max-w-[60px] truncate">
+                                  {v.label}
+                                </span>
+                                {isSoldOut && (
+                                  <span className="absolute inset-0 flex items-center justify-center rounded-2xl bg-white/70">
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase">Sold out</span>
+                                  </span>
+                                )}
+                                {isSelected && (
+                                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[#9B6FD1] rounded-full flex items-center justify-center">
+                                    <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {product.description && (
                       <p className="text-gray-500 text-sm leading-relaxed mb-6">{product.description}</p>
                     )}
-
-
-
 
                     {/* Return Policy */}
                     <div className="rounded-2xl bg-[#F3EEFB] px-4 py-3 mb-4 space-y-1.5 text-xs text-gray-600">
@@ -565,14 +669,14 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                       </p>
                     </div>
 
-                    {product.stock > 0 && product.stock <= 2 && (
+                    {displayStock > 0 && displayStock <= 2 && (
                       <p className="text-xs font-semibold text-red-500 mb-3">
-                        Only {product.stock} left in stock!
+                        Only {displayStock} left in stock!
                       </p>
                     )}
 
                     <div className="flex flex-col sm:flex-row gap-3 md:mt-auto pt-2">
-                      {product.stock === 0 ? (
+                      {outOfStock ? (
                         <div className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full bg-gray-100 text-gray-400 font-semibold text-sm">
                           Out of Stock
                         </div>
@@ -600,7 +704,7 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                     </div>
                     {stockMsg && (
                       <p className="text-xs text-amber-600 font-medium text-center mt-2">
-                        Max {product.stock} in stock - can't add more
+                        Max {displayStock} in stock — can't add more
                       </p>
                     )}
                   </div>

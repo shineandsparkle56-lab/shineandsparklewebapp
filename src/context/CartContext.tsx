@@ -18,16 +18,25 @@ export const WHATSAPP_NUMBER = "919574024419";
 export interface CartItem {
   product: Product;
   quantity: number;
+  // variant fields — undefined when product has no variants
+  variantId?: string;
+  variantLabel?: string;
+  variantImage?: string;
+}
+
+// Unique key for a cart item = product id + variant id (or just product id if no variant)
+export function cartItemKey(item: Pick<CartItem, "product" | "variantId">) {
+  return item.variantId ? `${item.product.id}__${item.variantId}` : String(item.product.id);
 }
 
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (product: Product) => boolean; // returns false if stock limit reached
-  removeFromCart: (id: number) => void;
-  updateQuantity: (id: number, delta: number) => void;
+  addToCart: (product: Product, variantId?: string) => boolean;
+  removeFromCart: (productId: number, variantId?: string) => void;
+  updateQuantity: (productId: number, delta: number, variantId?: string) => void;
   totalItems: number;
   subtotal: number;
-  shippingCredit: number; // total ₹ to subtract from shipping charge
+  shippingCredit: number;
   isCartOpen: boolean;
   setIsCartOpen: (isOpen: boolean) => void;
 }
@@ -38,91 +47,85 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>(loadCart);
   const [isCartOpen, setIsCartOpen] = useState(false);
 
-  // Persist cart to localStorage whenever it changes
   useEffect(() => {
-    try {
-      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
-    } catch {
-      // Ignore storage errors (private browsing quota, etc.)
-    }
+    try { localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart)); } catch { }
   }, [cart]);
 
-  const addToCart = (product: Product): boolean => {
+  const addToCart = (product: Product, variantId?: string): boolean => {
+    // Resolve the variant object if provided
+    const variant = variantId
+      ? product.variants?.find((v) => v.id === variantId)
+      : undefined;
+
+    // Stock limit — use variant stock if available, otherwise product stock
+    const availableStock = variant ? variant.stock : product.stock;
+
     let hitLimit = false;
     setCart((prev) => {
-      const existing = prev.find((item) => item.product.id === product.id);
+      const key = variantId ? `${product.id}__${variantId}` : String(product.id);
+      const existing = prev.find((i) => cartItemKey(i) === key);
       if (existing) {
-        // Don't exceed available stock
-        if (existing.quantity >= product.stock) {
-          hitLimit = true;
-          return prev;
-        }
-        return prev.map((item) =>
-          item.product.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
+        if (existing.quantity >= availableStock) { hitLimit = true; return prev; }
+        return prev.map((i) =>
+          cartItemKey(i) === key ? { ...i, quantity: i.quantity + 1 } : i
         );
       }
-      return [...prev, { product, quantity: 1 }];
+      const newItem: CartItem = {
+        product,
+        quantity: 1,
+        variantId: variant?.id,
+        variantLabel: variant?.label,
+        variantImage: variant?.images?.[0],
+      };
+      return [...prev, newItem];
     });
     return !hitLimit;
   };
 
-  const removeFromCart = (id: number) => {
-    setCart((prev) => prev.filter((item) => item.product.id !== id));
+  const removeFromCart = (productId: number, variantId?: string) => {
+    const key = variantId ? `${productId}__${variantId}` : String(productId);
+    setCart((prev) => prev.filter((i) => cartItemKey(i) !== key));
   };
 
-  const updateQuantity = (id: number, delta: number) => {
-    setCart((prev) => {
-      return prev.reduce<CartItem[]>((acc, item) => {
-        if (item.product.id === id) {
-          const newQuantity = Math.min(
-            item.product.stock,
-            item.quantity + delta
-          );
-          // Remove item if quantity drops to 0 or below
-          if (newQuantity <= 0) return acc;
-          return [...acc, { ...item, quantity: newQuantity }];
-        }
-        return [...acc, item];
-      }, []);
-    });
+  const updateQuantity = (productId: number, delta: number, variantId?: string) => {
+    const key = variantId ? `${productId}__${variantId}` : String(productId);
+    setCart((prev) =>
+      prev.reduce<CartItem[]>((acc, item) => {
+        if (cartItemKey(item) !== key) return [...acc, item];
+        const variant = item.variantId
+          ? item.product.variants?.find((v) => v.id === item.variantId)
+          : undefined;
+        const maxStock = variant ? variant.stock : item.product.stock;
+        const newQty = Math.min(maxStock, item.quantity + delta);
+        if (newQty <= 0) return acc;
+        return [...acc, { ...item, quantity: newQty }];
+      }, [])
+    );
   };
 
-  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const subtotal = cart.reduce(
-    (sum, item) => sum + item.product.price * item.quantity,
-    0
-  );
-  // Sum of shipping_credit × quantity for every item in cart
+  const totalItems = cart.reduce((s, i) => s + i.quantity, 0);
+  const subtotal = cart.reduce((s, i) => {
+    // Use variant price if set, otherwise product base price
+    const variant = i.variantId ? i.product.variants?.find((v) => v.id === i.variantId) : undefined;
+    const price = variant?.price ?? i.product.price;
+    return s + price * i.quantity;
+  }, 0);
   const shippingCredit = cart.reduce(
-    (sum, item) => sum + (item.product.shipping_credit ?? 0) * item.quantity,
-    0
+    (s, i) => s + (i.product.shipping_credit ?? 0) * i.quantity, 0
   );
 
   return (
-    <CartContext.Provider
-      value={{
-        cart,
-        addToCart,
-        removeFromCart,
-        updateQuantity,
-        totalItems,
-        subtotal,
-        shippingCredit,
-        isCartOpen,
-        setIsCartOpen,
-      }}
-    >
+    <CartContext.Provider value={{
+      cart, addToCart, removeFromCart, updateQuantity,
+      totalItems, subtotal, shippingCredit, isCartOpen, setIsCartOpen,
+    }}>
       {children}
     </CartContext.Provider>
   );
 }
 
 export function useCart() {
-  const context = useContext(CartContext);
-  if (context === undefined) {
-    throw new Error("useCart must be used within a CartProvider");
-  }
-  return context;
+  const ctx = useContext(CartContext);
+  if (!ctx) throw new Error("useCart must be used within a CartProvider");
+  return ctx;
 }

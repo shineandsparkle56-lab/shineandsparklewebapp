@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { Product } from "../data/products";
+import { Product, ProductVariant } from "../data/products";
 import { supabase } from "../lib/supabase";
 
 interface ProductsContextValue {
@@ -30,6 +30,8 @@ function mapRow(row: Record<string, unknown>): Product {
     stock: typeof row.stock === "number" ? row.stock : 99,
     shipping_credit: typeof row.shipping_credit === "number" ? row.shipping_credit : 0,
     wholesale_price: typeof row.wholesale_price === "number" ? row.wholesale_price : 0,
+    variants: Array.isArray(row.variants) ? (row.variants as ProductVariant[]) : [],
+    base_variant_label: typeof row.base_variant_label === "string" ? row.base_variant_label : undefined,
     created_at: row.created_at as string | undefined,
   };
 }
@@ -69,12 +71,14 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
         stock: p.stock,
         shipping_credit: p.shipping_credit,
         wholesale_price: p.wholesale_price,
+        variants: p.variants ?? [],
+        base_variant_label: p.base_variant_label ?? null,
       }])
       .select()
       .single();
 
     if (err) throw new Error(err.message);
-    setProducts((prev) => [...prev, mapRow(data)]);
+    setProducts((prev) => [mapRow(data), ...prev]);
   };
 
   const updateProduct = async (id: number, p: Omit<Product, "id">) => {
@@ -92,39 +96,31 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
         stock: p.stock,
         shipping_credit: p.shipping_credit,
         wholesale_price: p.wholesale_price,
+        variants: p.variants ?? [],
+        base_variant_label: p.base_variant_label ?? null,
       })
       .eq("id", id);
     if (err) throw new Error(err.message);
-    // Patch local state directly — no need to re-fetch
     setProducts((prev) =>
-      prev.map((prod) =>
-        prod.id === id ? { ...prod, ...p, id } : prod
-      )
+      prev.map((prod) => prod.id === id ? { ...prod, ...p, id } : prod)
     );
   };
 
   const deleteProduct = async (id: number, imageUrls?: string[]) => {
-    // Delete the DB row first
     const { error: err } = await supabase.from("products").delete().eq("id", id);
     if (err) throw new Error(err.message);
     setProducts((prev) => prev.filter((p) => p.id !== id));
 
-    // Delete images from storage (best-effort — don't block on failure)
     if (imageUrls && imageUrls.length > 0) {
-      // Extract the storage path from each public URL.
-      // Public URLs look like: https://<project>.supabase.co/storage/v1/object/public/product-images/<path>
       const BUCKET = "product-images";
       const paths = imageUrls
         .map((url) => {
           try {
             const u = new URL(url);
-            // path after /public/product-images/
             const marker = `/public/${BUCKET}/`;
             const idx = u.pathname.indexOf(marker);
             return idx !== -1 ? decodeURIComponent(u.pathname.slice(idx + marker.length)) : null;
-          } catch {
-            return null;
-          }
+          } catch { return null; }
         })
         .filter((p): p is string => p !== null && p.length > 0);
 
@@ -137,14 +133,9 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
 
   const updateStock = async (id: number, newStock: number) => {
     const stock = Math.max(0, newStock);
-    const { error: err } = await supabase
-      .from("products")
-      .update({ stock })
-      .eq("id", id);
+    const { error: err } = await supabase.from("products").update({ stock }).eq("id", id);
     if (err) throw new Error(err.message);
-    setProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, stock } : p))
-    );
+    setProducts((prev) => prev.map((p) => p.id === id ? { ...p, stock } : p));
   };
 
   return (

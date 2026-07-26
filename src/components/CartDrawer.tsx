@@ -4,7 +4,7 @@ import {
   Minus, Plus, X, ShoppingBag, MessageCircle,
   Sparkles, Loader2, MapPin, CheckCircle2, AlertCircle, Truck, User, ChevronRight, ChevronLeft,
 } from "lucide-react";
-import { useCart, WHATSAPP_NUMBER } from "../context/CartContext";
+import { useCart, WHATSAPP_NUMBER, cartItemKey } from "../context/CartContext";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "./ui/sheet";
 import { supabase } from "../lib/supabase";
 import { AutocompleteInput } from "./ui/AutocompleteInput";
@@ -182,7 +182,12 @@ export function CartDrawer() {
   const checkoutWhatsApp = async () => {
     setCheckingOut(true);
     const lines = cart
-      .map((i) => `${i.product.name} x${i.quantity} - Rs. ${i.product.price * i.quantity}`)
+      .map((i) => {
+        const variant = i.variantId ? i.product.variants?.find((v) => v.id === i.variantId) : undefined;
+        const price = (variant?.price ?? i.product.price) * i.quantity;
+        const variantStr = i.variantLabel ? ` (${i.variantLabel})` : "";
+        return `${i.product.name}${variantStr} x${i.quantity} - Rs. ${price}`;
+      })
       .join("\n");
     const shippingLine = shipping?.serviceable
       ? `\nShipping: Rs. ${shippingCharge}${codCharge > 0 ? `\nCOD Charge: Rs. ${codCharge}` : ""}`
@@ -204,21 +209,26 @@ export function CartDrawer() {
     const waUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(waMsg)}`;
     try {
       await supabase.from("orders").insert({
-        items: cart.map((item) => ({
-          product: {
-            id: item.product.id,
-            name: item.product.name,
-            category: item.product.category,
-            price: item.product.price,
-            original_price: item.product.originalPrice ?? item.product.price,
-            discount: item.product.discount ?? 0,
-            wholesale_price: item.product.wholesale_price ?? 0,
-            shipping_credit: item.product.shipping_credit ?? 0,
-            image: item.product.images?.length ? item.product.images[0] : item.product.image,
-            images: item.product.images ?? [item.product.image],
-          },
-          quantity: item.quantity,
-        })),
+        items: cart.map((item) => {
+          const variant = item.variantId ? item.product.variants?.find((v) => v.id === item.variantId) : undefined;
+          return {
+            product: {
+              id: item.product.id,
+              name: item.product.name,
+              category: item.product.category,
+              price: variant?.price ?? item.product.price,
+              original_price: item.product.originalPrice ?? item.product.price,
+              discount: item.product.discount ?? 0,
+              wholesale_price: item.product.wholesale_price ?? 0,
+              shipping_credit: item.product.shipping_credit ?? 0,
+              image: item.variantImage || (item.product.images?.length ? item.product.images[0] : item.product.image),
+              images: item.product.images ?? [item.product.image],
+            },
+            quantity: item.quantity,
+            variant_id: item.variantId ?? null,
+            variant_label: item.variantLabel ?? null,
+          };
+        }),
         subtotal,
         shipping_charge: shippingCharge,
         cod_charge: codCharge,
@@ -314,47 +324,62 @@ export function CartDrawer() {
                   <motion.div key="step1" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }} transition={{ duration: 0.2 }}>
                     <div className="px-4 pt-4 pb-2 space-y-3">
                       <AnimatePresence initial={false}>
-                        {cart.map((item) => (
+                        {cart.map((item) => {
+                          const itemKey = cartItemKey(item);
+                          const variant = item.variantId
+                            ? item.product.variants?.find((v) => v.id === item.variantId)
+                            : undefined;
+                          const itemStock = variant ? variant.stock : item.product.stock;
+                          const itemPrice = (variant?.price ?? item.product.price) * item.quantity;
+                          const itemImage = item.variantImage
+                            || (item.product.images?.length ? item.product.images[0] : item.product.image);
+                          return (
                           <motion.div
-                            key={item.product.id}
+                            key={itemKey}
                             initial={{ opacity: 0, x: 24 }}
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 24, height: 0 }}
                             transition={{ duration: 0.22, ease: "easeOut" }}
                             className="flex gap-3 bg-[#F3EEFB]/50 rounded-2xl p-3 relative"
-                            data-testid={`cart-item-${item.product.id}`}
+                            data-testid={`cart-item-${itemKey}`}
                           >
                             <img
-                              src={item.product.images?.length ? item.product.images[0] : item.product.image}
+                              src={itemImage}
                               alt={item.product.name}
                               className="w-24 h-24 object-cover rounded-xl flex-shrink-0"
                             />
                             <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                               <div className="pr-6">
                                 <p className="font-serif text-gray-900 text-base leading-snug line-clamp-2">{item.product.name}</p>
+                                {item.variantLabel && (
+                                  <span className="inline-block text-[10px] font-semibold text-[#9B6FD1] bg-[#F3EEFB] border border-[#9B6FD1]/20 px-2 py-0.5 rounded-full mt-0.5">
+                                    {item.variantLabel}
+                                  </span>
+                                )}
                                 <p className="text-xs text-gray-400 mt-0.5 capitalize">{item.product.category}</p>
                               </div>
                               <div className="flex items-center justify-between mt-2">
                                 <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-2 py-1 shadow-sm">
-                                  <button onClick={() => updateQuantity(item.product.id, -1)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-[#F3EEFB] text-gray-500 hover:text-[#9B6FD1] transition-colors" data-testid={`qty-decrease-${item.product.id}`}>
+                                  <button onClick={() => updateQuantity(item.product.id, -1, item.variantId)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-[#F3EEFB] text-gray-500 hover:text-[#9B6FD1] transition-colors" data-testid={`qty-decrease-${itemKey}`}>
                                     <Minus className="w-3.5 h-3.5" />
                                   </button>
                                   <span className="text-sm font-bold text-gray-800 w-6 text-center">{item.quantity}</span>
-                                  <button onClick={() => updateQuantity(item.product.id, 1)} disabled={item.quantity >= item.product.stock} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-[#F3EEFB] text-gray-500 hover:text-[#9B6FD1] transition-colors disabled:opacity-30 disabled:cursor-not-allowed" data-testid={`qty-increase-${item.product.id}`}>
+                                  <button onClick={() => updateQuantity(item.product.id, 1, item.variantId)} disabled={item.quantity >= itemStock} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-[#F3EEFB] text-gray-500 hover:text-[#9B6FD1] transition-colors disabled:opacity-30 disabled:cursor-not-allowed" data-testid={`qty-increase-${itemKey}`}>
                                     <Plus className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
-                                <span className="font-bold text-gray-900 text-base">₹{item.product.price * item.quantity}</span>
+                                <span className="font-bold text-gray-900 text-base">₹{itemPrice}</span>
                               </div>
-                              {item.quantity >= item.product.stock && (
-                                <p className="text-[11px] text-red-500 font-medium mt-1.5">Only {item.product.stock} in stock</p>
+                              {item.quantity >= itemStock && (
+                                <p className="text-[11px] text-red-500 font-medium mt-1.5">Only {itemStock} in stock</p>
                               )}
                             </div>
-                            <button onClick={() => removeFromCart(item.product.id)} className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center text-gray-300 hover:text-red-400 transition-colors" aria-label={`Remove ${item.product.name}`}>
+                            <button onClick={() => removeFromCart(item.product.id, item.variantId)} className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center text-gray-300 hover:text-red-400 transition-colors" aria-label={`Remove ${item.product.name}`}>
                               <X className="w-4 h-4" />
                             </button>
                           </motion.div>
-                        ))}
+                          );
+                        })}
                       </AnimatePresence>
                     </div>
 

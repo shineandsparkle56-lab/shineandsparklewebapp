@@ -9,6 +9,8 @@ import {
 import { useProducts } from "../context/ProductsContext";
 import { useCategories } from "../context/CategoriesContext";
 import { Product } from "../data/products";
+import type { ProductVariant } from "../data/products";
+import { variantCover } from "../data/products";
 import { supabase } from "../lib/supabase";
 import { generateOrderPDF } from "../utils/generateOrderPDF";
 import type { OrderMeta } from "../utils/generateOrderPDF";
@@ -31,7 +33,7 @@ import { useSettings } from "../hooks/useSettings";
 
 const BUCKET = "product-images";
 const MAX_IMAGES = 6;
-const EMPTY_FORM = { name: "", category: "", price: "", originalPrice: "", description: "", stock: "10", shipping_credit: "0", wholesale_price: "0" };
+const EMPTY_FORM = { name: "", category: "", price: "", originalPrice: "", description: "", stock: "10", shipping_credit: "0", wholesale_price: "0", base_variant_label: "" };
 
 // ── Reusable small components ────────────────────────────────
 function Spinner({ cls = "w-4 h-4" }: { cls?: string }) {
@@ -122,6 +124,9 @@ export function AdminPanel() {
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const img = useImageItems(MAX_IMAGES);
+  const [addFormVariants, setAddFormVariants] = useState<ProductVariant[]>([]);
+  const [variantUploading, setVariantUploading] = useState<Record<string, boolean>>({});
+  const variantFileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // Product filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -212,9 +217,12 @@ export function AdminPanel() {
           price: i.product.price, originalPrice: i.product.price,
           discount: 0, image: i.product.image,
           images: i.product.images ?? [i.product.image],
-          description: "", stock: 99, shipping_credit: 0, wholesale_price: 0,
+          description: "", stock: 99, shipping_credit: 0, wholesale_price: 0, variants: [],
         },
         quantity: i.quantity,
+        variantId:    (i as typeof i & { variant_id?: string }).variant_id ?? undefined,
+        variantLabel: (i as typeof i & { variant_label?: string }).variant_label ?? undefined,
+        variantImage: i.product.image, // image is already set to variant image at checkout time
       }));
       const meta: OrderMeta = {
         customerName: order.customer_name, customerMobile: order.customer_mobile,
@@ -317,15 +325,27 @@ export function AdminPanel() {
     }
     if (!imageUrls.length) imageUrls = [`https://placehold.co/400x400/F3EEFB/9B6FD1?text=${encodeURIComponent(form.name)}`];
     const discount = Math.max(0, Math.round(((originalPrice - price) / originalPrice) * 100));
+    // If variants exist, total stock = sum of variant stocks
+    const effectiveStock = addFormVariants.length > 0
+      ? addFormVariants.reduce((s, v) => s + v.stock, 0)
+      : Math.max(0, Number(form.stock) || 0);
+    const cleanedVariants: ProductVariant[] = addFormVariants.map((v) => ({
+      ...v,
+      id: v.id || `var-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      label: v.label.trim() || "Variant",
+    }));
     try {
       await addProduct({
         name: form.name.trim(), category: form.category, price, originalPrice, discount,
         image: imageUrls[0], images: imageUrls, description: form.description.trim(),
-        stock: Math.max(0, Number(form.stock) || 0),
+        stock: effectiveStock,
         shipping_credit: Math.max(0, Number(form.shipping_credit) || 0),
         wholesale_price: Math.max(0, Number(form.wholesale_price) || 0),
+        variants: cleanedVariants,
+        base_variant_label: form.base_variant_label.trim() || undefined,
       });
       setForm({ ...EMPTY_FORM, category: categories[0]?.name ?? "" });
+      setAddFormVariants([]);
       img.clear();
       toast.show("Product saved!");
     } catch (err) {
@@ -434,9 +454,131 @@ export function AdminPanel() {
                     {img.uploading && <p className="text-[#9B6FD1] text-xs mt-1.5 flex items-center gap-1.5"><span className="w-3 h-3 border-2 border-[#9B6FD1] border-t-transparent rounded-full animate-spin inline-block" />Uploading {img.items.length} image{img.items.length > 1 ? "s" : ""}…</p>}
                   </div>
                   <div className="sm:col-span-2"><label className="label">Description</label><textarea rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Describe this product…" className="input resize-none" /></div>
-                  <div><label className="label">Stock Quantity</label><input required type="number" min="0" value={form.stock} onChange={(e) => set("stock", e.target.value)} className="input" /><p className="text-[11px] text-gray-400 mt-1">Set to 0 to mark as Out of Stock</p></div>
+                  {addFormVariants.length === 0 && (
+                    <div><label className="label">Stock Quantity</label><input required type="number" min="0" value={form.stock} onChange={(e) => set("stock", e.target.value)} className="input" /><p className="text-[11px] text-gray-400 mt-1">Set to 0 to mark as Out of Stock</p></div>
+                  )}
                   <div><label className="label">Shipping Credit (₹)</label><input type="number" min="0" value={form.shipping_credit} onChange={(e) => set("shipping_credit", e.target.value)} className="input" /><p className="text-[11px] text-gray-400 mt-1">₹ deducted from shipping per unit in cart</p></div>
                   <div><label className="label">Wholesale Price (₹)</label><input type="number" min="0" value={form.wholesale_price} onChange={(e) => set("wholesale_price", e.target.value)} className="input" /><p className="text-[11px] text-gray-400 mt-1">Your cost price — only visible in admin panel</p></div>
+
+                  {/* ── Variants manager ── */}
+                  <div className="sm:col-span-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <label className="label mb-0">Variants <span className="text-gray-400 font-normal normal-case">(colour / design)</span></label>
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                          {addFormVariants.length === 0
+                            ? "No variants — single product. Add variants for Gold/Silver etc."
+                            : `${addFormVariants.length} variant${addFormVariants.length > 1 ? "s" : ""} · total stock ${addFormVariants.reduce((s, v) => s + v.stock, 0)}`}
+                        </p>
+                      </div>
+                      <button type="button"
+                        onClick={() => setAddFormVariants((prev) => [...prev, { id: `var-${Date.now()}`, label: "", images: [], stock: 0 }])}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#9B6FD1] bg-[#F3EEFB] hover:bg-[#9B6FD1] hover:text-white rounded-xl transition-colors shrink-0">
+                        <Plus className="w-3.5 h-3.5" /> Add Variant
+                      </button>
+                    </div>
+                    {/* Base variant label — only when variants exist */}
+                    {addFormVariants.length > 0 && (
+                      <div className="mb-3 p-3 rounded-xl bg-[#F3EEFB]/60 border border-[#9B6FD1]/20">
+                        <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Default option label</label>
+                        <input
+                          value={form.base_variant_label}
+                          onChange={(e) => set("base_variant_label", e.target.value)}
+                          placeholder="e.g. Gold, Default, Original"
+                          className="input text-sm"
+                        />
+                        <p className="text-[11px] text-gray-400 mt-1">Names the option using the main product images. Leave blank to show "Default".</p>
+                      </div>
+                    )}
+                    {addFormVariants.length > 0 && (
+                      <div className="space-y-3">
+                        {addFormVariants.map((v, idx) => (
+                          <div key={v.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-3 space-y-2">
+                            {/* Top row */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {/* Cover swatch */}
+                              <div className="w-10 h-10 rounded-xl overflow-hidden border border-gray-200 shrink-0 bg-white flex items-center justify-center">
+                                {variantCover(v)
+                                  ? <img src={variantCover(v)} alt={v.label} className="w-full h-full object-cover" />
+                                  : <Image className="w-4 h-4 text-gray-300" />}
+                              </div>
+                              <input value={v.label}
+                                onChange={(e) => setAddFormVariants((prev) => prev.map((x, i) => i === idx ? { ...x, label: e.target.value } : x))}
+                                placeholder="e.g. Gold, Silver"
+                                className="flex-1 min-w-[100px] text-sm px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#9B6FD1]/20 focus:border-[#9B6FD1]" />
+                              <div className="flex flex-col items-center shrink-0">
+                                <span className="text-[10px] text-gray-400 mb-0.5">Stock</span>
+                                <input type="number" min="0" value={v.stock}
+                                  onChange={(e) => setAddFormVariants((prev) => prev.map((x, i) => i === idx ? { ...x, stock: Math.max(0, Number(e.target.value) || 0) } : x))}
+                                  className="w-16 text-sm px-2 py-2 rounded-xl border border-gray-200 text-center focus:outline-none focus:ring-2 focus:ring-[#9B6FD1]/20 focus:border-[#9B6FD1]" />
+                              </div>
+                              <button type="button" onClick={() => setAddFormVariants((prev) => prev.filter((_, i) => i !== idx))}
+                                className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors shrink-0">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {/* Multi-image upload row */}
+                            <div>
+                              <p className="text-[11px] text-gray-400 mb-1.5">
+                                Photos for this variant <span className="text-gray-300">(first = cover · max 4)</span>
+                              </p>
+                              {(v.images?.length ?? 0) > 0 ? (
+                                <DraggableImageGrid
+                                  items={(v.images ?? []).map((url) => ({ id: url, preview: url, file: undefined }))}
+                                  onReorder={(items) => {
+                                    const urls = items.map((it) => it.preview);
+                                    setAddFormVariants((prev) => prev.map((x, i) => i === idx ? { ...x, images: urls } : x));
+                                  }}
+                                  onRemove={(id) => {
+                                    const urls = (v.images ?? []).filter((url) => url !== id);
+                                    setAddFormVariants((prev) => prev.map((x, i) => i === idx ? { ...x, images: urls } : x));
+                                  }}
+                                  onAddMore={(v.images?.length ?? 0) < 4 ? () => variantFileRefs.current[v.id]?.click() : undefined}
+                                  maxImages={4}
+                                  newBadge={false}
+                                />
+                              ) : (
+                                <button type="button" onClick={() => variantFileRefs.current[v.id]?.click()}
+                                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-gray-200 hover:border-[#9B6FD1] hover:bg-[#F3EEFB]/50 transition-colors text-xs text-gray-400 hover:text-[#9B6FD1]">
+                                  <Plus className="w-3.5 h-3.5" /> Add photos
+                                </button>
+                              )}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="hidden"
+                                ref={(el) => { variantFileRefs.current[v.id] = el; }}
+                                onChange={async (e) => {
+                                  const files = e.target.files;
+                                  if (!files?.length) return;
+                                  setVariantUploading((prev) => ({ ...prev, [v.id]: true }));
+                                  try {
+                                    const newUrls = await Promise.all(
+                                      Array.from(files).map((f) => uploadToStorage(f, form.name.trim() || "variant"))
+                                    );
+                                    setAddFormVariants((prev) => prev.map((x) =>
+                                      x.id === v.id
+                                        ? { ...x, images: [...(x.images ?? []), ...newUrls].slice(0, 4) }
+                                        : x
+                                    ));
+                                  } catch { /* ignore */ }
+                                  finally { setVariantUploading((prev) => ({ ...prev, [v.id]: false })); }
+                                }}
+                              />
+                              {variantUploading[v.id] && (
+                                <p className="text-[11px] text-[#9B6FD1] mt-1 flex items-center gap-1">
+                                  <span className="w-3 h-3 border-2 border-[#9B6FD1] border-t-transparent rounded-full animate-spin inline-block" />
+                                  Uploading…
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="flex justify-end pt-1">
                   <button type="submit" disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-[#9B6FD1] text-white text-sm font-semibold rounded-xl hover:bg-[#8a5fc0] transition-colors disabled:opacity-60">

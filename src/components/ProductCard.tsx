@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Product } from "../data/products";
+import { Product, variantCover } from "../data/products";
 import { Button } from "./ui/button";
 import { useCart } from "../context/CartContext";
 import { ProductDetailModal } from "./ProductDetailModal";
@@ -17,17 +17,62 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
   const [imgIndex, setImgIndex] = useState(0);
   const [stockMsg, setStockMsg] = useState(false);
   const stockMsgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const images = product.images?.length ? product.images : [product.image];
-  const outOfStock = product.stock === 0;
+
+  // ── Variant selection state ───────────────────────────────────
+  const hasVariants = (product.variants?.length ?? 0) > 0;
+
+  // allVariants mirrors ProductDetailModal logic: base first, then real variants
+  const allVariants = hasVariants ? [
+    {
+      id: "__base",
+      label: product.base_variant_label || "Default",
+      images: product.images?.length ? product.images : [product.image],
+      stock: product.stock,
+      price: undefined as number | undefined,
+    },
+    ...(product.variants ?? []),
+  ] : [];
+
+  const [selectedVariantId, setSelectedVariantId] = useState<string>("__base");
+  const selectedVariant = allVariants.find((v) => v.id === selectedVariantId);
+
+  // Active images — use selected variant's images, fall back to base
+  const baseImages = product.images?.length ? product.images : [product.image];
+  const images = (selectedVariant && selectedVariant.id !== "__base" && selectedVariant.images?.length)
+    ? selectedVariant.images
+    : baseImages;
+
+  // Active stock / out-of-stock check
+  const activeStock = selectedVariant ? selectedVariant.stock : product.stock;
+  const totalStock = hasVariants
+    ? (product.variants?.reduce((s, v) => s + v.stock, 0) ?? 0) + product.stock
+    : product.stock;
+  const outOfStock = hasVariants ? activeStock === 0 : product.stock === 0;
+
   const isNew = !!product.created_at && (Date.now() - new Date(product.created_at).getTime()) < 3 * 24 * 60 * 60 * 1000;
 
+  // Selecting a variant swaps the image immediately
+  const selectVariant = (id: string, e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation();
+    setSelectedVariantId(id);
+    setImgIndex(0);
+  };
+
+  // Add to Cart — use selected variant directly, no modal needed
   const handleAddToCart = () => {
-    const added = addToCart(product);
+    const varId = selectedVariantId === "__base" ? undefined : selectedVariantId;
+    const added = addToCart(product, varId);
     if (!added) {
       setStockMsg(true);
       if (stockMsgTimer.current) clearTimeout(stockMsgTimer.current);
       stockMsgTimer.current = setTimeout(() => setStockMsg(false), 2500);
     }
+  };
+
+  const handleBuyNow = () => {
+    const varId = selectedVariantId === "__base" ? undefined : selectedVariantId;
+    addToCart(product, varId);
+    setIsCartOpen(true);
   };
 
   // ── Swipe state (list view) ──────────────────────────────────
@@ -140,11 +185,6 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
     dragStartX.current = null;
   };
 
-  const handleBuyNow = () => {
-    addToCart(product);
-    setIsCartOpen(true);
-  };
-
   // Shared opacity-stack for grid view
   function ImageStack({ contain = false }: { contain?: boolean }) {
     return (
@@ -248,6 +288,31 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
                 <span className="text-lg font-bold text-gray-900">₹{product.price}</span>
                 {product.originalPrice > product.price && <span className="text-sm text-gray-400 line-through">₹{product.originalPrice}</span>}
               </div>
+              {/* Variant dots — list view */}
+              {hasVariants && (
+                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                  {allVariants.slice(0, 5).map((v) => (
+                    <button key={v.id}
+                      onClick={(e) => selectVariant(v.id, e)}
+                      title={v.label}
+                      className={`w-6 h-6 rounded-full border-2 overflow-hidden shrink-0 transition-all ${
+                        v.id === selectedVariantId
+                          ? "border-[#9B6FD1] ring-2 ring-[#9B6FD1]/40 scale-110"
+                          : "border-white ring-1 ring-gray-200 hover:ring-[#9B6FD1]"
+                      } ${v.stock === 0 ? "opacity-30" : ""}`}>
+                      {v.images?.[0]
+                        ? <img src={v.images[0]} alt={v.label} className="w-full h-full object-cover" />
+                        : <div className="w-full h-full bg-[#9B6FD1]/20" />}
+                    </button>
+                  ))}
+                  {allVariants.length > 5 && (
+                    <span className="text-[10px] text-gray-400">+{allVariants.length - 5}</span>
+                  )}
+                  {selectedVariant && (
+                    <span className="text-[10px] text-[#9B6FD1] font-semibold ml-0.5">{selectedVariant.label}</span>
+                  )}
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-2">
               <Button variant="outline" className="border-[#9B6FD1] text-[#9B6FD1] hover:bg-[#9B6FD1]/5 rounded-full text-sm disabled:opacity-40" onClick={handleAddToCart} disabled={outOfStock} data-testid={`btn-add-to-cart-${product.id}`}>Add to Cart</Button>
@@ -255,7 +320,7 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
             </div>
             {stockMsg && (
               <p className="text-xs text-amber-600 font-medium text-center mt-1">
-                Max {product.stock} in stock - can't add more
+                Max {totalStock} in stock - can't add more
               </p>
             )}
           </div>
@@ -371,6 +436,27 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
               <span className="text-sm font-bold text-gray-900">₹{product.price}</span>
               {product.originalPrice > product.price && <span className="text-[10px] text-gray-400 line-through">₹{product.originalPrice}</span>}
             </div>
+            {/* Variant dots — mobile grid */}
+            {hasVariants && (
+              <div className="flex items-center gap-1 mt-1 flex-wrap">
+                {allVariants.slice(0, 4).map((v) => (
+                  <button key={v.id} onClick={(e) => selectVariant(v.id, e)}
+                    title={v.label}
+                    className={`w-4 h-4 rounded-full border-2 overflow-hidden shrink-0 transition-all ${
+                      v.id === selectedVariantId
+                        ? "border-[#9B6FD1] ring-1 ring-[#9B6FD1]/40 scale-110"
+                        : "border-white ring-1 ring-gray-200"
+                    } ${v.stock === 0 ? "opacity-30" : ""}`}>
+                    {v.images?.[0]
+                      ? <img src={v.images[0]} alt={v.label} className="w-full h-full object-cover" />
+                      : <div className="w-full h-full bg-[#9B6FD1]/20" />}
+                  </button>
+                ))}
+                {allVariants.length > 4 && (
+                  <span className="text-[9px] text-gray-400">+{allVariants.length - 4}</span>
+                )}
+              </div>
+            )}
           </div>
           <button onClick={handleAddToCart} disabled={outOfStock}
             className="w-full py-1.5 rounded-xl text-xs font-semibold border-2 border-[#9B6FD1] text-[#9B6FD1] hover:bg-[#9B6FD1] hover:text-white transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -379,7 +465,7 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
           </button>
           {stockMsg && (
             <p className="text-[10px] text-amber-600 font-medium text-center leading-tight">
-              Max {product.stock} in stock
+              Max {activeStock} in stock
             </p>
           )}
         </div>
@@ -459,11 +545,35 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
 
         <div className="p-6 flex flex-col flex-1">
           <h3 className="text-xl font-serif text-gray-900 mb-2">{product.name}</h3>
-          <div className="flex items-center gap-3 mb-6">
+          <div className="flex items-center gap-3 mb-3">
             <span className="text-xl font-bold text-gray-900">₹{product.price}</span>
             {product.originalPrice > product.price && <span className="text-sm text-gray-400 line-through">₹{product.originalPrice}</span>}
             {outOfStock && <span className="text-xs font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Out of Stock</span>}
           </div>
+          {/* Variant dots — desktop grid */}
+          {hasVariants && (
+            <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+              {allVariants.slice(0, 5).map((v) => (
+                <button key={v.id} onClick={(e) => selectVariant(v.id, e)}
+                  title={v.label}
+                  className={`w-6 h-6 rounded-full border-2 overflow-hidden shrink-0 transition-all ${
+                    v.id === selectedVariantId
+                      ? "border-[#9B6FD1] ring-2 ring-[#9B6FD1]/40 scale-110"
+                      : "border-white ring-1 ring-gray-200 hover:ring-[#9B6FD1]"
+                  } ${v.stock === 0 ? "opacity-30" : ""}`}>
+                  {v.images?.[0]
+                    ? <img src={v.images[0]} alt={v.label} className="w-full h-full object-cover" />
+                    : <div className="w-full h-full bg-[#9B6FD1]/20" />}
+                </button>
+              ))}
+              {allVariants.length > 5 && (
+                <span className="text-[10px] text-gray-400">+{allVariants.length - 5} more</span>
+              )}
+              {selectedVariant && (
+                <span className="text-[10px] text-[#9B6FD1] font-semibold ml-0.5">{selectedVariant.label}</span>
+              )}
+            </div>
+          )}
           <div className="mt-auto grid grid-cols-2 gap-3">
             <Button variant="outline" className="w-full border-[#9B6FD1] text-[#9B6FD1] hover:bg-[#9B6FD1]/5 rounded-full disabled:opacity-40 disabled:cursor-not-allowed" onClick={handleAddToCart} disabled={outOfStock} data-testid={`btn-add-to-cart-${product.id}`}>Add to Cart</Button>
             <Button className="w-full bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white rounded-full shadow-md hover:shadow-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed" onClick={handleBuyNow} disabled={outOfStock} data-testid={`btn-buy-now-${product.id}`}>Buy Now</Button>
