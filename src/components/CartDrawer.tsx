@@ -542,6 +542,64 @@ export function CartDrawer() {
                         </div>
                       )}
 
+                      {/* ── Smart upsell: reduce shipping banner ── */}
+                      {shipping?.serviceable && shippingCharge > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                          className="rounded-xl bg-gradient-to-br from-[#F3EEFB] to-white border border-[#9B6FD1]/20 px-4 py-3 space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <Truck className="w-4 h-4 text-[#9B6FD1]" />
+                              <span className="text-xs font-bold text-gray-700">Save on shipping</span>
+                            </div>
+                            <span className="text-xs font-bold text-[#9B6FD1]">₹{shippingCharge} remaining</span>
+                          </div>
+
+                          {/* Progress bar: credit earned vs total shipping */}
+                          <div className="h-2 rounded-full bg-[#9B6FD1]/15 overflow-hidden">
+                            <motion.div
+                              className="h-full rounded-full bg-gradient-to-r from-[#9B6FD1] to-[#c084fc]"
+                              initial={{ width: 0 }}
+                              animate={{ width: `${Math.min(100, Math.round((shippingCredit / rawShippingCharge) * 100))}%` }}
+                              transition={{ duration: 0.5, ease: "easeOut" }}
+                            />
+                          </div>
+
+                          <p className="text-[11px] text-gray-500 leading-relaxed">
+                            {shippingCredit > 0
+                              ? `You've saved ₹${shippingCredit} on shipping. Add ₹${shippingCharge} more in shipping credits to get `
+                              : `Add products with shipping credits to reduce your ₹${rawShippingCharge} delivery charge. Get `}
+                            <span className="font-bold text-green-600">FREE shipping</span>!
+                          </p>
+
+                          <button
+                            onClick={() => {
+                              setIsCartOpen(false);
+                              setTimeout(() => {
+                                const el = document.getElementById("products") ?? document.getElementById("shop");
+                                el?.scrollIntoView({ behavior: "smooth", block: "start" });
+                              }, 300);
+                            }}
+                            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-[#9B6FD1]/10 hover:bg-[#9B6FD1]/20 text-[#9B6FD1] text-xs font-semibold transition-colors"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Browse more — save ₹{shippingCharge} on shipping
+                          </button>
+                        </motion.div>
+                      )}
+
+                      {/* Already free shipping celebration */}
+                      {shipping?.serviceable && shippingCharge === 0 && shippingSaved > 0 && (
+                        <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex items-center gap-2">
+                          <span className="text-lg">🎉</span>
+                          <div>
+                            <p className="text-xs font-bold text-green-700">Free shipping unlocked!</p>
+                            <p className="text-[11px] text-green-600">You saved ₹{shippingSaved} on delivery charges.</p>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Payment mode — only shown when COD is enabled */}
                       {codEnabled && (
                       <div>

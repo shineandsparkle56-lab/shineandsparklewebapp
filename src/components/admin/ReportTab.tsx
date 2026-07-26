@@ -176,15 +176,16 @@ export function ReportTab() {
   // ── Stock potential (live from products) ─────────────────────
   // Net revenue per unit = price - shipping_credit
   // (shipping_credit is absorbed by seller, reducing what customer pays for shipping)
-  // Matches SQL: SUM((price - shipping_credit) * stock)
+  // Matches SQL: SUM((price - shipping_credit) * stock) — now includes variant stocks
   const stockPotentialRevenue = products
-    .filter((p) => p.stock > 0)
-    .reduce((s, p) => s + (p.price - p.shipping_credit) * p.stock, 0);
+    .reduce((s, p) => {
+      const totalUnits = p.stock + (p.variants ?? []).reduce((vs, v) => vs + v.stock, 0);
+      return totalUnits > 0 ? s + (p.price - p.shipping_credit) * totalUnits : s;
+    }, 0);
 
-  // Total in-stock units (for display)
+  // Total in-stock units across base + variants
   const totalStockUnits = products
-    .filter((p) => p.stock > 0)
-    .reduce((s, p) => s + p.stock, 0);
+    .reduce((s, p) => s + p.stock + (p.variants ?? []).reduce((vs, v) => vs + v.stock, 0), 0);
 
   // ── Final profit if all remaining stock sells ─────────────────
   // Your formula:

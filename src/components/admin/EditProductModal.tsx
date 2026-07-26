@@ -226,9 +226,12 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
   const removeVariant = (idx: number) =>
     setVariants((prev) => prev.filter((_, i) => i !== idx));
 
+  // base stock is stored in product.stock; variant stocks stored in variants[]
+  // effectiveStock here is just for display in the header label
+  const baseStock = Number(form.stock) || 0;
   const effectiveStock = variants.length > 0
-    ? variants.reduce((s, v) => s + v.stock, 0)
-    : Number(form.stock) || 0;
+    ? baseStock + variants.reduce((s, v) => s + v.stock, 0)
+    : baseStock;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -273,7 +276,7 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
         image: finalImages[0],
         images: finalImages,
         description: form.description.trim(),
-        stock: effectiveStock,
+        stock: Number(form.stock) || 0,  // base stock only — variant stocks live in variants[]
         shipping_credit: Math.max(0, Number(form.shipping_credit) || 0),
         wholesale_price: Math.max(0, Number(form.wholesale_price) || 0),
         variants: cleanedVariants,
@@ -393,21 +396,39 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
                     </button>
                   </div>
 
-                  {/* Base variant label — only when variants exist */}
+                  {/* Base variant label + stock — only when variants exist */}
                   {variants.length > 0 && (
-                    <div className="mb-3 p-3 rounded-xl bg-[#F3EEFB]/60 border border-[#9B6FD1]/20">
-                      <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">
-                        Default option label
-                      </label>
-                      <input
-                        value={form.base_variant_label}
-                        onChange={(e) => set("base_variant_label", e.target.value)}
-                        placeholder="e.g. Gold, Default, Original"
-                        className="input text-sm"
-                      />
-                      <p className="text-[11px] text-gray-400 mt-1">
-                        This names the option that uses the main product images above. Leave blank to show "Default".
-                      </p>
+                    <div className="mb-3 p-3 rounded-xl bg-[#F3EEFB]/60 border border-[#9B6FD1]/20 space-y-3">
+                      <div>
+                        <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">
+                          Default option label
+                        </label>
+                        <input
+                          value={form.base_variant_label}
+                          onChange={(e) => set("base_variant_label", e.target.value)}
+                          placeholder="e.g. Gold, Default, Original"
+                          className="input text-sm"
+                        />
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          This names the option that uses the main product images above. Leave blank to show "Default".
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">
+                          Default option stock qty
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={form.stock}
+                          onChange={(e) => set("stock", e.target.value)}
+                          placeholder="0"
+                          className="input text-sm"
+                        />
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          Stock for the "{form.base_variant_label || "Default"}" option (uses main product images).
+                        </p>
+                      </div>
                     </div>
                   )}
 

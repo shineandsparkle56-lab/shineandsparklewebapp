@@ -57,7 +57,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
       ? product.variants?.find((v) => v.id === variantId)
       : undefined;
 
-    // Stock limit — use variant stock if available, otherwise product stock
+    // Stock limit:
+    // - Named variant (Silver) → use variant.stock
+    // - Base option (no variantId, but product has variants) → use product.stock (base stock only)
+    // - No variants at all → use product.stock
     const availableStock = variant ? variant.stock : product.stock;
 
     let hitLimit = false;

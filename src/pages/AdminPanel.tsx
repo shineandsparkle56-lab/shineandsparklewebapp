@@ -181,9 +181,24 @@ export function AdminPanel() {
   const filteredProducts = useMemo(() => products.filter((p) => {
     const matchSearch = !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchCat    = filterCategory === "all" || p.category === filterCategory;
-    const matchStock  = filterStock === "all" || (filterStock === "in" ? p.stock > 0 : p.stock === 0);
+    const matchStock  = filterStock === "all" || (() => {
+      const totalStk = p.variants?.length
+        ? p.stock + (p.variants?.reduce((s, v) => s + v.stock, 0) ?? 0)
+        : p.stock;
+      return filterStock === "in" ? totalStk > 0 : totalStk === 0;
+    })();
     return matchSearch && matchCat && matchStock;
   }), [products, searchQuery, filterCategory, filterStock]);
+
+  // ── Admin product list pagination (10 per batch) ─────────────
+  const BATCH_SIZE = 10;
+  const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
+
+  // Reset to first page whenever filters change
+  useEffect(() => { setVisibleCount(BATCH_SIZE); }, [searchQuery, filterCategory, filterStock]);
+
+  const visibleProducts = filteredProducts.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredProducts.length;
 
   const statusMeta = (status?: OrderStatus) =>
     ORDER_STATUSES.find((s) => s.value === (status ?? "pending")) ?? ORDER_STATUSES[0];
@@ -325,10 +340,12 @@ export function AdminPanel() {
     }
     if (!imageUrls.length) imageUrls = [`https://placehold.co/400x400/F3EEFB/9B6FD1?text=${encodeURIComponent(form.name)}`];
     const discount = Math.max(0, Math.round(((originalPrice - price) / originalPrice) * 100));
-    // If variants exist, total stock = sum of variant stocks
+    // base stock stored in product.stock; variant stocks live inside variants[]
+    // effectiveStock used only for display — save base stock separately
+    const baseStock = Math.max(0, Number(form.stock) || 0);
     const effectiveStock = addFormVariants.length > 0
-      ? addFormVariants.reduce((s, v) => s + v.stock, 0)
-      : Math.max(0, Number(form.stock) || 0);
+      ? baseStock + addFormVariants.reduce((s, v) => s + v.stock, 0)
+      : baseStock;
     const cleanedVariants: ProductVariant[] = addFormVariants.map((v) => ({
       ...v,
       id: v.id || `var-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -338,7 +355,7 @@ export function AdminPanel() {
       await addProduct({
         name: form.name.trim(), category: form.category, price, originalPrice, discount,
         image: imageUrls[0], images: imageUrls, description: form.description.trim(),
-        stock: effectiveStock,
+        stock: baseStock,  // base stock only — variant stocks live in variants[]
         shipping_credit: Math.max(0, Number(form.shipping_credit) || 0),
         wholesale_price: Math.max(0, Number(form.wholesale_price) || 0),
         variants: cleanedVariants,
@@ -479,15 +496,29 @@ export function AdminPanel() {
                     </div>
                     {/* Base variant label — only when variants exist */}
                     {addFormVariants.length > 0 && (
-                      <div className="mb-3 p-3 rounded-xl bg-[#F3EEFB]/60 border border-[#9B6FD1]/20">
-                        <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Default option label</label>
-                        <input
-                          value={form.base_variant_label}
-                          onChange={(e) => set("base_variant_label", e.target.value)}
-                          placeholder="e.g. Gold, Default, Original"
-                          className="input text-sm"
-                        />
-                        <p className="text-[11px] text-gray-400 mt-1">Names the option using the main product images. Leave blank to show "Default".</p>
+                      <div className="mb-3 p-3 rounded-xl bg-[#F3EEFB]/60 border border-[#9B6FD1]/20 space-y-3">
+                        <div>
+                          <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Default option label</label>
+                          <input
+                            value={form.base_variant_label}
+                            onChange={(e) => set("base_variant_label", e.target.value)}
+                            placeholder="e.g. Gold, Default, Original"
+                            className="input text-sm"
+                          />
+                          <p className="text-[11px] text-gray-400 mt-1">Names the option using the main product images. Leave blank to show "Default".</p>
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Default option stock qty</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={form.stock}
+                            onChange={(e) => set("stock", e.target.value)}
+                            placeholder="0"
+                            className="input text-sm"
+                          />
+                          <p className="text-[11px] text-gray-400 mt-1">Stock for the "{form.base_variant_label || "Default"}" option.</p>
+                        </div>
                       </div>
                     )}
                     {addFormVariants.length > 0 && (
@@ -642,13 +673,15 @@ export function AdminPanel() {
                       {products.length > 0 && <button onClick={() => { setSearchQuery(""); setFilterCategory("all"); setFilterStock("all"); }} className="text-xs text-[#9B6FD1] hover:underline mt-1">Clear filters</button>}
                     </div>
                   )}
-                  {filteredProducts.map((p) => (
+                  {visibleProducts.map((p) => (
                     <div key={p.id} className="px-4 py-4 flex flex-col gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex -space-x-2 shrink-0">
-                          {(p.images?.length ? p.images.slice(0, 3) : [p.image]).map((img, i) => (
-                            <img key={i} src={img} alt={p.name} className="w-11 h-11 rounded-xl object-cover bg-[#F3EEFB] border-2 border-white" style={{ zIndex: 3 - i }} />
-                          ))}
+                        <div className="shrink-0">
+                          <img
+                            src={p.images?.[0] ?? p.image}
+                            alt={p.name}
+                            className="w-30 h-30 rounded-xl object-cover bg-[#F3EEFB] border border-gray-100"
+                          />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-gray-800 text-sm truncate">{p.name}</p>
@@ -671,17 +704,46 @@ export function AdminPanel() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${p.stock === 0 ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>
-                          {p.stock === 0 ? "OUT OF STOCK" : `${p.stock} in stock`}
-                        </span>
-                        <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1">
-                          <button type="button" onClick={() => updateStock(p.id, p.stock - 1)} disabled={p.stock === 0} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] disabled:opacity-30 transition-colors"><Minus className="w-3 h-3" /></button>
-                          <span className="text-sm font-semibold text-gray-700 w-8 text-center">{p.stock}</span>
-                          <button type="button" onClick={() => updateStock(p.id, p.stock + 1)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] transition-colors"><Plus className="w-3 h-3" /></button>
-                        </div>
+                        {(() => {
+                          const variantStock = (p.variants ?? []).reduce((s, v) => s + v.stock, 0);
+                          const totalStk = p.variants?.length ? p.stock + variantStock : p.stock;
+                          return (
+                            <>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${totalStk === 0 ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>
+                                {totalStk === 0 ? "OUT OF STOCK" : `${totalStk} in stock`}
+                              </span>
+                              {p.variants?.length ? (
+                                <span className="text-[10px] text-gray-400">
+                                  {p.stock} base + {variantStock} variants
+                                </span>
+                              ) : (
+                                <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1">
+                                  <button type="button" onClick={() => updateStock(p.id, p.stock - 1)} disabled={p.stock === 0} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] disabled:opacity-30 transition-colors"><Minus className="w-3 h-3" /></button>
+                                  <span className="text-sm font-semibold text-gray-700 w-8 text-center">{p.stock}</span>
+                                  <button type="button" onClick={() => updateStock(p.id, p.stock + 1)} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] transition-colors"><Plus className="w-3 h-3" /></button>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   ))}
+                  {/* Load More — batch pagination */}
+                  {hasMore && (
+                    <div className="px-4 py-4 flex items-center justify-between gap-3">
+                      <span className="text-xs text-gray-400">
+                        Showing {visibleProducts.length} of {filteredProducts.length} products
+                      </span>
+                      <button
+                        onClick={() => setVisibleCount((c) => c + BATCH_SIZE)}
+                        className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-[#9B6FD1] bg-[#F3EEFB] hover:bg-[#9B6FD1] hover:text-white rounded-xl transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Load {Math.min(BATCH_SIZE, filteredProducts.length - visibleCount)} more
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

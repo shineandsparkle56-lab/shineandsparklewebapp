@@ -45,7 +45,7 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
   // Active stock / out-of-stock check
   const activeStock = selectedVariant ? selectedVariant.stock : product.stock;
   const totalStock = hasVariants
-    ? (product.variants?.reduce((s, v) => s + v.stock, 0) ?? 0) + product.stock
+    ? product.stock + (product.variants?.reduce((s, v) => s + v.stock, 0) ?? 0)
     : product.stock;
   const outOfStock = hasVariants ? activeStock === 0 : product.stock === 0;
 
@@ -320,7 +320,7 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
             </div>
             {stockMsg && (
               <p className="text-xs text-amber-600 font-medium text-center mt-1">
-                Max {totalStock} in stock - can't add more
+                Only {activeStock} {selectedVariant?.label ? `(${selectedVariant.label})` : ""} in stock
               </p>
             )}
           </div>
@@ -465,7 +465,7 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
           </button>
           {stockMsg && (
             <p className="text-[10px] text-amber-600 font-medium text-center leading-tight">
-              Max {activeStock} in stock
+              Only {activeStock} {selectedVariant?.label ? `(${selectedVariant.label})` : ""} in stock
             </p>
           )}
         </div>
@@ -580,7 +580,7 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
           </div>
           {stockMsg && (
             <p className="text-xs text-amber-600 font-medium text-center mt-2">
-              Max {product.stock} in stock - can't add more
+              Only {activeStock} {selectedVariant?.label ? `(${selectedVariant.label})` : ""} in stock
             </p>
           )}
         </div>
