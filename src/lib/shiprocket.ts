@@ -56,7 +56,7 @@ export function buildShiprocketItems(
 
 /** Estimate package weight from total item count (min 0.5 kg) */
 export function estimateWeight(totalUnits: number): number {
-  return Math.max(0.5, parseFloat((totalUnits * 0.01).toFixed(2)));
+  return Math.max(0.1, parseFloat((totalUnits * 0.01).toFixed(2)));
 }
 
 /** Push order to Shiprocket — always creates a new order. */

@@ -338,7 +338,11 @@ export async function generateOrderPDF(
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(...GREY);
-    doc.text(item.product.category.toUpperCase(), COL_TEXT, item.variantLabel ? variantY + 5 : rowY + 17);
+    doc.text(
+      `${item.product.category.toUpperCase()}  ·  SKU: SNS-${item.product.id}`,
+      COL_TEXT,
+      item.variantLabel ? variantY + 5 : rowY + 17
+    );
 
     // Use variant price if set, otherwise product base price
     const variant = item.variantId

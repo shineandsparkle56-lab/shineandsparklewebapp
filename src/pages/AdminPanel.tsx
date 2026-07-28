@@ -137,6 +137,7 @@ export function AdminPanel() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
+  const [previewImg, setPreviewImg] = useState<string | null>(null);
 
   // Category management
   const [catName, setCatName] = useState("");
@@ -179,7 +180,10 @@ export function AdminPanel() {
 
   // ── Filtered products ────────────────────────────────────────
   const filteredProducts = useMemo(() => products.filter((p) => {
-    const matchSearch = !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchSearch = !searchQuery || 
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      `sns-${p.id}` === searchQuery.toLowerCase().trim() ||
+      String(p.id) === searchQuery.trim();
     const matchCat    = filterCategory === "all" || p.category === filterCategory;
     const matchStock  = filterStock === "all" || (() => {
       const totalStk = p.variants?.length
@@ -250,7 +254,7 @@ export function AdminPanel() {
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
       a.href     = url;
-      a.download = `Order_${order.id}_${new Date(order.created_at).toLocaleDateString("en-IN").replace(/\//g, "-")}.pdf`;
+      a.download = `${order.customer_name ? order.customer_name.trim().replace(/\s+/g, "_") : `Order_${order.id}`}_${new Date(order.created_at).toLocaleDateString("en-IN").replace(/\//g, "-")}.pdf`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     } catch (err) { console.error("PDF download failed:", err); }
@@ -680,11 +684,15 @@ export function AdminPanel() {
                           <img
                             src={p.images?.[0] ?? p.image}
                             alt={p.name}
-                            className="w-30 h-30 rounded-xl object-cover bg-[#F3EEFB] border border-gray-100"
+                            onClick={() => setPreviewImg(p.images?.[0] ?? p.image)}
+                            className="w-20 h-20 rounded-xl object-cover bg-[#F3EEFB] border border-gray-100 cursor-zoom-in hover:opacity-90 transition-opacity"
                           />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-gray-800 text-sm truncate">{p.name}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-medium text-gray-800 text-sm truncate">{p.name}</p>
+                            <span className="text-[10px] font-mono font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">SNS-{p.id}</span>
+                          </div>
                           <p className="text-xs text-gray-400 capitalize">{p.category} · ₹{p.price}{p.images?.length > 1 && <span className="ml-1 text-[#9B6FD1]">· {p.images.length} photos</span>}</p>
                           {p.wholesale_price > 0 && (() => {
                             const margin = p.price - p.wholesale_price - (p.shipping_credit ?? 0);
@@ -753,25 +761,25 @@ export function AdminPanel() {
         {/* ══ ORDERS TAB ════════════════════════════════════════ */}
         {activeTab === "orders" && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center gap-2 justify-between">
               <div className="flex items-center gap-2">
                 <ShoppingBag className="w-5 h-5 text-[#9B6FD1]" />
                 <h2 className="font-semibold text-gray-800">Placed Orders</h2>
                 <span className="text-sm text-gray-400">{orders.length} total</span>
               </div>
-              <div className="flex items-center gap-2">
-                <button onClick={fetchOrders} className="text-xs text-[#9B6FD1] hover:underline">Refresh</button>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button onClick={fetchOrders} className="text-xs text-[#9B6FD1] hover:underline px-2 py-1">Refresh</button>
                 <button
                   onClick={() => setQuickAddOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-gray-50 text-[#9B6FD1] text-xs font-semibold rounded-xl border border-[#9B6FD1]/40 transition-colors"
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-gray-50 text-[#9B6FD1] text-xs font-semibold rounded-xl border border-[#9B6FD1]/40 transition-colors"
                 >
-                  <Zap className="w-3.5 h-3.5" /> Quick Add
+                  <Zap className="w-3 h-3" /> Quick Add
                 </button>
                 <button
                   onClick={() => setAddOrderOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white text-xs font-semibold rounded-xl transition-colors"
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white text-xs font-semibold rounded-xl transition-colors"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Add Order
+                  <Plus className="w-3 h-3" /> Add Order
                 </button>
               </div>
             </div>
@@ -1004,6 +1012,36 @@ export function AdminPanel() {
       </div>
 
       {/* ══ MODALS ════════════════════════════════════════════════ */}
+
+      {/* Image Lightbox */}
+      <AnimatePresence>
+        {previewImg && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4"
+            onClick={() => setPreviewImg(null)}
+          >
+            <motion.img
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 340, damping: 30 }}
+              src={previewImg}
+              alt="Product preview"
+              className="max-w-full max-h-[90vh] rounded-2xl object-contain shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              onClick={() => setPreviewImg(null)}
+              className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Edit Product */}
       <EditProductModal
