@@ -302,7 +302,7 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
                           : "border-white ring-1 ring-gray-200 hover:ring-[#9B6FD1]"
                       } ${v.stock === 0 ? "opacity-30" : ""}`}>
                       {v.images?.[0]
-                        ? <img src={imgUrl(v.images[0], "thumb")} alt={v.label} className="w-full h-full object-cover" />
+                        ? <img src={imgUrl(v.images[0], "tiny")} alt={v.label} className="w-full h-full object-cover" />
                         : <div className="w-full h-full bg-[#9B6FD1]/20" />}
                     </button>
                   ))}
@@ -449,7 +449,7 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
                         : "border-white ring-1 ring-gray-200"
                     } ${v.stock === 0 ? "opacity-30" : ""}`}>
                     {v.images?.[0]
-                      ? <img src={imgUrl(v.images[0], "thumb")} alt={v.label} className="w-full h-full object-cover" />
+                      ? <img src={imgUrl(v.images[0], "tiny")} alt={v.label} className="w-full h-full object-cover" />
                       : <div className="w-full h-full bg-[#9B6FD1]/20" />}
                   </button>
                 ))}
@@ -563,7 +563,7 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
                       : "border-white ring-1 ring-gray-200 hover:ring-[#9B6FD1]"
                   } ${v.stock === 0 ? "opacity-30" : ""}`}>
                   {v.images?.[0]
-                    ? <img src={imgUrl(v.images[0], "thumb")} alt={v.label} className="w-full h-full object-cover" />
+                    ? <img src={imgUrl(v.images[0], "tiny")} alt={v.label} className="w-full h-full object-cover" />
                     : <div className="w-full h-full bg-[#9B6FD1]/20" />}
                 </button>
               ))}

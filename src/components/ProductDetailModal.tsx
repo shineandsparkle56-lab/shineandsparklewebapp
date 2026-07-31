@@ -546,7 +546,7 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                               : "border-transparent opacity-60 hover:opacity-90 hover:border-[#9B6FD1]/40"
                               }`}
                           >
-                            <img src={imgUrl(imgSrc, "thumb")} alt={`Thumbnail ${i + 1}`} className="w-full h-full object-cover object-center" />
+                            <img src={imgUrl(imgSrc, "tiny")} alt={`Thumbnail ${i + 1}`} className="w-full h-full object-cover object-center" />
                           </button>
                         ))}
                       </div>
@@ -613,7 +613,7 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                           {allVariants.map((v) => {
                             const isSelected = v.id === selectedVariantId;
                             const isSoldOut  = v.stock === 0;
-                            const cover = imgUrl(v.images?.[0] ?? "", "thumb");
+                            const cover = imgUrl(v.images?.[0] ?? "", "tiny");
                             return (
                               <button
                                 key={v.id}

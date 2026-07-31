@@ -900,7 +900,7 @@ export function AdminPanel() {
                       <div className="flex flex-wrap gap-2 mb-3">
                         {order.items.map((item, i) => (
                           <div key={i} className="flex items-center gap-1.5 bg-gray-50 rounded-xl px-2 py-1">
-                            <img src={imgUrl(item.product.image, "thumb")} alt={item.product.name} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
+                            <img src={imgUrl(item.product.image, "tiny")} alt={item.product.name} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
                             <span className="text-xs text-gray-700 font-medium max-w-[100px] truncate">{item.product.name}</span>
                             <span className="text-xs text-gray-400">×{item.quantity}</span>
                           </div>
