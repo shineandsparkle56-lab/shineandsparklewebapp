@@ -60,9 +60,43 @@ export function ProductGrid() {
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
 
+  // ── Category hierarchy ────────────────────────────────────────
+  const parentCats = categories.filter((c) => c.parent_id === null);
+
+  // Find the current active category object
+  const activeCat = categories.find((c) => c.name === activeCategory) ?? null;
+
+  // The parent to show subcategory chips for:
+  // - if active is a parent → show its children
+  // - if active is a child → show siblings (parent's children)
+  const activeParent = activeCat
+    ? activeCat.parent_id === null
+      ? activeCat                                                          // it's a parent
+      : categories.find((c) => c.id === activeCat.parent_id) ?? null      // it's a child
+    : null;
+
+  const activeSubs = activeParent
+    ? categories.filter((c) => c.parent_id === activeParent.id)
+    : [];
+
+  // The category slug(s) to filter products by.
+  // When a parent is selected, include its own slug + all children slugs
+  // so products tagged as parent OR any subcategory all show up.
+  const filterSlug: string | string[] = (() => {
+    if (activeCategory === "all") return "all";
+    const cat = categories.find((c) => c.name === activeCategory);
+    if (!cat) return activeCategory;
+    // If it's a parent category, include children slugs too
+    if (cat.parent_id === null) {
+      const children = categories.filter((c) => c.parent_id === cat.id);
+      if (children.length > 0) return [cat.name, ...children.map((c) => c.name)];
+    }
+    return activeCategory;
+  })();
+
   // ── Infinite scroll data ──────────────────────────────────────
   const { products, loading, loadingMore, hasMore, error, loadMore } =
-    useInfiniteProducts(activeCategory, sortOrder);
+    useInfiniteProducts(filterSlug, sortOrder);
 
   // Keep a stable ref to loadMore so the observer callback never goes stale.
   const loadMoreRef = useRef(loadMore);
@@ -94,7 +128,7 @@ export function ProductGrid() {
 
   const tabs = [
     { id: "all", label: "All" },
-    ...categories.map((c) => ({ id: c.name, label: c.label })),
+    ...parentCats.map((c) => ({ id: c.name, label: c.label, hasChildren: categories.some((s) => s.parent_id === c.id) })),
   ];
 
   const gridClass =
@@ -116,8 +150,8 @@ export function ProductGrid() {
         data-testid="category-filter-bar"
       >
         <div className="container mx-auto px-4 py-2">
-          {/* Row 1 — Category chips */}
-          <div className="flex items-center gap-2 overflow-x-auto scrollbar-none mb-2">
+          {/* Row 1 — Parent category chips */}
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-none mb-1">
             {tabs.map((tab) => (
               <div key={tab.id} className="relative flex-shrink-0 pt-1 pr-1">
                 <button
@@ -127,12 +161,12 @@ export function ProductGrid() {
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
                   className={`relative px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 focus:outline-none ${
-                    activeCategory === tab.id
+                    activeCategory === tab.id || activeParent?.name === tab.id
                       ? "text-white shadow-md"
                       : "text-gray-500 bg-[#F3EEFB] hover:text-[#9B6FD1]"
                   }`}
                 >
-                  {activeCategory === tab.id && (
+                  {(activeCategory === tab.id || activeParent?.name === tab.id) && (
                     <motion.span
                       layoutId="active-pill"
                       className="absolute inset-0 rounded-full bg-[#9B6FD1]"
@@ -148,6 +182,54 @@ export function ProductGrid() {
               </div>
             ))}
           </div>
+
+          {/* Row 1b — Subcategory chips (animated, only when parent selected) */}
+          <AnimatePresence>
+            {activeSubs.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1.5 pt-0.5 pl-1">
+                  {/* "All [parent]" chip */}
+                  <button
+                    onClick={() => {
+                      const parent = categories.find((c) => activeSubs[0] && c.id === activeSubs[0].parent_id);
+                      if (parent) { setActiveCategory(parent.name); window.scrollTo({ top: 0, behavior: "smooth" }); }
+                    }}
+                    className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                      activeParent?.name === activeCategory
+                        ? "bg-[#9B6FD1]/20 text-[#9B6FD1]"
+                        : activeSubs.every((s) => s.name !== activeCategory)
+                          ? "bg-[#9B6FD1]/20 text-[#9B6FD1]"
+                          : "bg-gray-100 text-gray-500 hover:bg-[#F3EEFB] hover:text-[#9B6FD1]"
+                    }`}
+                  >
+                    All
+                  </button>
+                  {activeSubs.map((sub) => (
+                    <button
+                      key={sub.id}
+                      onClick={() => { setActiveCategory(sub.name); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                      className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                        activeCategory === sub.name
+                          ? "bg-[#9B6FD1] text-white shadow-sm"
+                          : "bg-gray-100 text-gray-500 hover:bg-[#F3EEFB] hover:text-[#9B6FD1]"
+                      }`}
+                    >
+                      {sub.label}
+                      {newCategories.has(sub.name) && (
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 ml-1 mb-0.5" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Row 2 — Sort + View toggle */}
           <div className="flex items-center justify-between gap-2">

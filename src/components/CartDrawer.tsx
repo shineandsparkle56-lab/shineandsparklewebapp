@@ -5,6 +5,7 @@ import {
   Sparkles, Loader2, MapPin, CheckCircle2, AlertCircle, Truck, User, ChevronRight, ChevronLeft,
 } from "lucide-react";
 import { useCart, WHATSAPP_NUMBER, cartItemKey } from "../context/CartContext";
+import { imgUrl } from "../lib/imgUrl";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "./ui/sheet";
 import { supabase } from "../lib/supabase";
 import { AutocompleteInput } from "./ui/AutocompleteInput";
@@ -331,8 +332,11 @@ export function CartDrawer() {
                             : undefined;
                           const itemStock = variant ? variant.stock : item.product.stock;
                           const itemPrice = (variant?.price ?? item.product.price) * item.quantity;
-                          const itemImage = item.variantImage
-                            || (item.product.images?.length ? item.product.images[0] : item.product.image);
+                          const itemImage = imgUrl(
+                            item.variantImage
+                            || (item.product.images?.length ? item.product.images[0] : item.product.image),
+                            "thumb"
+                          );
                           return (
                           <motion.div
                             key={itemKey}

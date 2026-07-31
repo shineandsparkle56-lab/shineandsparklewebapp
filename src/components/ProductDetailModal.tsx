@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, ShoppingBag, Zap, ZoomIn, X, Zoom
 import { Product, variantCover } from "../data/products";
 import { Button } from "./ui/button";
 import { useCart } from "../context/CartContext";
+import { imgUrl } from "../lib/imgUrl";
 
 interface ProductDetailModalProps {
   product: Product | null;
@@ -244,8 +245,8 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
   // Build image list — use selected variant's images
   const baseImages = product?.images?.length ? product.images : product ? [product.image] : [];
   const images = (selectedVariant && selectedVariant.id !== "__base" && selectedVariant.images?.length)
-    ? selectedVariant.images
-    : baseImages;
+    ? selectedVariant.images.map((u) => imgUrl(u, "medium"))
+    : baseImages.map((u) => imgUrl(u, "medium"));
 
   // ── Instagram swipe state ────────────────────────────────────
   const dragStartX = useRef<number | null>(null);
@@ -535,7 +536,7 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                     {/* Thumbnail strip — desktop only (mobile uses swipe) */}
                     {images.length > 1 && (
                       <div className="hidden sm:flex gap-2 px-4 py-3 justify-center bg-[#F3EEFB] flex-shrink-0">
-                        {images.map((img, i) => (
+                        {images.map((imgSrc, i) => (
                           <button
                             key={i}
                             onClick={() => setActiveImg(i)}
@@ -545,7 +546,7 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                               : "border-transparent opacity-60 hover:opacity-90 hover:border-[#9B6FD1]/40"
                               }`}
                           >
-                            <img src={img} alt={`Thumbnail ${i + 1}`} className="w-full h-full object-cover object-center" />
+                            <img src={imgUrl(imgSrc, "thumb")} alt={`Thumbnail ${i + 1}`} className="w-full h-full object-cover object-center" />
                           </button>
                         ))}
                       </div>
@@ -612,7 +613,7 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                           {allVariants.map((v) => {
                             const isSelected = v.id === selectedVariantId;
                             const isSoldOut  = v.stock === 0;
-                            const cover = v.images?.[0] ?? "";
+                            const cover = imgUrl(v.images?.[0] ?? "", "thumb");
                             return (
                               <button
                                 key={v.id}

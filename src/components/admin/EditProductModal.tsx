@@ -329,7 +329,17 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
                   <label className="label">Category</label>
                   <div className="relative">
                     <select value={form.category} onChange={(e) => set("category", e.target.value)} className="input appearance-none pr-8 capitalize">
-                      {categories.map((c) => <option key={c.name} value={c.name} className="capitalize">{c.label}</option>)}
+                      {categories.filter(c => c.parent_id === null).map((parent) => {
+                        const children = categories.filter(c => c.parent_id === parent.id);
+                        return children.length > 0 ? (
+                          <optgroup key={parent.id} label={parent.label}>
+                            <option value={parent.name}>{parent.label} (All)</option>
+                            {children.map(c => <option key={c.name} value={c.name}>{c.label}</option>)}
+                          </optgroup>
+                        ) : (
+                          <option key={parent.name} value={parent.name} className="capitalize">{parent.label}</option>
+                        );
+                      })}
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                   </div>

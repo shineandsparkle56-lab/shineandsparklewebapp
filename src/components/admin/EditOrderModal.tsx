@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Pencil, X, CheckCircle2 } from "lucide-react";
+import { Pencil, X, CheckCircle2, Package } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
 type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
@@ -43,9 +43,14 @@ export interface OrderRow {
   customer_city?: string;
   customer_state?: string;
   created_at: string;
-  sr_order_id?: number;      // Shiprocket order ID — persisted after first push
-  sr_shipment_id?: number;   // Shiprocket shipment ID
-  stock_deducted?: boolean;  // whether order qty has been deducted from product stock
+  sr_order_id?: number;
+  sr_shipment_id?: number;
+  stock_deducted?: boolean;
+  // Shipping dimensions
+  box_length?: number;
+  box_breadth?: number;
+  box_height?: number;
+  weight_kg?: number;
 }
 
 interface Props {
@@ -67,6 +72,11 @@ interface FormState {
   subtotal: string;
   shipping_charge: string;
   cod_charge: string;
+  // Shipping box
+  box_length: string;
+  box_breadth: string;
+  box_height: string;
+  weight_kg: string;
 }
 
 function toForm(order: OrderRow): FormState {
@@ -82,6 +92,10 @@ function toForm(order: OrderRow): FormState {
     subtotal:         String(order.subtotal),
     shipping_charge:  String(order.shipping_charge),
     cod_charge:       String(order.cod_charge),
+    box_length:       String(order.box_length  ?? 5),
+    box_breadth:      String(order.box_breadth ?? 5),
+    box_height:       String(order.box_height  ?? 3),
+    weight_kg:        String(order.weight_kg   ?? 0.5),
   };
 }
 
@@ -89,7 +103,6 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
   const [form, setForm] = useState<FormState>(() => order ? toForm(order) : ({} as FormState));
   const [saving, setSaving] = useState(false);
 
-  // Sync form whenever a different order is passed in (modal opens)
   useEffect(() => {
     if (order) setForm(toForm(order));
   }, [order?.id]);
@@ -120,6 +133,10 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
       shipping_charge,
       cod_charge,
       grand_total,
+      box_length:  parseFloat(form.box_length)  || 5,
+      box_breadth: parseFloat(form.box_breadth) || 5,
+      box_height:  parseFloat(form.box_height)  || 3,
+      weight_kg:   parseFloat(form.weight_kg)   || 0.5,
     };
 
     const { error, count } = await supabase
@@ -167,6 +184,7 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-5">
+
               {/* Status */}
               <div>
                 <label className="label">Order Status</label>
@@ -241,6 +259,43 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
                   <label className="label">COD Charge (₹)</label>
                   <input type="number" min="0" value={form.cod_charge} onChange={(e) => set("cod_charge", e.target.value)} className="input" />
                 </div>
+              </div>
+
+              {/* Shipping dimensions & weight */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Package className="w-4 h-4 text-[#9B6FD1]" />
+                  <label className="label mb-0">Box Size &amp; Weight (for Shiprocket)</label>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Length (cm)</label>
+                    <input type="number" min="0.1" step="0.1" value={form.box_length} onChange={(e) => set("box_length", e.target.value)} className="input" placeholder="5" />
+                  </div>
+                  <div>
+                    <label className="label">Breadth (cm)</label>
+                    <input type="number" min="0.1" step="0.1" value={form.box_breadth} onChange={(e) => set("box_breadth", e.target.value)} className="input" placeholder="5" />
+                  </div>
+                  <div>
+                    <label className="label">Height (cm)</label>
+                    <input type="number" min="0.1" step="0.1" value={form.box_height} onChange={(e) => set("box_height", e.target.value)} className="input" placeholder="3" />
+                  </div>
+                  <div>
+                    <label className="label">Weight (kg)</label>
+                    <input type="number" min="0.1" step="0.001" value={form.weight_kg} onChange={(e) => set("weight_kg", e.target.value)} className="input" placeholder="0.5" />
+                  </div>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1.5">
+                  Volumetric weight = {(
+                    (parseFloat(form.box_length) || 5) *
+                    (parseFloat(form.box_breadth) || 5) *
+                    (parseFloat(form.box_height) || 3) / 5000
+                  ).toFixed(3)} kg · Dead weight = {parseFloat(form.weight_kg) || 0.5} kg ·
+                  Charged = {Math.max(
+                    (parseFloat(form.box_length) || 5) * (parseFloat(form.box_breadth) || 5) * (parseFloat(form.box_height) || 3) / 5000,
+                    parseFloat(form.weight_kg) || 0.5
+                  ).toFixed(3)} kg
+                </p>
               </div>
 
               <div className="flex gap-3 justify-end pt-1">

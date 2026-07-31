@@ -29,17 +29,16 @@ function mapRow(row: Record<string, unknown>): Product {
   };
 }
 
-export function useInfiniteProducts(category: string, sort: SortOrder) {
+export function useInfiniteProducts(category: string | string[], sort: SortOrder) {
   const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);      // first page loading
-  const [loadingMore, setLoadingMore] = useState(false); // subsequent pages
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState("");
-
-  // Track the current page offset so loadMore always knows where to start.
-  // Use a ref so loadMore closure always reads the latest value without
-  // needing to be in the dependency array.
   const offsetRef = useRef(0);
+
+  // Stable key for deps — avoids infinite re-render when category is an array
+  const categoryKey = Array.isArray(category) ? category.slice().sort().join(",") : category;
 
   // Fetch a single page starting from `from`.
   // `reset` = true means we're starting over (filter/sort changed).
@@ -58,8 +57,13 @@ export function useInfiniteProducts(category: string, sort: SortOrder) {
       query = query.gt("stock", 0);
 
       // Server-side category filter
-      if (category !== "all") {
-        query = query.eq("category", category);
+      const catFilter = category; // snapshot for this call
+      if (catFilter !== "all" && !(Array.isArray(catFilter) && catFilter.includes("all"))) {
+        if (Array.isArray(catFilter)) {
+          query = query.in("category", catFilter);
+        } else {
+          query = query.eq("category", catFilter);
+        }
       }
 
       // Server-side sort
@@ -91,7 +95,7 @@ export function useInfiniteProducts(category: string, sort: SortOrder) {
       setLoading(false);
       setLoadingMore(false);
     },
-    [category, sort]
+    [categoryKey, sort]
   );
 
   // Reset and reload whenever filter or sort changes.

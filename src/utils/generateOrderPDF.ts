@@ -1,6 +1,8 @@
 import { jsPDF } from "jspdf";
 import type { CartItem } from "../context/CartContext";
 
+import { imgUrl } from "../lib/imgUrl";
+
 // ── Brand colours ───────────────────────────────────────────────
 const PURPLE       = [155, 111, 209] as const;
 const PURPLE_LIGHT = [243, 238, 251] as const;
@@ -173,10 +175,14 @@ export async function generateOrderPDF(
   const doc = new jsPDF({ unit: "mm", format: "a4" });
 
   // Pre-fetch all images — use variant image when available, else base product image
+  // medium size (800px) — good quality for PDF print without full egress cost
   const imageDataUrls = await Promise.all(
     cart.map((item) => toDataURL(
-      item.variantImage
-        || (item.product.images?.length ? item.product.images[0] : item.product.image)
+      imgUrl(
+        item.variantImage
+          || (item.product.images?.length ? item.product.images[0] : item.product.image),
+        "medium"
+      )
     ))
   );
 

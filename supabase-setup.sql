@@ -154,3 +154,20 @@ ALTER TABLE products
 -- ─────────────────────────────────────────────
 ALTER TABLE products
   ADD COLUMN IF NOT EXISTS base_variant_label text;
+
+-- ─────────────────────────────────────────────
+-- 9. Subcategories — add parent_id to categories
+--    NULL parent_id = top-level category (e.g. "Earrings")
+--    Non-null parent_id = subcategory (e.g. "Stud Earrings" under "Earrings")
+-- ─────────────────────────────────────────────
+ALTER TABLE categories
+  ADD COLUMN IF NOT EXISTS parent_id integer REFERENCES categories(id) ON DELETE SET NULL;
+
+-- ─────────────────────────────────────────────
+-- 10. Shipping dimensions & weight columns on orders
+-- ─────────────────────────────────────────────
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS box_length  numeric(6,1) DEFAULT 5,
+  ADD COLUMN IF NOT EXISTS box_breadth numeric(6,1) DEFAULT 5,
+  ADD COLUMN IF NOT EXISTS box_height  numeric(6,1) DEFAULT 3,
+  ADD COLUMN IF NOT EXISTS weight_kg   numeric(6,3) DEFAULT 0.5;

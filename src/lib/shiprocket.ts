@@ -23,6 +23,9 @@ export interface ShiprocketPayload {
   cod_charge: number;
   grand_total: number;
   weight: number;
+  length?: number;
+  breadth?: number;
+  height?: number;
   items: ShiprocketItem[];
 }
 
