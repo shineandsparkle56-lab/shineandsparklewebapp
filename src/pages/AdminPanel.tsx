@@ -132,6 +132,7 @@ export function AdminPanel() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterStock, setFilterStock] = useState<"all" | "in" | "out">("all");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "sns-asc" | "sns-desc" | "price-asc" | "price-desc" | "stock-asc" | "stock-desc">("newest");
 
   // Product delete / edit
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -179,27 +180,44 @@ export function AdminPanel() {
   const set = (k: keyof typeof EMPTY_FORM, v: string) => setForm((prev) => ({ ...prev, [k]: v }));
 
   // ── Filtered products ────────────────────────────────────────
-  const filteredProducts = useMemo(() => products.filter((p) => {
-    const matchSearch = !searchQuery || 
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      `sns-${p.id}` === searchQuery.toLowerCase().trim() ||
-      String(p.id) === searchQuery.trim();
-    const matchCat    = filterCategory === "all" || p.category === filterCategory;
-    const matchStock  = filterStock === "all" || (() => {
-      const totalStk = p.variants?.length
-        ? p.stock + (p.variants?.reduce((s, v) => s + v.stock, 0) ?? 0)
-        : p.stock;
-      return filterStock === "in" ? totalStk > 0 : totalStk === 0;
-    })();
-    return matchSearch && matchCat && matchStock;
-  }), [products, searchQuery, filterCategory, filterStock]);
+  const filteredProducts = useMemo(() => {
+    const filtered = products.filter((p) => {
+      const matchSearch = !searchQuery ||
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        `sns-${p.id}` === searchQuery.toLowerCase().trim() ||
+        String(p.id) === searchQuery.trim();
+      const matchCat    = filterCategory === "all" || p.category === filterCategory;
+      const matchStock  = filterStock === "all" || (() => {
+        const totalStk = p.variants?.length
+          ? p.stock + (p.variants?.reduce((s, v) => s + v.stock, 0) ?? 0)
+          : p.stock;
+        return filterStock === "in" ? totalStk > 0 : totalStk === 0;
+      })();
+      return matchSearch && matchCat && matchStock;
+    });
+    const totalStk = (p: typeof products[number]) =>
+      p.variants?.length ? p.stock + (p.variants?.reduce((s, v) => s + v.stock, 0) ?? 0) : p.stock;
+    return [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case "newest":    return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
+        case "oldest":    return new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime();
+        case "sns-desc":  return b.id - a.id;
+        case "sns-asc":   return a.id - b.id;
+        case "price-asc": return a.price - b.price;
+        case "price-desc":return b.price - a.price;
+        case "stock-asc": return totalStk(a) - totalStk(b);
+        case "stock-desc":return totalStk(b) - totalStk(a);
+        default: return 0;
+      }
+    });
+  }, [products, searchQuery, filterCategory, filterStock, sortBy]);
 
   // ── Admin product list pagination (10 per batch) ─────────────
   const BATCH_SIZE = 10;
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
 
-  // Reset to first page whenever filters change
-  useEffect(() => { setVisibleCount(BATCH_SIZE); }, [searchQuery, filterCategory, filterStock]);
+  // Reset to first page whenever filters or sort change
+  useEffect(() => { setVisibleCount(BATCH_SIZE); }, [searchQuery, filterCategory, filterStock, sortBy]);
 
   const visibleProducts = filteredProducts.slice(0, visibleCount);
   const hasMore = visibleCount < filteredProducts.length;
@@ -661,6 +679,24 @@ export function AdminPanel() {
                       <X className="w-3 h-3" /> Clear filters
                     </button>
                   )}
+                  {/* Sort */}
+                  <div className="relative ml-auto">
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                      className="appearance-none pl-3 pr-7 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#9B6FD1]/30 bg-gray-50 font-medium text-gray-600"
+                    >
+                      <option value="newest">Newest first</option>
+                      <option value="oldest">Oldest first</option>
+                      <option value="sns-desc">SNS# High → Low</option>
+                      <option value="sns-asc">SNS# Low → High</option>
+                      <option value="price-desc">Price High → Low</option>
+                      <option value="price-asc">Price Low → High</option>
+                      <option value="stock-desc">Stock High → Low</option>
+                      <option value="stock-asc">Stock Low → High</option>
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+                  </div>
                 </div>
               )}
 
