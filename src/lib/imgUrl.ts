@@ -16,7 +16,7 @@ export type ImgSize = "thumb" | "medium" | "full";
 
 const SIZE_PARAMS: Record<ImgSize, string> = {
   thumb:  "width=400&height=400&resize=cover&quality=75",
-  medium: "width=800&quality=80",
+  medium: "width=1000&height=1000&resize=cover&quality=80",
   full:   "",                      // no transform — original quality
 };
 
