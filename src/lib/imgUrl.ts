@@ -5,28 +5,23 @@
  * Supabase docs: https://supabase.com/docs/guides/storage/serving/image-transformations
  *
  * Sizes:
- *   tiny   → 64×64,   cover crop, q70  — variant dots, order mini images, admin swatches
- *   thumb  → 400×400, cover crop, q75  — product grid cards, cart items, admin list
- *   medium → 800px wide,          q80  — product detail modal main image, PDF
- *   full   → original, no transform    — zoom lightbox, image editor
+ *   tiny → 200×200, cover crop, q85  — admin thumbnails & order icons
+ *   full → 1080×1080, cover crop, q90 — all client-facing images (grid, modal, cart)
  */
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 
-export type ImgSize = "tiny" | "thumb" | "medium" | "full";
+export type ImgSize = "tiny" | "full";
 
 const SIZE_PARAMS: Record<ImgSize, string> = {
-  tiny:   "width=64&height=64&resize=cover&quality=70",
-  thumb:  "width=600&height=600&resize=cover&quality=75",
-  medium: "width=1000&height=1000&resize=cover&quality=80",
-  full:   "",
+  tiny: "width=200&height=200&resize=cover&quality=85",
+  full: "width=1080&height=1080&resize=cover&quality=90",
 };
 
-export function imgUrl(src: string | null | undefined, size: ImgSize = "thumb"): string {
+export function imgUrl(src: string | null | undefined, size: ImgSize = "full"): string {
   if (!src) return "";
   if (!SUPABASE_URL) return src;
   if (!src.startsWith(SUPABASE_URL)) return src;
-  if (size === "full") return src;
 
   const params = SIZE_PARAMS[size];
   if (!params) return src;
@@ -41,7 +36,7 @@ export function imgUrl(src: string | null | undefined, size: ImgSize = "thumb"):
 }
 
 /** Convenience: get first image from an array, with size transform */
-export function coverImg(images: string[] | null | undefined, fallback = "", size: ImgSize = "thumb"): string {
+export function coverImg(images: string[] | null | undefined, fallback = "", size: ImgSize = "full"): string {
   const src = images?.[0] ?? fallback;
   return imgUrl(src, size);
 }

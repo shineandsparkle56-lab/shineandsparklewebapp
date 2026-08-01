@@ -4,6 +4,7 @@ import { X, Plus, Trash2, ShoppingBag, CheckCircle2, Search, Minus } from "lucid
 import { supabase } from "../../lib/supabase";
 import { useProducts } from "../../context/ProductsContext";
 import type { OrderRow } from "./EditOrderModal";
+import { imgUrl } from "../../lib/imgUrl";
 
 // ── Types ─────────────────────────────────────────────────────
 interface CartLine {
@@ -232,7 +233,7 @@ export function AddOrderModal({ open, onClose, onCreated, onError }: Props) {
                           className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors"
                         >
                           <img
-                            src={p.images?.[0] ?? p.image}
+                            src={imgUrl(p.images?.[0] ?? p.image, "tiny")}
                             alt={p.name}
                             className="w-9 h-9 rounded-lg object-cover shrink-0"
                           />
@@ -295,7 +296,7 @@ export function AddOrderModal({ open, onClose, onCreated, onError }: Props) {
                         className="flex items-center gap-2 text-sm"
                       >
                         <img
-                          src={l.product.image}
+                          src={imgUrl(l.product.image, "tiny")}
                           alt={l.product.name}
                           className="w-7 h-7 rounded-lg object-cover shrink-0"
                         />

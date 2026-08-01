@@ -1,9 +1,10 @@
 export interface ProductVariant {
-  id: string;       // e.g. "gold", "silver", "rose-gold"
-  label: string;    // e.g. "Gold", "Silver", "Rose Gold"
-  images: string[]; // variant-specific photos — first is the cover/swatch
-  stock: number;    // per-variant stock quantity
-  price?: number;   // override base price (optional — omit to use base price)
+  id: string;
+  label: string;
+  images: string[];
+  stock: number;
+  price?: number;
+  color?: string;   // hex color for the swatch dot e.g. "#C9A96E" (Gold), "#C0C0C0" (Silver)
 }
 
 /** Convenience getter — first image of the variant (used as swatch/cover) */

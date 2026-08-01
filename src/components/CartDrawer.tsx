@@ -255,13 +255,12 @@ export function CartDrawer() {
       {([1, 2, 3] as Step[]).map((s, idx) => (
         <div key={s} className="flex items-center">
           <div className="flex flex-col items-center gap-0.5">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 ${
-              step === s
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 ${step === s
                 ? "bg-[#9B6FD1] text-white shadow-md shadow-purple-200"
                 : step > s
-                ? "bg-green-500 text-white"
-                : "bg-gray-100 text-gray-400"
-            }`}>
+                  ? "bg-green-500 text-white"
+                  : "bg-gray-100 text-gray-400"
+              }`}>
               {step > s ? <CheckCircle2 className="w-4 h-4" /> : s}
             </div>
             <span className={`text-[10px] font-semibold transition-colors ${step === s ? "text-[#9B6FD1]" : step > s ? "text-green-500" : "text-gray-400"}`}>
@@ -335,53 +334,53 @@ export function CartDrawer() {
                           const itemImage = imgUrl(
                             item.variantImage
                             || (item.product.images?.length ? item.product.images[0] : item.product.image),
-                            "thumb"
+                            "full"
                           );
                           return (
-                          <motion.div
-                            key={itemKey}
-                            initial={{ opacity: 0, x: 24 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 24, height: 0 }}
-                            transition={{ duration: 0.22, ease: "easeOut" }}
-                            className="flex gap-3 bg-[#F3EEFB]/50 rounded-2xl p-3 relative"
-                            data-testid={`cart-item-${itemKey}`}
-                          >
-                            <img
-                              src={itemImage}
-                              alt={item.product.name}
-                              className="w-24 h-24 object-cover rounded-xl flex-shrink-0"
-                            />
-                            <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
-                              <div className="pr-6">
-                                <p className="font-serif text-gray-900 text-base leading-snug line-clamp-2">{item.product.name}</p>
-                                {item.variantLabel && (
-                                  <span className="inline-block text-[10px] font-semibold text-[#9B6FD1] bg-[#F3EEFB] border border-[#9B6FD1]/20 px-2 py-0.5 rounded-full mt-0.5">
-                                    {item.variantLabel}
-                                  </span>
-                                )}
-                                <p className="text-xs text-gray-400 mt-0.5 capitalize">{item.product.category}</p>
-                              </div>
-                              <div className="flex items-center justify-between mt-2">
-                                <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-2 py-1 shadow-sm">
-                                  <button onClick={() => updateQuantity(item.product.id, -1, item.variantId)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-[#F3EEFB] text-gray-500 hover:text-[#9B6FD1] transition-colors" data-testid={`qty-decrease-${itemKey}`}>
-                                    <Minus className="w-3.5 h-3.5" />
-                                  </button>
-                                  <span className="text-sm font-bold text-gray-800 w-6 text-center">{item.quantity}</span>
-                                  <button onClick={() => updateQuantity(item.product.id, 1, item.variantId)} disabled={item.quantity >= itemStock} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-[#F3EEFB] text-gray-500 hover:text-[#9B6FD1] transition-colors disabled:opacity-30 disabled:cursor-not-allowed" data-testid={`qty-increase-${itemKey}`}>
-                                    <Plus className="w-3.5 h-3.5" />
-                                  </button>
+                            <motion.div
+                              key={itemKey}
+                              initial={{ opacity: 0, x: 24 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: 24, height: 0 }}
+                              transition={{ duration: 0.22, ease: "easeOut" }}
+                              className="flex gap-3 bg-[#F3EEFB]/50 rounded-2xl p-3 relative"
+                              data-testid={`cart-item-${itemKey}`}
+                            >
+                              <img
+                                src={itemImage}
+                                alt={item.product.name}
+                                className="w-24 h-24 object-cover rounded-xl flex-shrink-0"
+                              />
+                              <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                                <div className="pr-6">
+                                  <p className="font-serif text-gray-900 text-base leading-snug line-clamp-2">{item.product.name}</p>
+                                  {item.variantLabel && (
+                                    <span className="inline-block text-[10px] font-semibold text-[#9B6FD1] bg-[#F3EEFB] border border-[#9B6FD1]/20 px-2 py-0.5 rounded-full mt-0.5">
+                                      {item.variantLabel}
+                                    </span>
+                                  )}
+                                  <p className="text-xs text-gray-400 mt-0.5 capitalize">{item.product.category}</p>
                                 </div>
-                                <span className="font-bold text-gray-900 text-base">₹{itemPrice}</span>
+                                <div className="flex items-center justify-between mt-2">
+                                  <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-2 py-1 shadow-sm">
+                                    <button onClick={() => updateQuantity(item.product.id, -1, item.variantId)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-[#F3EEFB] text-gray-500 hover:text-[#9B6FD1] transition-colors" data-testid={`qty-decrease-${itemKey}`}>
+                                      <Minus className="w-3.5 h-3.5" />
+                                    </button>
+                                    <span className="text-sm font-bold text-gray-800 w-6 text-center">{item.quantity}</span>
+                                    <button onClick={() => updateQuantity(item.product.id, 1, item.variantId)} disabled={item.quantity >= itemStock} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-[#F3EEFB] text-gray-500 hover:text-[#9B6FD1] transition-colors disabled:opacity-30 disabled:cursor-not-allowed" data-testid={`qty-increase-${itemKey}`}>
+                                      <Plus className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                  <span className="font-bold text-gray-900 text-base">₹{itemPrice}</span>
+                                </div>
+                                {item.quantity >= itemStock && (
+                                  <p className="text-[11px] text-red-500 font-medium mt-1.5">Only {itemStock} in stock</p>
+                                )}
                               </div>
-                              {item.quantity >= itemStock && (
-                                <p className="text-[11px] text-red-500 font-medium mt-1.5">Only {itemStock} in stock</p>
-                              )}
-                            </div>
-                            <button onClick={() => removeFromCart(item.product.id, item.variantId)} className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center text-gray-300 hover:text-red-400 transition-colors" aria-label={`Remove ${item.product.name}`}>
-                              <X className="w-4 h-4" />
-                            </button>
-                          </motion.div>
+                              <button onClick={() => removeFromCart(item.product.id, item.variantId)} className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center text-gray-300 hover:text-red-400 transition-colors" aria-label={`Remove ${item.product.name}`}>
+                                <X className="w-4 h-4" />
+                              </button>
+                            </motion.div>
                           );
                         })}
                       </AnimatePresence>
@@ -426,8 +425,8 @@ export function CartDrawer() {
                               {isMaxed
                                 ? "🎉 Your cart is fully covered — shipping & COD charges will be waived!"
                                 : shippingCredit > 0
-                                ? `₹${shippingCredit} of your shipping is already covered. Add more products to save even more!`
-                                : "Some products include free shipping credits. Add them to your cart to save on delivery!"}
+                                  ? `₹${shippingCredit} of your shipping is already covered. Add more products to save even more!`
+                                  : "Some products include free shipping credits. Add them to your cart to save on delivery!"}
                             </p>
 
                             {/* Browse more CTA — only when not maxed */}
@@ -606,21 +605,20 @@ export function CartDrawer() {
 
                       {/* Payment mode — only shown when COD is enabled */}
                       {codEnabled && (
-                      <div>
-                        <label className="text-xs font-semibold text-gray-500 mb-1.5 block">Payment Method</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {(["prepaid", "cod"] as PaymentMode[]).map((mode) => (
-                            <button key={mode} onClick={() => handlePaymentModeChange(mode)}
-                              className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-200 ${
-                                paymentMode === mode
-                                  ? "bg-[#9B6FD1] border-[#9B6FD1] text-white shadow-sm"
-                                  : "bg-white border-gray-200 text-gray-600 hover:border-[#9B6FD1]/50"
-                              }`}>
-                              {mode === "prepaid" ? "Online Payment" : "Cash on Delivery"}
-                            </button>
-                          ))}
+                        <div>
+                          <label className="text-xs font-semibold text-gray-500 mb-1.5 block">Payment Method</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {(["prepaid", "cod"] as PaymentMode[]).map((mode) => (
+                              <button key={mode} onClick={() => handlePaymentModeChange(mode)}
+                                className={`py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-200 ${paymentMode === mode
+                                    ? "bg-[#9B6FD1] border-[#9B6FD1] text-white shadow-sm"
+                                    : "bg-white border-gray-200 text-gray-600 hover:border-[#9B6FD1]/50"
+                                  }`}>
+                                {mode === "prepaid" ? "Online Payment" : "Cash on Delivery"}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                      </div>
                       )}
                     </div>
                   </motion.div>
@@ -660,22 +658,22 @@ export function CartDrawer() {
                         <textarea rows={2} placeholder="House No., Street, Area *" value={customer.address} onChange={(e) => setC("address", e.target.value)} className={INPUT_CLASS + " resize-none"} />
                         <div className="grid grid-cols-2 gap-2">
                           <AutocompleteInput
-                              value={customer.state}
-                              onChange={(val) => { setC("state", val); if (val !== customer.state) setC("city", ""); }}
-                              options={INDIA_STATES}
-                              placeholder="State *"
-                              className={INPUT_CLASS}
-                              portalContainer={sheetContentEl}
-                            />
+                            value={customer.state}
+                            onChange={(val) => { setC("state", val); if (val !== customer.state) setC("city", ""); }}
+                            options={INDIA_STATES}
+                            placeholder="State *"
+                            className={INPUT_CLASS}
+                            portalContainer={sheetContentEl}
+                          />
                           <AutocompleteInput
-                              value={customer.city}
-                              onChange={(val) => setC("city", val)}
-                              options={getCitiesForState(customer.state)}
-                              placeholder={customer.state ? "City *" : "Select state first"}
-                              className={INPUT_CLASS}
-                              disabled={!customer.state}
-                              portalContainer={sheetContentEl}
-                            />
+                            value={customer.city}
+                            onChange={(val) => setC("city", val)}
+                            options={getCitiesForState(customer.state)}
+                            placeholder={customer.state ? "City *" : "Select state first"}
+                            className={INPUT_CLASS}
+                            disabled={!customer.state}
+                            portalContainer={sheetContentEl}
+                          />
                         </div>
                       </div>
                     </div>
@@ -765,11 +763,10 @@ export function CartDrawer() {
                   <button
                     onClick={() => setStep(3)}
                     disabled={!shipping?.serviceable}
-                    className={`flex-1 flex items-center justify-center gap-2 font-semibold text-base rounded-2xl py-3 transition-all ${
-                      shipping?.serviceable
+                    className={`flex-1 flex items-center justify-center gap-2 font-semibold text-base rounded-2xl py-3 transition-all ${shipping?.serviceable
                         ? "bg-[#9B6FD1] hover:bg-[#8a5fc0] active:scale-[0.98] text-white shadow-md shadow-purple-200"
                         : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                    }`}
+                      }`}
                   >
                     Continue to Details
                     <ChevronRight className="w-5 h-5" />
@@ -787,11 +784,10 @@ export function CartDrawer() {
                     <button
                       onClick={checkoutWhatsApp}
                       disabled={checkingOut || !canCheckout}
-                      className={`flex-1 flex items-center justify-center gap-2 font-semibold text-base rounded-2xl py-3 transition-all duration-200 ${
-                        canCheckout
+                      className={`flex-1 flex items-center justify-center gap-2 font-semibold text-base rounded-2xl py-3 transition-all duration-200 ${canCheckout
                           ? "bg-[#25D366] hover:bg-[#1ebe5d] active:scale-[0.98] text-white shadow-lg shadow-green-200"
                           : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      }`}
+                        }`}
                       data-testid="btn-checkout-whatsapp"
                     >
                       {checkingOut

@@ -175,13 +175,13 @@ export async function generateOrderPDF(
   const doc = new jsPDF({ unit: "mm", format: "a4" });
 
   // Pre-fetch all images — use variant image when available, else base product image
-  // medium size (800px) — good quality for PDF print without full egress cost
+  // full size (1080px) — sharp quality for PDF print
   const imageDataUrls = await Promise.all(
     cart.map((item) => toDataURL(
       imgUrl(
         item.variantImage
           || (item.product.images?.length ? item.product.images[0] : item.product.image),
-        "medium"
+        "full"
       )
     ))
   );

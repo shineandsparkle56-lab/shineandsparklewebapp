@@ -570,11 +570,22 @@ export function AdminPanel() {
                           <div key={v.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-3 space-y-2">
                             {/* Top row */}
                             <div className="flex flex-wrap items-center gap-2">
-                              {/* Cover swatch */}
-                              <div className="w-10 h-10 rounded-xl overflow-hidden border border-gray-200 shrink-0 bg-white flex items-center justify-center">
-                                {variantCover(v)
-                                  ? <img src={variantCover(v)} alt={v.label} className="w-full h-full object-cover" />
-                                  : <Image className="w-4 h-4 text-gray-300" />}
+                              {/* Color picker swatch */}
+                              <div className="relative shrink-0" title="Pick swatch color">
+                                <div
+                                  className="w-10 h-10 rounded-xl border-2 border-gray-200 cursor-pointer hover:border-[#9B6FD1] transition-colors flex items-center justify-center"
+                                  style={{ backgroundColor: v.color || "#e5e7eb" }}
+                                  onClick={() => (document.getElementById(`acolor-${v.id}`) as HTMLInputElement)?.click()}
+                                >
+                                  {!v.color && <span className="text-[9px] text-gray-400 text-center leading-tight">Color</span>}
+                                </div>
+                                <input
+                                  id={`acolor-${v.id}`}
+                                  type="color"
+                                  value={v.color || "#9B6FD1"}
+                                  onChange={(e) => setAddFormVariants((prev) => prev.map((x, i) => i === idx ? { ...x, color: e.target.value } : x))}
+                                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                                />
                               </div>
                               <input value={v.label}
                                 onChange={(e) => setAddFormVariants((prev) => prev.map((x, i) => i === idx ? { ...x, label: e.target.value } : x))}
@@ -739,9 +750,9 @@ export function AdminPanel() {
                       <div className="flex items-center gap-3">
                         <div className="shrink-0">
                           <img
-                            src={imgUrl(p.images?.[0] ?? p.image, "thumb")}
+                            src={imgUrl(p.images?.[0] ?? p.image, "tiny")}
                             alt={p.name}
-                            onClick={() => setPreviewImg(p.images?.[0] ?? p.image)}
+                            onClick={() => setPreviewImg(imgUrl(p.images?.[0] ?? p.image, "full"))}
                             className="w-20 h-20 rounded-xl object-cover bg-[#F3EEFB] border border-gray-100 cursor-zoom-in hover:opacity-90 transition-opacity"
                           />
                         </div>

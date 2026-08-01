@@ -243,10 +243,16 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
   const outOfStock     = displayStock === 0;
 
   // Build image list — use selected variant's images
-  const baseImages = product?.images?.length ? product.images : product ? [product.image] : [];
-  const images = (selectedVariant && selectedVariant.id !== "__base" && selectedVariant.images?.length)
-    ? selectedVariant.images.map((u) => imgUrl(u, "medium"))
-    : baseImages.map((u) => imgUrl(u, "medium"));
+  const rawBaseImages = product?.images?.length ? product.images : product ? [product.image] : [];
+  const rawVariantImages = (selectedVariant && selectedVariant.id !== "__base" && selectedVariant.images?.length)
+    ? selectedVariant.images : null;
+  const rawImages = rawVariantImages ?? rawBaseImages;
+
+  // Display images — full 1080p for main slider, raw for thumbnails
+  const baseImages = rawBaseImages.map((u) => imgUrl(u, "full"));
+  const images = rawVariantImages
+    ? rawVariantImages.map((u) => imgUrl(u, "full"))
+    : baseImages;
 
   // ── Instagram swipe state ────────────────────────────────────
   const dragStartX = useRef<number | null>(null);
@@ -533,24 +539,6 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                       )}
                     </div>
 
-                    {/* Thumbnail strip — desktop only (mobile uses swipe) */}
-                    {images.length > 1 && (
-                      <div className="hidden sm:flex gap-2 px-4 py-3 justify-center bg-[#F3EEFB] flex-shrink-0">
-                        {images.map((imgSrc, i) => (
-                          <button
-                            key={i}
-                            onClick={() => setActiveImg(i)}
-                            aria-label={`View image ${i + 1}`}
-                            className={`w-14 h-14 rounded-xl overflow-hidden border-2 transition-all duration-200 flex-shrink-0 ${i === activeImg
-                              ? "border-[#9B6FD1] shadow-md scale-105"
-                              : "border-transparent opacity-60 hover:opacity-90 hover:border-[#9B6FD1]/40"
-                              }`}
-                          >
-                            <img src={imgUrl(imgSrc, "tiny")} alt={`Thumbnail ${i + 1}`} className="w-full h-full object-cover object-center" />
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
 
                   {/* ── Instagram pinch-zoom overlay (inside modal z-stack) ── */}
@@ -609,45 +597,42 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
                             ? <>Colour / Design: <span className="text-[#9B6FD1] normal-case">{selectedVariant.label}</span></>
                             : "Select Colour / Design"}
                         </p>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-3">
                           {allVariants.map((v) => {
                             const isSelected = v.id === selectedVariantId;
                             const isSoldOut  = v.stock === 0;
-                            const cover = imgUrl(v.images?.[0] ?? "", "tiny");
                             return (
                               <button
                                 key={v.id}
                                 onClick={() => !isSoldOut && setSelectedVariantId(v.id)}
                                 disabled={isSoldOut}
-                                className={`relative flex flex-col items-center gap-1 p-1.5 rounded-2xl border-2 transition-all duration-200 ${
-                                  isSelected
-                                    ? "border-[#9B6FD1] shadow-md shadow-[#9B6FD1]/20"
-                                    : isSoldOut
-                                    ? "border-gray-100 opacity-40 cursor-not-allowed"
-                                    : "border-gray-200 hover:border-[#9B6FD1]/50"
-                                }`}
+                                className={`relative flex flex-col items-center gap-1.5 transition-all duration-200 ${isSoldOut ? "opacity-40 cursor-not-allowed" : ""}`}
                               >
-                                {cover ? (
-                                  <img src={cover} alt={v.label}
-                                    className="w-14 h-14 rounded-xl object-cover" />
-                                ) : (
-                                  <div className="w-14 h-14 rounded-xl bg-[#F3EEFB] flex items-center justify-center text-[#9B6FD1] text-xs font-bold">
-                                    {v.label.slice(0, 2)}
-                                  </div>
-                                )}
-                                <span className="text-[10px] font-semibold text-gray-700 px-1 max-w-[60px] truncate">
+                                {/* Circle color dot */}
+                                <div
+                                  style={{ backgroundColor: v.color || "#e5e7eb" }}
+                                  className={`w-10 h-10 rounded-full border-[3px] transition-all duration-200 ${
+                                    isSelected
+                                      ? "border-[#9B6FD1] shadow-md shadow-[#9B6FD1]/30 scale-110"
+                                      : "border-white ring-1 ring-gray-200 hover:ring-[#9B6FD1] hover:scale-105"
+                                  }`}
+                                />
+                                {/* Label */}
+                                <span className={`text-[11px] font-semibold ${isSelected ? "text-[#9B6FD1]" : "text-gray-500"}`}>
                                   {v.label}
                                 </span>
-                                {isSoldOut && (
-                                  <span className="absolute inset-0 flex items-center justify-center rounded-2xl bg-white/70">
-                                    <span className="text-[9px] font-bold text-gray-400 uppercase">Sold out</span>
-                                  </span>
-                                )}
+                                {/* Selected checkmark */}
                                 {isSelected && (
-                                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[#9B6FD1] rounded-full flex items-center justify-center">
+                                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#9B6FD1] rounded-full flex items-center justify-center">
                                     <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                     </svg>
+                                  </span>
+                                )}
+                                {/* Sold out line */}
+                                {isSoldOut && (
+                                  <span className="absolute inset-0 flex items-center justify-center">
+                                    <span className="w-full h-0.5 bg-gray-400 rotate-45 absolute" />
                                   </span>
                                 )}
                               </button>
@@ -720,7 +705,7 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
       <AnimatePresence>
         {zoomOpen && product && (
           <ZoomLightbox
-            src={images[activeImg]}
+            src={rawImages[activeImg] ?? images[activeImg]}
             alt={`${product.name} – zoom`}
             onClose={() => setZoomOpen(false)}
           />

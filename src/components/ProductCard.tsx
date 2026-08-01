@@ -38,9 +38,9 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
   const selectedVariant = allVariants.find((v) => v.id === selectedVariantId);
 
   // Active images — use selected variant's images, fall back to base
-  const baseImages = (product.images?.length ? product.images : [product.image]).map((u) => imgUrl(u, "thumb"));
+  const baseImages = (product.images?.length ? product.images : [product.image]).map((u) => imgUrl(u, "full"));
   const images = (selectedVariant && selectedVariant.id !== "__base" && selectedVariant.images?.length)
-    ? selectedVariant.images.map((u) => imgUrl(u, "thumb"))
+    ? selectedVariant.images.map((u) => imgUrl(u, "full"))
     : baseImages;
 
   // Active stock / out-of-stock check
@@ -289,28 +289,24 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
                 <span className="text-lg font-bold text-gray-900">₹{product.price}</span>
                 {product.originalPrice > product.price && <span className="text-sm text-gray-400 line-through">₹{product.originalPrice}</span>}
               </div>
-              {/* Variant dots — list view */}
+              {/* Variant pills — list view */}
               {hasVariants && (
                 <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                  {allVariants.slice(0, 5).map((v) => (
+                  {allVariants.slice(0, 4).map((v) => (
                     <button key={v.id}
                       onClick={(e) => selectVariant(v.id, e)}
-                      title={v.label}
-                      className={`w-6 h-6 rounded-full border-2 overflow-hidden shrink-0 transition-all ${
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all text-[11px] font-semibold shrink-0 ${
                         v.id === selectedVariantId
-                          ? "border-[#9B6FD1] ring-2 ring-[#9B6FD1]/40 scale-110"
-                          : "border-white ring-1 ring-gray-200 hover:ring-[#9B6FD1]"
-                      } ${v.stock === 0 ? "opacity-30" : ""}`}>
-                      {v.images?.[0]
-                        ? <img src={imgUrl(v.images[0], "tiny")} alt={v.label} className="w-full h-full object-cover" />
-                        : <div className="w-full h-full bg-[#9B6FD1]/20" />}
+                          ? "border-[#9B6FD1] bg-[#F3EEFB] text-[#9B6FD1]"
+                          : "border-gray-200 bg-white text-gray-500 hover:border-[#9B6FD1]/50"
+                      } ${v.stock === 0 ? "opacity-30" : ""}`}
+                    >
+                      <span className="w-3 h-3 rounded-full shrink-0 border border-white/60" style={{ backgroundColor: v.color || "#e5e7eb" }} />
+                      {v.label}
                     </button>
                   ))}
-                  {allVariants.length > 5 && (
-                    <span className="text-[10px] text-gray-400">+{allVariants.length - 5}</span>
-                  )}
-                  {selectedVariant && (
-                    <span className="text-[10px] text-[#9B6FD1] font-semibold ml-0.5">{selectedVariant.label}</span>
+                  {allVariants.length > 4 && (
+                    <span className="text-[10px] text-gray-400">+{allVariants.length - 4}</span>
                   )}
                 </div>
               )}
@@ -437,24 +433,23 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
               <span className="text-sm font-bold text-gray-900">₹{product.price}</span>
               {product.originalPrice > product.price && <span className="text-[10px] text-gray-400 line-through">₹{product.originalPrice}</span>}
             </div>
-            {/* Variant dots — mobile grid */}
+            {/* Variant pills — mobile grid */}
             {hasVariants && (
               <div className="flex items-center gap-1 mt-1 flex-wrap">
-                {allVariants.slice(0, 4).map((v) => (
+                {allVariants.slice(0, 3).map((v) => (
                   <button key={v.id} onClick={(e) => selectVariant(v.id, e)}
-                    title={v.label}
-                    className={`w-4 h-4 rounded-full border-2 overflow-hidden shrink-0 transition-all ${
+                    className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[9px] font-semibold shrink-0 transition-all ${
                       v.id === selectedVariantId
-                        ? "border-[#9B6FD1] ring-1 ring-[#9B6FD1]/40 scale-110"
-                        : "border-white ring-1 ring-gray-200"
-                    } ${v.stock === 0 ? "opacity-30" : ""}`}>
-                    {v.images?.[0]
-                      ? <img src={imgUrl(v.images[0], "tiny")} alt={v.label} className="w-full h-full object-cover" />
-                      : <div className="w-full h-full bg-[#9B6FD1]/20" />}
+                        ? "border-[#9B6FD1] bg-[#F3EEFB] text-[#9B6FD1]"
+                        : "border-gray-200 bg-white text-gray-400"
+                    } ${v.stock === 0 ? "opacity-30" : ""}`}
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: v.color || "#e5e7eb" }} />
+                    {v.label}
                   </button>
                 ))}
-                {allVariants.length > 4 && (
-                  <span className="text-[9px] text-gray-400">+{allVariants.length - 4}</span>
+                {allVariants.length > 3 && (
+                  <span className="text-[9px] text-gray-400">+{allVariants.length - 3}</span>
                 )}
               </div>
             )}
@@ -551,27 +546,23 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
             {product.originalPrice > product.price && <span className="text-sm text-gray-400 line-through">₹{product.originalPrice}</span>}
             {outOfStock && <span className="text-xs font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">Out of Stock</span>}
           </div>
-          {/* Variant dots — desktop grid */}
+          {/* Variant pills — desktop grid */}
           {hasVariants && (
             <div className="flex items-center gap-1.5 mb-4 flex-wrap">
-              {allVariants.slice(0, 5).map((v) => (
+              {allVariants.slice(0, 4).map((v) => (
                 <button key={v.id} onClick={(e) => selectVariant(v.id, e)}
-                  title={v.label}
-                  className={`w-6 h-6 rounded-full border-2 overflow-hidden shrink-0 transition-all ${
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-[11px] font-semibold shrink-0 transition-all ${
                     v.id === selectedVariantId
-                      ? "border-[#9B6FD1] ring-2 ring-[#9B6FD1]/40 scale-110"
-                      : "border-white ring-1 ring-gray-200 hover:ring-[#9B6FD1]"
-                  } ${v.stock === 0 ? "opacity-30" : ""}`}>
-                  {v.images?.[0]
-                    ? <img src={imgUrl(v.images[0], "tiny")} alt={v.label} className="w-full h-full object-cover" />
-                    : <div className="w-full h-full bg-[#9B6FD1]/20" />}
+                      ? "border-[#9B6FD1] bg-[#F3EEFB] text-[#9B6FD1]"
+                      : "border-gray-200 bg-white text-gray-500 hover:border-[#9B6FD1]/50"
+                  } ${v.stock === 0 ? "opacity-30" : ""}`}
+                >
+                  <span className="w-3 h-3 rounded-full shrink-0 border border-white/60" style={{ backgroundColor: v.color || "#e5e7eb" }} />
+                  {v.label}
                 </button>
               ))}
-              {allVariants.length > 5 && (
-                <span className="text-[10px] text-gray-400">+{allVariants.length - 5} more</span>
-              )}
-              {selectedVariant && (
-                <span className="text-[10px] text-[#9B6FD1] font-semibold ml-0.5">{selectedVariant.label}</span>
+              {allVariants.length > 4 && (
+                <span className="text-[10px] text-gray-400">+{allVariants.length - 4} more</span>
               )}
             </div>
           )}

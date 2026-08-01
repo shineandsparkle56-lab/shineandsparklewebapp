@@ -78,15 +78,24 @@ function VariantRow({ variant, productName, onChange, onRemove }: VariantRowProp
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3 space-y-3">
-      {/* Top row: label, stock, price, delete */}
+      {/* Top row: label, stock, price, color, delete */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Cover swatch */}
-        <div className="w-10 h-10 rounded-xl overflow-hidden border border-gray-200 shrink-0 bg-white flex items-center justify-center">
-          {variantCover(variant) ? (
-            <img src={variantCover(variant)} alt={variant.label} className="w-full h-full object-cover" />
-          ) : (
-            <Image className="w-4 h-4 text-gray-300" />
-          )}
+        {/* Color swatch */}
+        <div className="relative shrink-0" title="Pick swatch color">
+          <div
+            className="w-10 h-10 rounded-xl border-2 border-gray-200 overflow-hidden flex items-center justify-center cursor-pointer hover:border-[#9B6FD1] transition-colors"
+            style={{ backgroundColor: variant.color || "#e5e7eb" }}
+            onClick={() => (document.getElementById(`color-${variant.id}`) as HTMLInputElement)?.click()}
+          >
+            {!variant.color && <span className="text-[9px] text-gray-400 text-center leading-tight">Color</span>}
+          </div>
+          <input
+            id={`color-${variant.id}`}
+            type="color"
+            value={variant.color || "#9B6FD1"}
+            onChange={(e) => onChange({ ...variant, color: e.target.value })}
+            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+          />
         </div>
 
         <input
