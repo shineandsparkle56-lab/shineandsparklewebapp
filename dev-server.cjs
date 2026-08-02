@@ -34,20 +34,17 @@ app.use(express.json({ limit: "20mb" }));
 // Load the TypeScript handlers via tsx
 const shippingHandler = (require("./api/shipping-rate.ts").default || require("./api/shipping-rate.ts"));
 const createOrderHandler = (require("./api/create-shiprocket-order.ts").default || require("./api/create-shiprocket-order.ts"));
-const uploadImageHandler = (require("./api/upload-image.ts").default || require("./api/upload-image.ts"));
-const deleteImagesHandler = (require("./api/delete-images.ts").default || require("./api/delete-images.ts"));
+const uploadImageHandler  = (require("./api/upload-image.ts").default  || require("./api/upload-image.ts"));
+const deleteImagesHandler = (require("./api/delete-images.ts").default  || require("./api/delete-images.ts"));
+const proxyImageHandler   = (require("./api/proxy-image.ts").default    || require("./api/proxy-image.ts"));
 
-app.post("/api/shipping-rate", (req, res) => shippingHandler(req, res));
+app.post("/api/shipping-rate",           (req, res) => shippingHandler(req, res));
 app.post("/api/create-shiprocket-order", (req, res) => createOrderHandler(req, res));
-app.post("/api/upload-image", (req, res) => uploadImageHandler(req, res));
-app.post("/api/delete-images", (req, res) => deleteImagesHandler(req, res));
+app.post("/api/upload-image",            (req, res) => uploadImageHandler(req, res));
+app.post("/api/delete-images",           (req, res) => deleteImagesHandler(req, res));
+app.get("/api/proxy-image",              (req, res) => proxyImageHandler(req, res));
 
 const PORT = 3001;
 app.listen(PORT, () => {
   console.log(`[dev-server] API running at http://localhost:${PORT}`);
-  console.log(`  SHIPROCKET_EMAIL:          ${process.env.SHIPROCKET_EMAIL || "NOT SET"}`);
-  console.log(`  SHIPROCKET_PICKUP_PINCODE: ${process.env.SHIPROCKET_PICKUP_PINCODE || "NOT SET"}`);
-  console.log(`  R2_ACCOUNT_ID:             ${process.env.R2_ACCOUNT_ID || "NOT SET"}`);
-  console.log(`  R2_BUCKET_NAME:            ${process.env.R2_BUCKET_NAME || "NOT SET"}`);
-  console.log(`  VITE_R2_PUBLIC_URL:        ${process.env.VITE_R2_PUBLIC_URL || "NOT SET"}`);
 });

@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 
-export type AppSettingKey = "cod_enabled";
+export type AppSettingKey = "cod_enabled" | "search_bar_enabled";
 
 /** Fetch a single setting value. Returns null if not found. */
 export async function getSetting(key: AppSettingKey): Promise<string | null> {

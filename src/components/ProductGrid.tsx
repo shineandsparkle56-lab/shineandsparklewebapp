@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutGrid, List, ArrowUpDown, Check } from "lucide-react";
+import { LayoutGrid, List, ArrowUpDown, Check, Search, X } from "lucide-react";
 import { useCategories } from "../context/CategoriesContext";
 import { useScroll } from "../context/ScrollContext";
 import { useInfiniteProducts, SortOrder } from "../hooks/useInfiniteProducts";
@@ -49,7 +49,7 @@ function LoadMoreSpinner() {
   );
 }
 
-export function ProductGrid() {
+export function ProductGrid({ showSearchBar = true }: { showSearchBar?: boolean }) {
   const { categories } = useCategories();
   const { scrollingDown } = useScroll();
   const newCategories = useNewCategories();
@@ -59,6 +59,11 @@ export function ProductGrid() {
   const [sortOrder, setSortOrder] = useState<SortOrder>("default");
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
+  const filterBarRef = useRef<HTMLDivElement>(null);
+  const [filterBarHeight, setFilterBarHeight] = useState(96);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Category hierarchy ────────────────────────────────────────
   const parentCats = categories.filter((c) => c.parent_id === null);
@@ -96,7 +101,7 @@ export function ProductGrid() {
 
   // ── Infinite scroll data ──────────────────────────────────────
   const { products, loading, loadingMore, hasMore, error, loadMore } =
-    useInfiniteProducts(filterSlug, sortOrder);
+    useInfiniteProducts(filterSlug, sortOrder, searchTerm);
 
   // Keep a stable ref to loadMore so the observer callback never goes stale.
   const loadMoreRef = useRef(loadMore);
@@ -126,6 +131,29 @@ export function ProductGrid() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  // ── Measure filter bar height dynamically ─────────────────────
+  useEffect(() => {
+    const el = filterBarRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => setFilterBarHeight(el.offsetHeight));
+    observer.observe(el);
+    setFilterBarHeight(el.offsetHeight);
+    return () => observer.disconnect();
+  }, []);
+
+  // ── Debounce search input 350ms ───────────────────────────────
+  const handleSearchChange = (val: string) => {
+    setSearchInput(val);
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    searchDebounce.current = setTimeout(() => setSearchTerm(val.trim()), 350);
+  };
+
+  const clearSearch = () => {
+    setSearchInput("");
+    setSearchTerm("");
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+  };
+
   const tabs = [
     { id: "all", label: "All" },
     ...parentCats.map((c) => ({ id: c.name, label: c.label, hasChildren: categories.some((s) => s.parent_id === c.id) })),
@@ -140,6 +168,7 @@ export function ProductGrid() {
     <>
       {/* ── Fixed filter + view toggle bar ───────────────────────── */}
       <div
+        ref={filterBarRef}
         className="fixed left-0 right-0 z-30 bg-white border-b border-gray-100 shadow-sm transition-transform duration-300 ease-in-out"
         style={{
           top: `${NAVBAR_H}px`,
@@ -150,6 +179,24 @@ export function ProductGrid() {
         data-testid="category-filter-bar"
       >
         <div className="container mx-auto px-4 py-2">
+          {/* Search bar */}
+          {showSearchBar && (
+            <div className="relative mb-2">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="Search products"
+                className="w-full pl-9 pr-8 py-1.5 text-sm rounded-full bg-[#F3EEFB] border border-transparent focus:border-[#9B6FD1] focus:outline-none focus:bg-white transition-colors placeholder-gray-400"
+              />
+              {searchInput && (
+                <button onClick={clearSearch} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          )}
           {/* Row 1 — Parent category chips */}
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-none mb-1">
             {tabs.map((tab) => (
@@ -327,7 +374,7 @@ export function ProductGrid() {
       </div>
 
       {/* ── Main section ──────────────────────────────────────────── */}
-      <section id="shop" className="bg-white pb-20 pt-[120px]">
+      <section id="shop" className="bg-white pb-20" style={{ paddingTop: NAVBAR_H + filterBarHeight }}>
         <div className="container mx-auto px-4">
 
           {/* First-page skeleton */}

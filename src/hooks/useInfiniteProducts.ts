@@ -29,7 +29,7 @@ function mapRow(row: Record<string, unknown>): Product {
   };
 }
 
-export function useInfiniteProducts(category: string | string[], sort: SortOrder) {
+export function useInfiniteProducts(category: string | string[], sort: SortOrder, search = "") {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -40,8 +40,11 @@ export function useInfiniteProducts(category: string | string[], sort: SortOrder
   // Stable key for deps — avoids infinite re-render when category is an array
   const categoryKey = Array.isArray(category) ? category.slice().sort().join(",") : category;
 
-  // Fetch a single page starting from `from`.
-  // `reset` = true means we're starting over (filter/sort changed).
+  // Detect if search is a pure numeric product ID (e.g. "212" or "SNS-212")
+  const searchTerm = search.trim();
+  const idMatch = searchTerm.match(/^(?:SNS-?)?(\d+)$/i);
+  const searchId = idMatch ? Number(idMatch[1]) : null;
+
   const fetchPage = useCallback(
     async (from: number, reset: boolean) => {
       if (reset) setLoading(true);
@@ -53,16 +56,24 @@ export function useInfiniteProducts(category: string | string[], sort: SortOrder
         .select("*")
         .range(from, from + PAGE_SIZE - 1);
 
-      // Hide out-of-stock items
-      query = query.gt("stock", 0);
+      // Hide out-of-stock items (skip when searching by ID)
+      if (!searchId) query = query.gt("stock", 0);
 
-      // Server-side category filter
-      const catFilter = category; // snapshot for this call
-      if (catFilter !== "all" && !(Array.isArray(catFilter) && catFilter.includes("all"))) {
-        if (Array.isArray(catFilter)) {
-          query = query.in("category", catFilter);
-        } else {
-          query = query.eq("category", catFilter);
+      // Search by product ID
+      if (searchId) {
+        query = query.eq("id", searchId);
+      } else if (searchTerm) {
+        // Name search — case-insensitive contains
+        query = query.ilike("name", `%${searchTerm}%`);
+      } else {
+        // Category filter only when not searching
+        const catFilter = category;
+        if (catFilter !== "all" && !(Array.isArray(catFilter) && catFilter.includes("all"))) {
+          if (Array.isArray(catFilter)) {
+            query = query.in("category", catFilter);
+          } else {
+            query = query.eq("category", catFilter);
+          }
         }
       }
 
@@ -72,7 +83,6 @@ export function useInfiniteProducts(category: string | string[], sort: SortOrder
       } else if (sort === "high-low") {
         query = query.order("price", { ascending: false }).order("id", { ascending: true });
       } else {
-        // Default: newest first
         query = query.order("created_at", { ascending: false }).order("id", { ascending: false });
       }
 
@@ -86,19 +96,16 @@ export function useInfiniteProducts(category: string | string[], sort: SortOrder
       }
 
       const rows = (data ?? []).map(mapRow);
-
       setProducts((prev) => (reset ? rows : [...prev, ...rows]));
-      // If we got fewer rows than PAGE_SIZE, there are no more pages.
       setHasMore(rows.length === PAGE_SIZE);
       offsetRef.current = from + rows.length;
 
       setLoading(false);
       setLoadingMore(false);
     },
-    [categoryKey, sort]
+    [categoryKey, sort, searchTerm, searchId]
   );
 
-  // Reset and reload whenever filter or sort changes.
   useEffect(() => {
     offsetRef.current = 0;
     setProducts([]);
@@ -106,7 +113,6 @@ export function useInfiniteProducts(category: string | string[], sort: SortOrder
     fetchPage(0, true);
   }, [fetchPage]);
 
-  // Called by the IntersectionObserver sentinel in ProductGrid.
   const loadMore = useCallback(() => {
     if (loadingMore || !hasMore) return;
     fetchPage(offsetRef.current, false);

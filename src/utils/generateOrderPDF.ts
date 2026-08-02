@@ -48,15 +48,11 @@ async function toDataURL(src: string): Promise<string | null> {
   if (!src) return null;
   if (src.startsWith("data:")) return src;
   try {
-    const res = await fetch(src);
+    const res = await fetch(`/api/proxy-image?url=${encodeURIComponent(src)}`);
     if (!res.ok) return null;
-    const blob = await res.blob();
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload  = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
+    const { base64, contentType } = await res.json() as { base64: string; contentType: string };
+    if (!base64) return null;
+    return `data:${contentType};base64,${base64}`;
   } catch { return null; }
 }
 
@@ -236,7 +232,19 @@ export async function generateOrderPDF(
     if (meta.pincode)         rightLines.push(["PIN",     meta.pincode!]);
 
     const maxRows = Math.max(leftLines.length, rightLines.length);
-    const blockH  = 4 + 5 + maxRows * 7 + 6 + 6; // title + divider + rows + gap + divider
+
+    // Calculate how many visual lines the address takes (may wrap)
+    const addressMaxW = PAGE_W - MARGIN - (PAGE_W / 2 + 2) - 18;
+    let extraAddressLines = 0;
+    if (meta.customerAddress) {
+      const doc2 = new jsPDF({ unit: "mm", format: "a4" });
+      doc2.setFont("helvetica", "bold");
+      doc2.setFontSize(7.5);
+      const wrapped = doc2.splitTextToSize(meta.customerAddress, addressMaxW) as string[];
+      extraAddressLines = Math.max(0, wrapped.length - 1);
+    }
+
+    const blockH = 4 + 5 + maxRows * 7 + extraAddressLines * 5 + 6 + 6;
     y = checkBreak(y, blockH);
 
     doc.setFont("helvetica", "bold");
@@ -253,6 +261,10 @@ export async function generateOrderPDF(
     const leftX  = MARGIN;
     const rightX = PAGE_W / 2 + 2;
     const rowH   = 7;
+    const addrMaxW = PAGE_W - MARGIN - rightX - 18;
+
+    // Track right-side y independently so wrapped address lines push City/State/PIN down
+    let rightY = y;
 
     for (let i = 0; i < maxRows; i++) {
       const ly = y + i * rowH;
@@ -269,16 +281,16 @@ export async function generateOrderPDF(
         doc.setFont("helvetica", "normal");
         doc.setFontSize(7.5);
         doc.setTextColor(...GREY);
-        doc.text(rightLines[i][0] + ":", rightX, ly);
+        doc.text(rightLines[i][0] + ":", rightX, rightY);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(...DARK);
-        const maxW   = PAGE_W - MARGIN - rightX - 18;
-        const wrapped = doc.splitTextToSize(rightLines[i][1], maxW);
-        doc.text(wrapped[0] as string, rightX + 18, ly);
+        const wrapped = doc.splitTextToSize(rightLines[i][1], addrMaxW) as string[];
+        doc.text(wrapped, rightX + 18, rightY);
+        rightY += rowH + (wrapped.length - 1) * 5;
       }
     }
 
-    y += maxRows * rowH + 6;
+    y += Math.max(maxRows * rowH, rightY - y) + 6;
     doc.setDrawColor(...PURPLE_MID);
     doc.setLineWidth(0.4);
     doc.line(MARGIN, y, PAGE_W - MARGIN, y);

@@ -6,6 +6,7 @@ import { CartProvider } from "./context/CartContext";
 import { ProductsProvider } from "./context/ProductsContext";
 import { CategoriesProvider } from "./context/CategoriesContext";
 import { ScrollProvider } from "./context/ScrollContext";
+import { useSettings } from "./hooks/useSettings";
 
 import { Navbar } from "./components/Navbar";
 import { ProductGrid } from "./components/ProductGrid";
@@ -35,6 +36,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
 
 function AppRouter() {
   const [path] = useLocation();
+  const { showSearchBar } = useSettings();
 
   if (path === "/admin")           return <AdminLogin />;
   if (path === "/admin/dashboard") return <AdminPanel />;
@@ -47,7 +49,7 @@ function AppRouter() {
   // Default: storefront
   return (
     <PageShell>
-      <ProductGrid />
+      <ProductGrid showSearchBar={showSearchBar} />
     </PageShell>
   );
 }
