@@ -19,7 +19,9 @@ import { DraggableImageGrid } from "../components/ui/DraggableImageGrid";
 import { useImageItems } from "../hooks/useImageItems";
 import { useToast } from "../hooks/useToast";
 import { pushToShiprocket, saveSrIds, buildShiprocketItems, estimateWeight } from "../lib/shiprocket";
+import JSZip from "jszip";
 import { compressToWebP } from "../utils/compressToWebP";
+import { uploadToR2 } from "../lib/r2Upload";
 import { imgUrl } from "../lib/imgUrl";
 import { EditProductModal } from "../components/admin/EditProductModal";
 import { EditOrderModal } from "../components/admin/EditOrderModal";
@@ -32,7 +34,6 @@ import { ReportTab } from "../components/admin/ReportTab";
 import { ShiprocketPDFPrinter } from "../components/admin/ShiprocketPDFPrinter";
 import { useSettings } from "../hooks/useSettings";
 
-const BUCKET = "product-images";
 const MAX_IMAGES = 6;
 const EMPTY_FORM = { name: "", category: "", price: "", originalPrice: "", description: "", stock: "10", shipping_credit: "0", wholesale_price: "0", base_variant_label: "" };
 
@@ -98,13 +99,7 @@ function CategoryRow({ cat, onDelete }: { cat: import("../context/CategoriesCont
 // ── Storage helper ───────────────────────────────────────────
 async function uploadToStorage(file: File, productName?: string): Promise<string> {
   const compressed = await compressToWebP(file, { name: productName });
-  const slug = productName
-    ? productName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
-    : "product";
-  const path = `${Date.now()}-${slug}.webp`;
-  const { error } = await supabase.storage.from(BUCKET).upload(path, compressed, { cacheControl: "3600", upsert: false });
-  if (error) throw new Error(error.message);
-  return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+  return uploadToR2(compressed, productName);
 }
 
 // ── Shiprocket inline result type ────────────────────────────
@@ -140,6 +135,7 @@ export function AdminPanel() {
   const [deleting, setDeleting] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [previewImg, setPreviewImg] = useState<string | null>(null);
+  const [downloadingProductId, setDownloadingProductId] = useState<number | null>(null);
 
   // Category management
   const [catName, setCatName] = useState("");
@@ -405,6 +401,36 @@ export function AdminPanel() {
     await deleteProduct(deleteId, imageUrls);
     setDeleting(false);
     setDeleteId(null);
+  };
+
+  const handleDownloadProductImages = async (product: Product) => {
+    const images = product.images?.length ? product.images : product.image ? [product.image] : [];
+    if (!images.length) { toast.show("No images to download.", "error"); return; }
+    setDownloadingProductId(product.id);
+    try {
+      const zip = new JSZip();
+      const zipName = `SNS-${product.id}`;
+      const folder = zip.folder(zipName)!;
+      await Promise.all(
+        images.map(async (url, idx) => {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`Failed to fetch image ${idx + 1}`);
+          const blob = await res.blob();
+          const ext = url.split(".").pop()?.split("?")[0] || "jpg";
+          folder.file(`${zipName}-${idx + 1}.${ext}`, blob);
+        })
+      );
+      const content = await zip.generateAsync({ type: "blob" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(content);
+      link.download = `${zipName}.zip`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : "Download failed.", "error");
+    } finally {
+      setDownloadingProductId(null);
+    }
   };
 
   // ── Categories ───────────────────────────────────────────────
@@ -775,6 +801,9 @@ export function AdminPanel() {
                           })()}
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => handleDownloadProductImages(p)} disabled={downloadingProductId === p.id} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-emerald-500 hover:bg-emerald-50 transition-colors disabled:opacity-50" title="Download images">
+                            {downloadingProductId === p.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                          </button>
                           <button onClick={() => setEditProduct(p)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-[#9B6FD1] hover:bg-[#F3EEFB] transition-colors" title="Edit"><Pencil className="w-4 h-4" /></button>
                           <button onClick={() => setDeleteId(p.id)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
                         </div>

@@ -112,21 +112,14 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
     setProducts((prev) => prev.filter((p) => p.id !== id));
 
     if (imageUrls && imageUrls.length > 0) {
-      const BUCKET = "product-images";
-      const paths = imageUrls
-        .map((url) => {
-          try {
-            const u = new URL(url);
-            const marker = `/public/${BUCKET}/`;
-            const idx = u.pathname.indexOf(marker);
-            return idx !== -1 ? decodeURIComponent(u.pathname.slice(idx + marker.length)) : null;
-          } catch { return null; }
-        })
-        .filter((p): p is string => p !== null && p.length > 0);
-
-      if (paths.length > 0) {
-        const { error: storageErr } = await supabase.storage.from(BUCKET).remove(paths);
-        if (storageErr) console.warn("Storage cleanup failed:", storageErr.message);
+      try {
+        await fetch("/api/delete-images", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ urls: imageUrls }),
+        });
+      } catch (e) {
+        console.warn("Storage cleanup failed:", e);
       }
     }
   };

@@ -4,12 +4,11 @@ import { Pencil, X, CheckCircle2, ChevronDown, Image, Plus, Trash2 } from "lucid
 import { Product, ProductVariant, variantCover } from "../../data/products";
 import { useCategories } from "../../context/CategoriesContext";
 import { useProducts } from "../../context/ProductsContext";
-import { supabase } from "../../lib/supabase";
 import { useImageItems } from "../../hooks/useImageItems";
 import { DraggableImageGrid } from "../ui/DraggableImageGrid";
 import { compressToWebP } from "../../utils/compressToWebP";
+import { uploadToR2 } from "../../lib/r2Upload";
 
-const BUCKET = "product-images";
 const MAX_IMAGES = 6;
 const MAX_VARIANT_IMAGES = 4;
 
@@ -24,13 +23,7 @@ type FormKey = "name" | "category" | "price" | "originalPrice" | "description" |
 
 async function uploadFile(file: File, productName?: string): Promise<string> {
   const compressed = await compressToWebP(file, { name: productName });
-  const slug = productName
-    ? productName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
-    : "product";
-  const path = `${Date.now()}-${slug}.webp`;
-  const { error } = await supabase.storage.from(BUCKET).upload(path, compressed, { cacheControl: "3600", upsert: false });
-  if (error) throw new Error(error.message);
-  return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+  return uploadToR2(compressed, productName);
 }
 
 // ── Variant row editor ────────────────────────────────────────
