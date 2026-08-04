@@ -46,6 +46,7 @@ const STEP_LABELS: Record<Step, string> = {
 };
 
 import { useSettings } from "../hooks/useSettings";
+import moment from "moment";
 
 export function CartDrawer() {
   const { isCartOpen, setIsCartOpen, cart, removeFromCart, updateQuantity, subtotal, totalItems, shippingCredit } = useCart();
@@ -445,7 +446,7 @@ export function CartDrawer() {
                                   <div>
                                     <p className="text-sm font-semibold text-green-800">Delivery available</p>
                                     <p className="text-xs text-green-600">
-                                      By {new Date(Date.now() + (shipping.estimatedDays ?? 0) * 86400000).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
+                                      By {moment().add((parseInt(String(shipping.estimatedDays ?? 0), 10) || 0) + 2, "days").format("ddd, D MMM")}
                                       {rawCodCharge > 0 ? ` • COD: ₹${codCharge}${codSaved > 0 ? ` (₹${codSaved} saved)` : ""}` : ""}
                                     </p>
                                   </div>
@@ -579,7 +580,7 @@ export function CartDrawer() {
                       <div className="text-xs text-green-700 space-y-0.5">
                         <p className="font-semibold">Delivering to PIN {pincode}</p>
                         <p>
-                          Arrives by {new Date(Date.now() + (shipping?.estimatedDays ?? 0) * 86400000).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
+                          Arrives by {moment().add((parseInt(String(shipping?.estimatedDays ?? 0), 10) || 0) + 2, "days").format("ddd, D MMM")}
                           {" "}· {paymentMode === "cod" ? "Cash on Delivery" : "Online Payment"}
                         </p>
                         <p>
