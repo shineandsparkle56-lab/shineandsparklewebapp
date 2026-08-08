@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { ShoppingBag, Menu, Home, Info, Phone, X, Truck } from "lucide-react";
+import { ShoppingBag, Menu, Home, Info, Phone, Truck, Sparkles } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { useScroll } from "../context/ScrollContext";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 import { Button } from "./ui/button";
 
 const navLinks = [
-  { name: "Home",    href: "/",        icon: Home },
-  { name: "About",   href: "/about",   icon: Info },
-  { name: "Contact", href: "/contact", icon: Phone },
-  { name: "Track Order", href: "/track", icon: Truck },
+  { name: "Home",        href: "/",        icon: Home },
+  { name: "About",       href: "/about",   icon: Info },
+  { name: "Contact",     href: "/contact", icon: Phone },
+  { name: "Track Order", href: "/track",   icon: Truck },
 ];
 
 export function Navbar() {
@@ -40,61 +40,63 @@ export function Navbar() {
                 </Button>
               </SheetTrigger>
 
-              <SheetContent side="left" className="w-[280px] sm:w-[320px] p-0 flex flex-col border-0 shadow-2xl">
-                {/* Drawer header */}
-                <div className="relative bg-gradient-to-br from-[#9B6FD1] to-[#7c4fc0] px-6 pt-10 pb-8">
-                  <button
-                    onClick={close}
-                    className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors"
-                    aria-label="Close menu"
-                  >
-                    <X className="w-4 h-4" />
+              <SheetContent side="left" className="w-[270px] sm:w-[290px] p-0 flex flex-col border-0 shadow-2xl bg-white [&>button]:top-3.5 [&>button]:right-3.5 [&>button]:w-7 [&>button]:h-7 [&>button]:rounded-full [&>button]:bg-gray-100 [&>button]:hover:bg-gray-200 [&>button]:opacity-100 [&>button]:flex [&>button]:items-center [&>button]:justify-center">
+
+                {/* Brand */}
+                <div className="px-5 pt-7 pb-5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-11 h-11 rounded-2xl bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0">
+                      <img src="/logo.png" alt="" className="w-8 h-8 object-contain" />
+                    </div>
+                    <div>
+                      <p className="font-serif text-[15px] font-bold text-gray-900 leading-tight">Shine and Sparkle</p>
+                      <p className="text-[9px] text-[#9B6FD1] font-medium flex items-center gap-1 mt-0.5">
+                        <Sparkles className="w-2.5 h-2.5 shrink-0" />
+                        Trendy Indian Jewelry for Every Occasion
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Cart CTA */}
+                  <button onClick={() => { close(); setIsCartOpen(true); }}
+                    className="w-full flex items-center justify-between bg-[#F3EEFB] hover:bg-[#ece4f9] text-[#9B6FD1] px-4 py-2.5 rounded-2xl transition-colors">
+                    <div className="flex items-center gap-2 text-sm font-semibold">
+                      <ShoppingBag className="w-4 h-4" /> View Cart
+                    </div>
+                    {totalItems > 0 && (
+                      <span className="bg-[#9B6FD1] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        {totalItems}
+                      </span>
+                    )}
                   </button>
-                  <div className="flex items-center gap-3 mb-1">
-                    <img src="/logo.png" alt="Shine and Sparkle" className="h-12 w-auto object-contain rounded-xl bg-white/10 p-1" />
-                    <p className="font-serif text-2xl font-bold text-white leading-tight">Shine and Sparkle</p>
-                  </div>
-                  <p className="text-white/70 text-xs tracking-widest uppercase">Premium Indian Jewelry</p>
-                  <div className="flex gap-3 mt-5">
-                    <button
-                      onClick={() => { close(); setIsCartOpen(true); }}
-                      className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-medium px-3 py-1.5 rounded-full transition-colors"
-                    >
-                      <ShoppingBag className="w-3.5 h-3.5" />
-                      Cart
-                      {totalItems > 0 && (
-                        <span className="bg-white text-[#9B6FD1] text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                          {totalItems}
-                        </span>
-                      )}
-                    </button>
-                  </div>
                 </div>
 
-                {/* Drawer nav links */}
-                <nav className="flex-1 overflow-y-auto px-4 py-4">
-                  {navLinks.map((link, i) => {
+                <div className="h-px bg-gray-100 mx-5" />
+
+                {/* Nav links */}
+                <nav className="flex-1 px-3 py-3 space-y-0.5">
+                  {navLinks.map((link) => {
                     const Icon = link.icon;
+                    const active = window.location.pathname === link.href;
                     return (
-                      <a
-                        key={link.name}
-                        href={link.href}
-                        onClick={close}
-                        className="flex items-center gap-3 px-4 py-3 rounded-2xl text-gray-700 hover:text-[#9B6FD1] hover:bg-[#F3EEFB] transition-all duration-200 group"
-                        style={{ animationDelay: `${i * 40}ms` }}
-                      >
-                        <span className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-50 group-hover:bg-[#9B6FD1]/10 transition-colors">
-                          <Icon className="w-4 h-4 text-gray-400 group-hover:text-[#9B6FD1] transition-colors" />
-                        </span>
-                        <span className="font-medium text-sm">{link.name}</span>
+                      <a key={link.name} href={link.href} onClick={close}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium transition-all ${
+                          active
+                            ? "bg-[#9B6FD1] text-white shadow-sm"
+                            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                        }`}>
+                        <Icon className={`w-4 h-4 shrink-0 ${active ? "text-white" : "text-gray-400"}`} />
+                        {link.name}
                       </a>
                     );
                   })}
                 </nav>
 
-                <div className="px-6 py-5 border-t border-gray-100 bg-gray-50/60">
-                  <p className="text-[10px] text-gray-400 text-center tracking-wider uppercase">© 2025 Shine and Sparkle</p>
+                {/* Footer */}
+                <div className="px-5 py-4 border-t border-gray-100">
+                  <p className="text-[10px] text-gray-400 text-center">© {new Date().getFullYear()} Shine and Sparkle</p>
                 </div>
+
               </SheetContent>
             </Sheet>
           </div>

@@ -127,7 +127,7 @@ function drawPageHeader(doc: jsPDF): number {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(220, 205, 245);
-  doc.text("Premium Indian Jewelry", MARGIN, 22);
+  doc.text("Trendy Indian Jewelry for Every Occasion", MARGIN, 22);
   doc.setFontSize(8);
   doc.setTextColor(...WHITE);
   doc.text("Order Summary (continued)", PAGE_W - MARGIN, 14, { align: "right" });
@@ -204,7 +204,7 @@ export async function generateOrderPDF(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(220, 205, 245);
-  doc.text("Premium Indian Jewelry", MARGIN, 25);
+  doc.text("Trendy Indian Jewelry for Every Occasion", MARGIN, 25);
 
   const today = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
   doc.setFontSize(9);
