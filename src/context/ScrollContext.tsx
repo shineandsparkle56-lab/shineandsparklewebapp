@@ -6,6 +6,14 @@ interface ScrollContextValue {
 
 const ScrollContext = createContext<ScrollContextValue>({ scrollingDown: false });
 
+// Minimum pixels the user must scroll before we consider it intentional.
+// A higher value prevents layout-shift reflows (e.g. submenu expanding)
+// from falsely triggering the "hide navbar" state.
+const DOWN_THRESHOLD = 12;
+const UP_THRESHOLD = 4;
+// Don't hide the navbar until the user has scrolled at least this far down.
+const MIN_SCROLL_TO_HIDE = 120;
+
 export function ScrollProvider({ children }: { children: ReactNode }) {
   const [scrollingDown, setScrollingDown] = useState(false);
   const lastY = useRef(typeof window !== "undefined" ? window.scrollY : 0);
@@ -17,7 +25,7 @@ export function ScrollProvider({ children }: { children: ReactNode }) {
     }
     // Sync initial state — browser may restore scroll position on refresh
     lastY.current = window.scrollY;
-    if (window.scrollY > 10) {
+    if (window.scrollY <= MIN_SCROLL_TO_HIDE) {
       setScrollingDown(false);
     }
 
@@ -25,12 +33,16 @@ export function ScrollProvider({ children }: { children: ReactNode }) {
       const y = window.scrollY;
       const delta = y - lastY.current;
 
-      if (y < 10) {
+      if (y < MIN_SCROLL_TO_HIDE) {
+        // Always show navbar near the top of the page
         setScrollingDown(false);
-      } else if (delta > 4) {
+        lastY.current = y;
+      } else if (delta > DOWN_THRESHOLD) {
+        // User scrolled down intentionally
         setScrollingDown(true);
         lastY.current = y;
-      } else if (delta < -4) {
+      } else if (delta < -UP_THRESHOLD) {
+        // User scrolled up — reveal navbar
         setScrollingDown(false);
         lastY.current = y;
       }

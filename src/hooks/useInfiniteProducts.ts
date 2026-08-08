@@ -25,6 +25,7 @@ function mapRow(row: Record<string, unknown>): Product {
     wholesale_price: typeof row.wholesale_price === "number" ? row.wholesale_price : 0,
     variants: Array.isArray(row.variants) ? (row.variants as import("../data/products").ProductVariant[]) : [],
     base_variant_label: typeof row.base_variant_label === "string" ? row.base_variant_label : undefined,
+    base_variant_color: typeof row.base_variant_color === "string" ? row.base_variant_color : undefined,
     created_at: row.created_at as string | undefined,
   };
 }

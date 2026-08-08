@@ -30,6 +30,8 @@ interface DraggableImageGridProps {
   onAddMore?: () => void;
   maxImages?: number;
   newBadge?: boolean;
+  /** Tailwind size classes for each tile, e.g. "w-20 h-20" (default) or "w-28 h-28" */
+  tileSize?: string;
 }
 
 function DragHandle() {
@@ -45,11 +47,13 @@ function ImageTile({
   index,
   onRemove,
   newBadge,
+  tileSize = "w-20 h-20",
 }: {
   item: ImageItem;
   index: number;
   onRemove: (id: string) => void;
   newBadge?: boolean;
+  tileSize?: string;
 }) {
   const controls = useDragControls();
 
@@ -58,7 +62,7 @@ function ImageTile({
       value={item}
       dragListener={false}
       dragControls={controls}
-      className="relative group w-20 h-20 shrink-0 rounded-xl overflow-hidden border-2 border-white shadow-sm select-none"
+      className={`relative group ${tileSize} shrink-0 rounded-xl overflow-hidden border-2 border-white shadow-sm select-none`}
       whileDrag={{ scale: 1.06, zIndex: 50, boxShadow: "0 8px 24px rgba(0,0,0,0.18)" }}
       transition={{ type: "spring", stiffness: 400, damping: 30 }}
     >
@@ -110,6 +114,7 @@ export function DraggableImageGrid({
   onAddMore,
   maxImages = 5,
   newBadge = false,
+  tileSize = "w-20 h-20",
 }: DraggableImageGridProps) {
   return (
     <Reorder.Group
@@ -126,6 +131,7 @@ export function DraggableImageGrid({
           index={idx}
           onRemove={onRemove}
           newBadge={newBadge}
+          tileSize={tileSize}
         />
       ))}
 
@@ -134,7 +140,7 @@ export function DraggableImageGrid({
         <button
           type="button"
           onClick={onAddMore}
-          className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-[#9B6FD1] hover:text-[#9B6FD1] transition-colors shrink-0"
+          className={`${tileSize} rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-[#9B6FD1] hover:text-[#9B6FD1] transition-colors shrink-0`}
         >
           <Plus className="w-5 h-5" />
           <span className="text-[10px]">Add more</span>

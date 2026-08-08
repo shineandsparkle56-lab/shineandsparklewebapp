@@ -34,6 +34,9 @@ export interface OrderRow {
   shipping_charge: number;
   cod_charge: number;
   grand_total: number;
+  raw_shipping_charge?: number;
+  raw_cod_charge?: number;
+  courier_name?: string;
   pincode: string;
   payment_mode: string;
   status?: OrderStatus;

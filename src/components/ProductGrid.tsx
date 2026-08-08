@@ -135,9 +135,10 @@ export function ProductGrid({ showSearchBar = true }: { showSearchBar?: boolean 
   useEffect(() => {
     const el = filterBarRef.current;
     if (!el) return;
-    const observer = new ResizeObserver(() => setFilterBarHeight(el.offsetHeight));
+    const update = () => setFilterBarHeight(el.offsetHeight);
+    const observer = new ResizeObserver(update);
     observer.observe(el);
-    setFilterBarHeight(el.offsetHeight);
+    update();
     return () => observer.disconnect();
   }, []);
 
@@ -173,7 +174,7 @@ export function ProductGrid({ showSearchBar = true }: { showSearchBar?: boolean 
         style={{
           top: `${NAVBAR_H}px`,
           transform: scrollingDown
-            ? `translateY(-${NAVBAR_H + 96}px)`
+            ? `translateY(-${NAVBAR_H + filterBarHeight}px)`
             : "translateY(0)",
         }}
         data-testid="category-filter-bar"

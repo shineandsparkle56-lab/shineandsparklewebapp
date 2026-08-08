@@ -19,7 +19,7 @@ interface Props {
   onError: (msg: string) => void;
 }
 
-type FormKey = "name" | "category" | "price" | "originalPrice" | "description" | "stock" | "shipping_credit" | "wholesale_price" | "base_variant_label";
+type FormKey = "name" | "category" | "price" | "originalPrice" | "description" | "stock" | "shipping_credit" | "wholesale_price" | "base_variant_label" | "base_variant_color";
 
 async function uploadFile(file: File, productName?: string): Promise<string> {
   const compressed = await compressToWebP(file, { name: productName });
@@ -149,6 +149,7 @@ function VariantRow({ variant, productName, onChange, onRemove }: VariantRowProp
             onAddMore={varImg.items.length < MAX_VARIANT_IMAGES ? () => addMoreRef.current?.click() : undefined}
             maxImages={MAX_VARIANT_IMAGES}
             newBadge={false}
+            tileSize="w-28 h-28"
           />
         ) : (
           <button
@@ -188,7 +189,7 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
   const [form, setForm] = useState({
     name: "", category: "", price: "", originalPrice: "",
     description: "", stock: "", shipping_credit: "", wholesale_price: "",
-    base_variant_label: "",
+    base_variant_label: "", base_variant_color: "",
   });
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [saving, setSaving] = useState(false);
@@ -207,6 +208,7 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
       shipping_credit: String(product.shipping_credit ?? 0),
       wholesale_price: String(product.wholesale_price ?? 0),
       base_variant_label: product.base_variant_label ?? "",
+      base_variant_color: product.base_variant_color ?? "",
     });
     setVariants(product.variants ?? []);
     const urls = product.images?.length ? product.images : [product.image];
@@ -283,6 +285,7 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
         wholesale_price: Math.max(0, Number(form.wholesale_price) || 0),
         variants: cleanedVariants,
         base_variant_label: form.base_variant_label.trim() || undefined,
+        base_variant_color: form.base_variant_color.trim() || undefined,
       });
       onSaved("Product updated!");
       onClose();
@@ -415,12 +418,33 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
                         <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">
                           Default option label
                         </label>
-                        <input
-                          value={form.base_variant_label}
-                          onChange={(e) => set("base_variant_label", e.target.value)}
-                          placeholder="e.g. Gold, Default, Original"
-                          className="input text-sm"
-                        />
+                        <div className="flex items-center gap-2">
+                          {/* Color swatch for the default/base variant */}
+                          <div className="relative shrink-0" title="Pick swatch color for default option">
+                            <div
+                              className="w-9 h-9 rounded-xl border-2 border-gray-200 overflow-hidden flex items-center justify-center cursor-pointer hover:border-[#9B6FD1] transition-colors"
+                              style={{ backgroundColor: form.base_variant_color || "#e5e7eb" }}
+                              onClick={() => (document.getElementById("base-variant-color-edit") as HTMLInputElement)?.click()}
+                            >
+                              {!form.base_variant_color && (
+                                <span className="text-[9px] text-gray-400 text-center leading-tight">Color</span>
+                              )}
+                            </div>
+                            <input
+                              id="base-variant-color-edit"
+                              type="color"
+                              value={form.base_variant_color || "#9B6FD1"}
+                              onChange={(e) => set("base_variant_color", e.target.value)}
+                              className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                            />
+                          </div>
+                          <input
+                            value={form.base_variant_label}
+                            onChange={(e) => set("base_variant_label", e.target.value)}
+                            placeholder="e.g. Gold, Default, Original"
+                            className="input text-sm flex-1"
+                          />
+                        </div>
                         <p className="text-[11px] text-gray-400 mt-1">
                           This names the option that uses the main product images above. Leave blank to show "Default".
                         </p>

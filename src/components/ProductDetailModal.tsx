@@ -220,6 +220,7 @@ export function ProductDetailModal({ product, onClose }: ProductDetailModalProps
       label: product.base_variant_label || "Default",
       images: product.images?.length ? product.images : [product.image],
       stock: product.stock,
+      color: product.base_variant_color,
       price: undefined as number | undefined,
     },
     ...(product.variants ?? []),
