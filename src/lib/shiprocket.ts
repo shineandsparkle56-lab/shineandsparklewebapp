@@ -102,10 +102,11 @@ export async function pushToShiprocket(
   };
 }
 
-/** Save sr_order_id + sr_shipment_id back to Supabase after a successful push */
+/** Save sr_order_id + sr_shipment_id + awb_code back to Supabase after a successful push */
 export async function saveSrIds(dbOrderId: number, result: ShiprocketResult) {
   const patch: Record<string, unknown> = { status: "confirmed" };
   if (result.sr_order_id) patch.sr_order_id = result.sr_order_id;
   if (result.shipment_id) patch.sr_shipment_id = result.shipment_id;
+  if (result.awb)         patch.awb_code = result.awb;
   await supabase.from("orders").update(patch).eq("id", dbOrderId);
 }

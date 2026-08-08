@@ -19,6 +19,7 @@ import { AdminLogin } from "./pages/AdminLogin";
 import { AdminPanel } from "./pages/AdminPanel";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { TermsOfService } from "./pages/TermsOfService";
+import { TrackOrder } from "./pages/TrackOrder";
 const queryClient = new QueryClient();
 
 // ── Shared page shell — Navbar + Footer + CartDrawer on every page ──
@@ -42,6 +43,7 @@ function AppRouter() {
   if (path === "/admin/dashboard") return <AdminPanel />;
   if (path === "/privacy-policy")  return <PrivacyPolicy />;
   if (path === "/terms-of-service") return <TermsOfService />;
+  if (path === "/track") return <PageShell><TrackOrder /></PageShell>;
 
   if (path === "/about")   return <PageShell><About /></PageShell>;
   if (path === "/contact") return <PageShell><Contact /></PageShell>;

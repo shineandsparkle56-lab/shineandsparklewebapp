@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   Plus, Trash2, ShoppingBag, Download, FileText, Loader2,
-  Pencil, Truck, X, CheckCircle2, Zap,
+  Pencil, Truck, X, CheckCircle2, Zap, Link2, RefreshCw,
 } from "lucide-react";
 import { useProducts } from "../../context/ProductsContext";
 import { supabase } from "../../lib/supabase";
@@ -33,6 +33,7 @@ export function OrdersTab() {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [pushingId, setPushingId] = useState<number | null>(null);
   const [srResult, setSrResult] = useState<SrResult>(null);
+  const [syncingAwbId, setSyncingAwbId] = useState<number | null>(null);
 
   useEffect(() => { fetchOrders(); }, []);
 
@@ -123,7 +124,7 @@ export function OrdersTab() {
       await saveSrIds(order.id, result);
       setOrders((prev) => prev.map((o) =>
         o.id === order.id
-          ? { ...o, status: "confirmed", sr_order_id: result.sr_order_id, sr_shipment_id: result.shipment_id }
+          ? { ...o, status: "confirmed", sr_order_id: result.sr_order_id, sr_shipment_id: result.shipment_id, awb_code: result.awb || undefined }
           : o
       ));
       setSrResult({ orderId: order.id, shipmentId: result.shipment_id, awb: result.awb });
@@ -133,6 +134,28 @@ export function OrdersTab() {
       setSrResult({ orderId: order.id, error: msg });
       toast.show("Shiprocket push failed.", "error");
     } finally { setPushingId(null); }
+  };
+
+  const handleSyncAwb = async (order: OrderRow) => {
+    if (!order.sr_order_id) return;
+    setSyncingAwbId(order.id);
+    try {
+      const res = await fetch(`/api/get-shipment-awb?order_id=${order.sr_order_id}`);
+      const data = await res.json() as { awb_code?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`);
+      const awb = data.awb_code?.trim();
+      if (!awb) {
+        toast.show("No AWB yet — assign a courier in Shiprocket first.", "error");
+        return;
+      }
+      await supabase.from("orders").update({ awb_code: awb }).eq("id", order.id);
+      setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, awb_code: awb } : o));
+      toast.show(`AWB synced: ${awb}`);
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : "Failed to sync AWB.", "error");
+    } finally {
+      setSyncingAwbId(null);
+    }
   };
 
   const handleToggleStockDeduction = async (order: OrderRow) => {
@@ -202,6 +225,9 @@ export function OrdersTab() {
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md uppercase ${sm.color}`}>{sm.label}</span>
                       {isQuick && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-500 uppercase">Quick</span>}
                       {order.sr_order_id && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-600">SR #{order.sr_order_id}</span>}
+                      {order.awb_code && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-sky-100 text-sky-600">AWB: {order.awb_code}</span>
+                      )}
                     </div>
                     <span className="text-sm font-bold text-gray-900 shrink-0">₹{order.grand_total}</span>
                   </div>
@@ -292,6 +318,33 @@ export function OrdersTab() {
                       {pushingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
                       {order.sr_order_id ? "Shipped" : "Ship"}
                     </button>
+                    {order.awb_code && (
+                      <button
+                        onClick={() => {
+                          const url = `${window.location.origin}/track?awb=${order.awb_code}`;
+                          if (navigator.clipboard?.writeText) {
+                            navigator.clipboard.writeText(url).then(() => toast.show("Tracking link copied!")).catch(() => {
+                              window.open(url, "_blank");
+                            });
+                          } else {
+                            window.open(url, "_blank");
+                          }
+                        }}
+                        title="Open / copy customer tracking link"
+                        className="flex items-center gap-1 px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-600 text-xs font-semibold rounded-lg transition-colors border border-sky-200">
+                        <Link2 className="w-3.5 h-3.5" /> Track
+                      </button>
+                    )}
+                    {order.sr_order_id && !order.awb_code && (
+                      <button
+                        onClick={() => handleSyncAwb(order)}
+                        disabled={syncingAwbId === order.id}
+                        title="Fetch AWB from Shiprocket after assigning courier"
+                        className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold rounded-lg transition-colors border border-amber-200 disabled:opacity-60">
+                        {syncingAwbId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        Sync AWB
+                      </button>
+                    )}
                     <button onClick={() => setEditOrder(order)}
                       className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-[#9B6FD1] hover:bg-[#F3EEFB] transition-colors border border-gray-200">
                       <Pencil className="w-3.5 h-3.5" />

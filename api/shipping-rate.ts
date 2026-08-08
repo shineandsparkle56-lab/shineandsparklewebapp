@@ -134,8 +134,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // freight_charge + whatsapp_charges = total charge shown in Shiprocket dashboard
     const totalCharge = best.freight_charge + (best.whatsapp_charges ?? 0);
 
-    console.log(best)
-
     return res.status(200).json({
       serviceable: true,
       courierName: best.courier_name,

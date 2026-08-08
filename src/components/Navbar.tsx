@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ShoppingBag, Menu, Home, Info, Phone, X } from "lucide-react";
+import { ShoppingBag, Menu, Home, Info, Phone, X, Truck } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { useScroll } from "../context/ScrollContext";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
@@ -9,6 +9,7 @@ const navLinks = [
   { name: "Home",    href: "/",        icon: Home },
   { name: "About",   href: "/about",   icon: Info },
   { name: "Contact", href: "/contact", icon: Phone },
+  { name: "Track Order", href: "/track", icon: Truck },
 ];
 
 export function Navbar() {

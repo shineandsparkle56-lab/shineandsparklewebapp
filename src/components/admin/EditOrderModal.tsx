@@ -48,6 +48,7 @@ export interface OrderRow {
   created_at: string;
   sr_order_id?: number;
   sr_shipment_id?: number;
+  awb_code?: string;
   stock_deducted?: boolean;
   // Shipping dimensions
   box_length?: number;
