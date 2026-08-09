@@ -65,12 +65,38 @@ interface OrderRow {
 
 const STEPS = ["Ordered", "Picked Up", "In Transit", "Out for Delivery", "Delivered"];
 
+function isFailed(status: string): boolean {
+  const s = status.toLowerCase();
+  return s.includes("undeliver") ||
+    s.includes("rto") ||
+    s.includes("return to") ||
+    s.includes("cancelled") ||
+    s.includes("lost") ||
+    s.includes("refused");
+}
+
 function deriveStep(status: string): number {
   const s = status.toLowerCase();
-  if (s.includes("deliver")) return 4;
-  if (s.includes("out for")) return 3;
-  if (s.includes("transit")) return 2;
-  if (s.includes("pick") || s.includes("manifested") || s.includes("shipped")) return 1;
+  // Failed — freeze at "Out for Delivery", never mark as Delivered
+  if (isFailed(status)) return 3;
+  if (s.includes("delivered")) return 4;
+  if (s.includes("out for delivery")) return 3;
+  if (
+    s.includes("transit") ||
+    s.includes("destination hub") ||
+    s.includes("reached") ||
+    s.includes("facility") ||
+    s.includes("hub") ||
+    s.includes("sort") ||
+    s.includes("dispatch")
+  ) return 2;
+  if (
+    s.includes("picked") ||
+    s.includes("pick up") ||
+    s.includes("manifested") ||
+    s.includes("shipped") ||
+    s.includes("pickup")
+  ) return 1;
   return 0;
 }
 
@@ -140,11 +166,14 @@ export function TrackOrder() {
 
   const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); fetchAll(input); };
   const activeStep  = track ? deriveStep(track.current_status) : -1;
+  const failed      = track ? isFailed(track.current_status) : false;
   const activities  = track?.shipment_track_activities ?? [];
   const visibleActs = showAll ? activities : activities.slice(0, 3);
 
   // Status colour
-  const statusColor = activeStep === 4
+  const statusColor = failed
+    ? "text-red-600 bg-red-50 border-red-200"
+    : activeStep === 4
     ? "text-green-600 bg-green-50 border-green-200"
     : activeStep >= 2
     ? "text-[#9B6FD1] bg-[#F3EEFB] border-[#9B6FD1]/30"
@@ -236,7 +265,9 @@ export function TrackOrder() {
                         <div className="flex flex-col items-center gap-1 shrink-0">
                           <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all text-white ${
                             done
-                              ? current ? "bg-[#9B6FD1] shadow-sm shadow-purple-200 scale-110" : "bg-green-500"
+                              ? current
+                                ? failed ? "bg-red-400 shadow-sm shadow-red-200 scale-110" : "bg-[#9B6FD1] shadow-sm shadow-purple-200 scale-110"
+                                : "bg-green-500"
                               : "bg-gray-200"
                           }`}>
                             {done && !current
@@ -258,12 +289,18 @@ export function TrackOrder() {
                 </div>
               </div>
 
-              {/* EDD / Delivered pill */}
-              {(track.edd || track.delivered_date) && (
+              {/* EDD / Delivered / Failed pill */}
+              {(track.edd || track.delivered_date || failed) && (
                 <div className={`mx-4 mb-4 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${
-                  track.delivered_date ? "bg-green-50 text-green-700" : "bg-[#F3EEFB] text-[#9B6FD1]"
+                  failed
+                    ? "bg-red-50 text-red-600"
+                    : track.delivered_date
+                    ? "bg-green-50 text-green-700"
+                    : "bg-[#F3EEFB] text-[#9B6FD1]"
                 }`}>
-                  {track.delivered_date
+                  {failed
+                    ? <><AlertCircle className="w-3.5 h-3.5" /> {track.current_status}</>
+                    : track.delivered_date
                     ? <><CheckCircle2 className="w-3.5 h-3.5" /> Delivered {fmtShort(track.delivered_date)}</>
                     : <><Clock className="w-3.5 h-3.5" /> Expected by {fmtShort(track.edd)}</>}
                   {track.origin && track.destination && (
@@ -320,9 +357,11 @@ export function TrackOrder() {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className={`text-xs font-semibold leading-tight ${idx === 0 ? "text-gray-900" : "text-gray-500"}`}>
-                                  {(act["sr-status-label"] && act["sr-status-label"] !== "NA")
-                                    ? act["sr-status-label"]
-                                    : act.activity || "Update"}
+                                  {(act.activity && act.activity !== "NA")
+                                    ? act.activity
+                                    : (act["sr-status-label"] && act["sr-status-label"] !== "NA")
+                                      ? act["sr-status-label"]
+                                      : "Update"}
                                 </p>
                                 <div className="flex flex-wrap items-center gap-x-2 mt-0.5">
                                   {act.location && (
@@ -444,9 +483,11 @@ export function TrackOrder() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className={`text-xs font-semibold ${idx === 0 ? "text-gray-900" : "text-gray-500"}`}>
-                          {(act["sr-status-label"] && act["sr-status-label"] !== "NA")
-                            ? act["sr-status-label"]
-                            : act.activity || "Update"}
+                          {(act.activity && act.activity !== "NA")
+                            ? act.activity
+                            : (act["sr-status-label"] && act["sr-status-label"] !== "NA")
+                              ? act["sr-status-label"]
+                              : "Update"}
                         </p>
                         <div className="flex flex-wrap items-center gap-x-2 mt-0.5">
                           {act.location && <span className="flex items-center gap-0.5 text-[10px] text-gray-400"><MapPin className="w-2.5 h-2.5" />{act.location}</span>}
