@@ -37,7 +37,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
 
 function AppRouter() {
   const [path] = useLocation();
-  const { showSearchBar } = useSettings();
+  const { showSearchBar, allCategoryImage } = useSettings();
 
   if (path === "/admin")           return <AdminLogin />;
   if (path === "/admin/dashboard") return <AdminPanel />;
@@ -51,7 +51,7 @@ function AppRouter() {
   // Default: storefront
   return (
     <PageShell>
-      <ProductGrid showSearchBar={showSearchBar} />
+      <ProductGrid showSearchBar={showSearchBar} allCategoryImage={allCategoryImage} />
     </PageShell>
   );
 }

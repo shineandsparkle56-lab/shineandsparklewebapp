@@ -3,7 +3,6 @@ import { ShoppingBag, Menu, Home, Info, Phone, Truck, Sparkles } from "lucide-re
 import { useCart } from "../context/CartContext";
 import { useScroll } from "../context/ScrollContext";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
-import { Button } from "./ui/button";
 
 const navLinks = [
   { name: "Home",        href: "/",        icon: Home },
@@ -35,9 +34,9 @@ export function Navbar() {
           <div className="lg:hidden">
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-gray-700" data-testid="nav-menu-mobile">
-                  <Menu className="h-5 w-5" />
-                </Button>
+                <button className="p-2 text-gray-700 hover:text-[#9B6FD1] transition-colors rounded-xl hover:bg-[#F3EEFB]" data-testid="nav-menu-mobile">
+                  <Menu className="h-6 w-6" />
+                </button>
               </SheetTrigger>
 
               <SheetContent side="left" className="w-[270px] sm:w-[290px] p-0 flex flex-col border-0 shadow-2xl bg-white [&>button]:top-3.5 [&>button]:right-3.5 [&>button]:w-7 [&>button]:h-7 [&>button]:rounded-full [&>button]:bg-gray-100 [&>button]:hover:bg-gray-200 [&>button]:opacity-100 [&>button]:flex [&>button]:items-center [&>button]:justify-center">
@@ -115,12 +114,12 @@ export function Navbar() {
         </div>
 
         {/* ── Center: desktop nav (hidden on mobile) ── */}
-        <nav className="hidden lg:flex items-center justify-center gap-8">
+        <nav className="hidden lg:flex items-center justify-center gap-1">
           {navLinks.map((link) => (
             <a
               key={link.name}
               href={link.href}
-              className="text-sm font-medium text-gray-600 hover:text-primary transition-colors uppercase tracking-wider"
+              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-[#9B6FD1] hover:bg-[#F3EEFB] rounded-xl transition-all"
             >
               {link.name}
             </a>
@@ -129,24 +128,22 @@ export function Navbar() {
 
         {/* ── Right: cart icon ── */}
         <div className="flex items-center justify-end">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative text-gray-700 hover:text-primary transition-colors"
+          <button
+            className="relative p-2 text-gray-700 hover:text-[#9B6FD1] transition-colors rounded-xl hover:bg-[#F3EEFB]"
             onClick={() => setIsCartOpen(true)}
             data-testid="cart-icon-btn"
             aria-label="Open cart"
           >
-            <ShoppingBag className="h-5 w-5" />
+            <ShoppingBag className="h-6 w-6" />
             {totalItems > 0 && (
               <span
-                className="absolute top-1 right-1 bg-primary text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center transform translate-x-1/4 -translate-y-1/4"
+                className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-[#9B6FD1] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 shadow-sm"
                 data-testid="cart-count-badge"
               >
                 {totalItems}
               </span>
             )}
-          </Button>
+          </button>
         </div>
 
       </div>

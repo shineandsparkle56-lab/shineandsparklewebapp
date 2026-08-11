@@ -49,7 +49,7 @@ function LoadMoreSpinner() {
   );
 }
 
-export function ProductGrid({ showSearchBar = true }: { showSearchBar?: boolean }) {
+export function ProductGrid({ showSearchBar = true, allCategoryImage }: { showSearchBar?: boolean; allCategoryImage?: string | null }) {
   const { categories } = useCategories();
   const { scrollingDown } = useScroll();
   const newCategories = useNewCategories();
@@ -67,8 +67,6 @@ export function ProductGrid({ showSearchBar = true }: { showSearchBar?: boolean 
 
   // ── Category hierarchy ────────────────────────────────────────
   const parentCats = categories.filter((c) => c.parent_id === null);
-
-  // Find the current active category object
   const activeCat = categories.find((c) => c.name === activeCategory) ?? null;
 
   // The parent to show subcategory chips for:
@@ -155,15 +153,11 @@ export function ProductGrid({ showSearchBar = true }: { showSearchBar?: boolean 
     if (searchDebounce.current) clearTimeout(searchDebounce.current);
   };
 
-  const tabs = [
-    { id: "all", label: "All" },
-    ...parentCats.map((c) => ({ id: c.name, label: c.label, hasChildren: categories.some((s) => s.parent_id === c.id) })),
-  ];
 
   const gridClass =
     viewMode === "list"
-      ? "grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4"
-      : "grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4";
+      ? "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4 lg:gap-5"
+      : "grid grid-cols-2 gap-2.5 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4 lg:gap-5";
 
   return (
     <>
@@ -198,37 +192,67 @@ export function ProductGrid({ showSearchBar = true }: { showSearchBar?: boolean 
               )}
             </div>
           )}
-          {/* Row 1 — Parent category chips */}
-          <div className="flex items-center gap-2 overflow-x-auto scrollbar-none mb-1">
-            {tabs.map((tab) => (
-              <div key={tab.id} className="relative flex-shrink-0 pt-1 pr-1">
-                <button
-                  data-testid={`filter-tab-${tab.id}`}
-                  onClick={() => {
-                    setActiveCategory(tab.id);
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }}
-                  className={`relative px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 focus:outline-none ${
-                    activeCategory === tab.id || activeParent?.name === tab.id
-                      ? "text-white shadow-md"
-                      : "text-gray-500 bg-[#F3EEFB] hover:text-[#9B6FD1]"
-                  }`}
-                >
-                  {(activeCategory === tab.id || activeParent?.name === tab.id) && (
-                    <motion.span
-                      layoutId="active-pill"
-                      className="absolute inset-0 rounded-full bg-[#9B6FD1]"
-                      style={{ zIndex: -1 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                    />
-                  )}
-                  {tab.label}
-                </button>
-                {newCategories.has(tab.id) && (
-                  <span className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white pointer-events-none" />
-                )}
+          {/* Row 1 — Parent category image tiles */}
+          <div className="flex items-center gap-4 overflow-x-auto scrollbar-none pt-1 pb-2 pl-2 pr-1"
+               style={{ WebkitOverflowScrolling: "touch" }}>
+            {/* "All" tile */}
+            <button
+              data-testid="filter-tab-all"
+              onClick={() => { setActiveCategory("all"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+              className="flex flex-col items-center gap-1.5 flex-shrink-0 focus:outline-none"
+            >
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 overflow-hidden ${
+                activeCategory === "all"
+                  ? "shadow-md shadow-purple-200 outline outline-2 outline-[#9B6FD1] outline-offset-2"
+                  : "ring-1 ring-gray-200"
+              }`}>
+                {allCategoryImage
+                  ? <img src={allCategoryImage} alt="All" loading="lazy" className="w-10 h-10 object-contain" />
+                  : <span className="text-xl">✨</span>
+                }
               </div>
-            ))}
+              <span className={`text-[11px] font-semibold leading-none ${activeCategory === "all" ? "text-[#9B6FD1]" : "text-gray-500"}`}>
+                All
+              </span>
+            </button>
+
+            {parentCats.map((cat) => {
+              const isActive = activeCategory === cat.name || activeParent?.name === cat.name;
+              const hasNew = newCategories.has(cat.name);
+              return (
+                <button
+                  key={cat.id}
+                  data-testid={`filter-tab-${cat.name}`}
+                  onClick={() => { setActiveCategory(cat.name); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                  className="flex flex-col items-center gap-1.5 flex-shrink-0 focus:outline-none relative"
+                >
+                  <div className={`w-14 h-14 rounded-full overflow-hidden transition-all duration-200 flex items-center justify-center ${
+                    isActive
+                      ? "shadow-md shadow-purple-200 outline outline-2 outline-[#9B6FD1] outline-offset-2"
+                      : "ring-1 ring-gray-200"
+                  } ${cat.image_url ? "bg-white" : isActive ? "bg-[#9B6FD1]" : "bg-[#F3EEFB]"}`}>
+                    {cat.image_url ? (
+                      <img
+                        src={cat.image_url}
+                        alt={cat.label}
+                        loading="lazy"
+                        className="w-10 h-10 object-contain"
+                      />
+                    ) : (
+                      <span className="text-xl">💎</span>
+                    )}
+                  </div>
+                  <span className={`text-[11px] font-semibold leading-none w-16 text-center ${
+                    isActive ? "text-[#9B6FD1]" : "text-gray-500"
+                  }`} style={{ wordBreak: "break-word", whiteSpace: "normal", lineHeight: "1.2" }}>
+                    {cat.label}
+                  </span>
+                  {hasNew && (
+                    <span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* Row 1b — Subcategory chips (animated, only when parent selected) */}
@@ -241,78 +265,79 @@ export function ProductGrid({ showSearchBar = true }: { showSearchBar?: boolean 
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1.5 pt-0.5 pl-1">
-                  {/* "All [parent]" chip */}
+                <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-2 pt-0.5 px-1">
+                  {/* "All" sub-chip */}
                   <button
                     onClick={() => {
                       const parent = categories.find((c) => activeSubs[0] && c.id === activeSubs[0].parent_id);
                       if (parent) { setActiveCategory(parent.name); window.scrollTo({ top: 0, behavior: "smooth" }); }
                     }}
-                    className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-                      activeParent?.name === activeCategory
-                        ? "bg-[#9B6FD1]/20 text-[#9B6FD1]"
-                        : activeSubs.every((s) => s.name !== activeCategory)
-                          ? "bg-[#9B6FD1]/20 text-[#9B6FD1]"
-                          : "bg-gray-100 text-gray-500 hover:bg-[#F3EEFB] hover:text-[#9B6FD1]"
+                    className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                      activeSubs.every((s) => s.name !== activeCategory)
+                        ? "bg-[#9B6FD1] text-white border-[#9B6FD1] shadow-sm"
+                        : "bg-white text-gray-500 border-gray-200 hover:border-[#9B6FD1]/40 hover:text-[#9B6FD1]"
                     }`}
                   >
                     All
                   </button>
-                  {activeSubs.map((sub) => (
-                    <button
-                      key={sub.id}
-                      onClick={() => { setActiveCategory(sub.name); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                      className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-                        activeCategory === sub.name
-                          ? "bg-[#9B6FD1] text-white shadow-sm"
-                          : "bg-gray-100 text-gray-500 hover:bg-[#F3EEFB] hover:text-[#9B6FD1]"
-                      }`}
-                    >
-                      {sub.label}
-                      {newCategories.has(sub.name) && (
-                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 ml-1 mb-0.5" />
-                      )}
-                    </button>
-                  ))}
+                  {activeSubs.map((sub) => {
+                    const isSubActive = activeCategory === sub.name;
+                    return (
+                      <button
+                        key={sub.id}
+                        onClick={() => { setActiveCategory(sub.name); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                        className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                          isSubActive
+                            ? "bg-[#9B6FD1] text-white border-[#9B6FD1] shadow-sm"
+                            : "bg-white text-gray-500 border-gray-200 hover:border-[#9B6FD1]/40 hover:text-[#9B6FD1]"
+                        }`}
+                      >
+                        {sub.label}
+                        {newCategories.has(sub.name) && (
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* Row 2 — Sort + View toggle */}
-          <div className="flex items-center justify-between gap-2">
-            {/* Sort dropdown */}
-            <div className="relative" ref={sortRef}>
-              <button
-                onClick={() => setSortOpen((o) => !o)}
-                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all duration-200 ${
-                  sortOrder !== "default"
-                    ? "bg-[#9B6FD1] text-white shadow-md"
-                    : "bg-[#F3EEFB] text-gray-600 hover:text-[#9B6FD1]"
-                }`}
-                aria-label="Sort by price"
-              >
-                <ArrowUpDown className="w-3.5 h-3.5 shrink-0" />
-                <span>
-                  {sortOrder === "low-high"
-                    ? "Low to High"
-                    : sortOrder === "high-low"
-                    ? "High to Low"
-                    : "Sort by Price"}
-                </span>
-              </button>
+          {/* Row 2 — Sort + product count + View toggle */}
+          <div className="flex items-center justify-between gap-2 pb-1">
+            <div className="flex items-center gap-2">
+              {/* Sort dropdown */}
+              <div className="relative" ref={sortRef}>
+                <button
+                  onClick={() => setSortOpen((o) => !o)}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-200 ${
+                    sortOrder !== "default"
+                      ? "bg-[#9B6FD1] text-white shadow-md"
+                      : "bg-[#F3EEFB] text-gray-600 hover:text-[#9B6FD1]"
+                  }`}
+                  aria-label="Sort by price"
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    {sortOrder === "low-high"
+                      ? "Low → High"
+                      : sortOrder === "high-low"
+                      ? "High → Low"
+                      : "Sort"}
+                  </span>
+                </button>
 
-              <AnimatePresence>
-                {sortOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 6, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 6, scale: 0.96 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute left-0 mt-2 w-44 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50"
-                  >
-                    {(["default", "low-high", "high-low"] as SortOrder[]).map(
-                      (opt) => {
+                <AnimatePresence>
+                  {sortOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute left-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50"
+                    >
+                      {(["default", "low-high", "high-low"] as SortOrder[]).map((opt) => {
                         const labels = {
                           default: "Default",
                           "low-high": "Price: Low to High",
@@ -321,28 +346,27 @@ export function ProductGrid({ showSearchBar = true }: { showSearchBar?: boolean 
                         return (
                           <button
                             key={opt}
-                            onClick={() => {
-                              setSortOrder(opt);
-                              setSortOpen(false);
-                              window.scrollTo({ top: 0, behavior: "smooth" });
-                            }}
+                            onClick={() => { setSortOrder(opt); setSortOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                             className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${
-                              sortOrder === opt
-                                ? "text-[#9B6FD1] font-semibold bg-[#F3EEFB]"
-                                : "text-gray-600 hover:bg-gray-50"
+                              sortOrder === opt ? "text-[#9B6FD1] font-semibold bg-[#F3EEFB]" : "text-gray-600 hover:bg-gray-50"
                             }`}
                           >
                             {labels[opt]}
-                            {sortOrder === opt && (
-                              <Check className="w-3.5 h-3.5 text-[#9B6FD1]" />
-                            )}
+                            {sortOrder === opt && <Check className="w-3.5 h-3.5 text-[#9B6FD1]" />}
                           </button>
                         );
-                      }
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                      })}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Product count */}
+              {!loading && products.length > 0 && (
+                <span className="text-xs text-gray-400 font-medium hidden sm:block">
+                  {products.length} products
+                </span>
+              )}
             </div>
 
             {/* View toggle — mobile only */}
@@ -350,24 +374,16 @@ export function ProductGrid({ showSearchBar = true }: { showSearchBar?: boolean 
               <button
                 onClick={() => setViewMode("grid")}
                 aria-label="Grid view"
-                className={`p-2 rounded-full transition-all duration-200 ${
-                  viewMode === "grid"
-                    ? "bg-[#9B6FD1] text-white shadow"
-                    : "text-gray-400 hover:text-[#9B6FD1]"
-                }`}
+                className={`p-1.5 rounded-full transition-all duration-200 ${viewMode === "grid" ? "bg-[#9B6FD1] text-white shadow" : "text-gray-400 hover:text-[#9B6FD1]"}`}
               >
-                <LayoutGrid className="w-4 h-4" />
+                <LayoutGrid className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setViewMode("list")}
                 aria-label="List view"
-                className={`p-2 rounded-full transition-all duration-200 ${
-                  viewMode === "list"
-                    ? "bg-[#9B6FD1] text-white shadow"
-                    : "text-gray-400 hover:text-[#9B6FD1]"
-                }`}
+                className={`p-1.5 rounded-full transition-all duration-200 ${viewMode === "list" ? "bg-[#9B6FD1] text-white shadow" : "text-gray-400 hover:text-[#9B6FD1]"}`}
               >
-                <List className="w-4 h-4" />
+                <List className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
@@ -375,7 +391,7 @@ export function ProductGrid({ showSearchBar = true }: { showSearchBar?: boolean 
       </div>
 
       {/* ── Main section ──────────────────────────────────────────── */}
-      <section id="shop" className="bg-white pb-20" style={{ paddingTop: NAVBAR_H + filterBarHeight }}>
+      <section id="shop" className="bg-gray-50/50 pb-20" style={{ paddingTop: NAVBAR_H + filterBarHeight + 12 }}>
         <div className="container mx-auto px-4">
 
           {/* First-page skeleton */}

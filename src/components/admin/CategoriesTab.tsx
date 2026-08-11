@@ -1,11 +1,36 @@
-import { useState } from "react";
-import { Plus, Trash2, Tag, ChevronDown } from "lucide-react";
+import { useState, useRef } from "react";
+import { Plus, Trash2, Tag, ChevronDown, ImagePlus, Loader2, X } from "lucide-react";
 import { useCategories } from "../../context/CategoriesContext";
 import { useToast } from "../../hooks/useToast";
+import { useSettings } from "../../hooks/useSettings";
 import { ConfirmModal, Spinner } from "./shared";
+import { imgUrl } from "../../lib/imgUrl";
+
+/** Resize an image file to maxSize×maxSize and return base64 string (no data: prefix) */
+function resizeImage(file: File, maxSize: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+      const w = Math.round(img.width  * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width  = w;
+      canvas.height = h;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      const dataUrl = canvas.toDataURL("image/webp", 0.85);
+      resolve(dataUrl.split(",")[1]);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
 
 export function CategoriesTab() {
-  const { categories, addCategory, deleteCategory } = useCategories();
+  const { categories, addCategory, deleteCategory, updateCategoryImage } = useCategories();
+  const { allCategoryImage, setAllCategoryImage } = useSettings();
   const toast = useToast();
 
   const [catName, setCatName] = useState("");
@@ -15,6 +40,35 @@ export function CategoriesTab() {
   const [catError, setCatError] = useState("");
   const [deleteCatId, setDeleteCatId] = useState<number | null>(null);
   const [deletingCat, setDeletingCat] = useState(false);
+  const [uploadingId, setUploadingId] = useState<number | null>(null);
+  const [uploadingAll, setUploadingAll] = useState(false);
+
+  const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const allFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleAllImageUpload = async (file: File) => {
+    setUploadingAll(true);
+    try {
+      const base64 = await resizeImage(file, 200);
+      const res = await fetch("/api/upload-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileData: base64,
+          fileType: "image/webp",
+          fileName: `category-all-${Date.now()}.webp`,
+        }),
+      });
+      const data = await res.json() as { url?: string; error?: string };
+      if (!res.ok || !data.url) throw new Error(data.error ?? "Upload failed");
+      await setAllCategoryImage(data.url);
+      toast.show("'All' image updated!");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : "Upload failed.", "error");
+    } finally {
+      setUploadingAll(false);
+    }
+  };
 
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +93,44 @@ export function CategoriesTab() {
     setDeleteCatId(null);
   };
 
+  const handleImageUpload = async (catId: number, file: File) => {
+    setUploadingId(catId);
+    try {
+      // Resize to max 200×200 before uploading
+      const base64 = await resizeImage(file, 200);
+
+      const res = await fetch("/api/upload-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileData: base64,
+          fileType: "image/webp",
+          fileName: `category-${catId}-${Date.now()}.webp`,
+        }),
+      });
+      const data = await res.json() as { url?: string; error?: string };
+      if (!res.ok || !data.url) throw new Error(data.error ?? "Upload failed");
+
+      await updateCategoryImage(catId, data.url);
+      toast.show("Image updated!");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : "Upload failed.", "error");
+    } finally {
+      setUploadingId(null);
+    }
+  };
+
+  const handleRemoveImage = async (catId: number) => {
+    try {
+      await updateCategoryImage(catId, null);
+      toast.show("Image removed.");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : "Failed to remove image.", "error");
+    }
+  };
+
+  const parentCats = categories.filter((c) => c.parent_id === null);
+
   return (
     <div className="space-y-6">
       {/* Add form */}
@@ -56,7 +148,7 @@ export function CategoriesTab() {
                   onChange={(e) => setCatParentId(e.target.value === "" ? "" : Number(e.target.value))}
                   className="input appearance-none pr-8">
                   <option value="">Top-level category (e.g. Earrings, Rings)</option>
-                  {categories.filter((c) => c.parent_id === null).map((c) => (
+                  {parentCats.map((c) => (
                     <option key={c.id} value={c.id}>Subcategory under: {c.label}</option>
                   ))}
                 </select>
@@ -100,25 +192,145 @@ export function CategoriesTab() {
           <p className="text-center text-gray-400 text-sm py-10">No categories yet. Add one above.</p>
         ) : (
           <div className="divide-y divide-gray-50">
-            {categories.filter((c) => c.parent_id === null).map((parent) => {
+            {/* ── "All" special tile ── */}
+            <div className="px-6 py-4 flex items-center gap-4 bg-white">
+              <div className="relative shrink-0 group">
+                <div className="w-14 h-14 rounded-full overflow-hidden bg-[#F3EEFB] border border-gray-100 flex items-center justify-center">
+                  {allCategoryImage ? (
+                    <img src={allCategoryImage} alt="All" className="w-10 h-10 object-contain" />
+                  ) : (
+                    <span className="text-2xl">✨</span>
+                  )}
+                  {uploadingAll && (
+                    <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-full">
+                      <Loader2 className="w-4 h-4 animate-spin text-[#9B6FD1]" />
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => allFileInputRef.current?.click()}
+                  className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                  title="Upload image for All tile"
+                >
+                  <ImagePlus className="w-4 h-4 text-white" />
+                </button>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  ref={allFileInputRef}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleAllImageUpload(file);
+                    e.target.value = "";
+                  }}
+                />
+                {allCategoryImage && (
+                  <button
+                    type="button"
+                    onClick={() => setAllCategoryImage(null)}
+                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                    title="Remove image"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-gray-800 text-sm">All</p>
+                <p className="text-xs text-gray-400">Shown on "All" tile in storefront</p>
+                {!allCategoryImage && (
+                  <button
+                    type="button"
+                    onClick={() => allFileInputRef.current?.click()}
+                    className="mt-1 text-[11px] text-[#9B6FD1] hover:underline flex items-center gap-1"
+                  >
+                    <ImagePlus className="w-3 h-3" /> Add image
+                  </button>
+                )}
+              </div>
+            </div>
+            {parentCats.map((parent) => {
               const children = categories.filter((c) => c.parent_id === parent.id);
               return (
                 <div key={parent.id}>
-                  <div className="px-6 py-3.5 flex items-center gap-3 bg-white">
-                    <div className="w-9 h-9 rounded-xl bg-[#F3EEFB] flex items-center justify-center shrink-0">
-                      <Tag className="w-4 h-4 text-[#9B6FD1]" />
+                  {/* Parent row */}
+                  <div className="px-6 py-4 flex items-center gap-4 bg-white">
+                    {/* Image thumbnail + upload */}
+                    <div className="relative shrink-0 group">
+                      <div className="w-14 h-14 rounded-2xl overflow-hidden bg-[#F3EEFB] border border-gray-100 flex items-center justify-center">
+                        {parent.image_url ? (
+                          <img
+                            src={imgUrl(parent.image_url, "tiny")}
+                            alt={parent.label}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Tag className="w-5 h-5 text-[#9B6FD1]/40" />
+                        )}
+                        {uploadingId === parent.id && (
+                          <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-2xl">
+                            <Loader2 className="w-4 h-4 animate-spin text-[#9B6FD1]" />
+                          </div>
+                        )}
+                      </div>
+                      {/* Upload overlay on hover */}
+                      <button
+                        type="button"
+                        onClick={() => fileInputRefs.current[parent.id]?.click()}
+                        className="absolute inset-0 rounded-2xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                        title="Upload image"
+                      >
+                        <ImagePlus className="w-4 h-4 text-white" />
+                      </button>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        ref={(el) => { fileInputRefs.current[parent.id] = el; }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleImageUpload(parent.id, file);
+                          e.target.value = "";
+                        }}
+                      />
+                      {/* Remove image button */}
+                      {parent.image_url && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(parent.id)}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                          title="Remove image"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
                     </div>
+
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-gray-800 text-sm">{parent.label}</p>
-                      <p className="text-xs text-gray-400">slug: <span className="font-mono">{parent.name}</span>
+                      <p className="text-xs text-gray-400">
+                        slug: <span className="font-mono">{parent.name}</span>
                         {children.length > 0 && <span className="ml-2 text-[#9B6FD1]">· {children.length} sub</span>}
                       </p>
+                      {!parent.image_url && (
+                        <button
+                          type="button"
+                          onClick={() => fileInputRefs.current[parent.id]?.click()}
+                          className="mt-1 text-[11px] text-[#9B6FD1] hover:underline flex items-center gap-1"
+                        >
+                          <ImagePlus className="w-3 h-3" /> Add image
+                        </button>
+                      )}
                     </div>
                     <button onClick={() => setDeleteCatId(parent.id)}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors" title="Delete">
+                      className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors shrink-0" title="Delete">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
+
+                  {/* Children */}
                   {children.map((child) => (
                     <div key={child.id} className="pl-10 pr-6 py-2.5 flex items-center gap-3 bg-gray-50/60 border-t border-gray-50">
                       <div className="w-1 h-1 rounded-full bg-[#9B6FD1]/40 shrink-0 ml-2 mr-1" />
@@ -132,6 +344,7 @@ export function CategoriesTab() {
                       </button>
                     </div>
                   ))}
+
                   <div className="pl-12 pr-6 pb-2">
                     <button onClick={() => { setCatParentId(parent.id); setCatName(""); setCatLabel(""); document.querySelector<HTMLElement>(".categories-form")?.scrollIntoView({ behavior: "smooth" }); }}
                       className="text-[11px] text-[#9B6FD1] hover:underline flex items-center gap-1">
@@ -141,6 +354,7 @@ export function CategoriesTab() {
                 </div>
               );
             })}
+
             {/* Orphaned subcategories */}
             {categories.filter((c) => c.parent_id !== null && !categories.find((p) => p.id === c.parent_id)).map((c) => (
               <div key={c.id} className="px-6 py-3 flex items-center gap-3 bg-amber-50">

@@ -7,6 +7,7 @@ export interface Category {
   label: string;      // display e.g. "Stud Earrings"
   sort_order: number;
   parent_id: number | null; // null = top-level; non-null = subcategory
+  image_url?: string | null;
 }
 
 interface CategoriesContextValue {
@@ -16,6 +17,7 @@ interface CategoriesContextValue {
   addCategory: (name: string, label: string, parentId?: number | null) => Promise<void>;
   deleteCategory: (id: number) => Promise<void>;
   reorderCategories: (reordered: Category[]) => Promise<void>;
+  updateCategoryImage: (id: number, imageUrl: string | null) => Promise<void>;
 }
 
 const CategoriesContext = createContext<CategoriesContextValue | null>(null);
@@ -27,6 +29,7 @@ function mapRow(row: Record<string, unknown>): Category {
     label: row.label as string,
     sort_order: typeof row.sort_order === "number" ? row.sort_order : 0,
     parent_id: typeof row.parent_id === "number" ? row.parent_id : null,
+    image_url: (row.image_url as string | null) ?? null,
   };
 }
 
@@ -81,8 +84,19 @@ export function CategoriesProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const updateCategoryImage = async (id: number, imageUrl: string | null) => {
+    const { error: err } = await supabase
+      .from("categories")
+      .update({ image_url: imageUrl })
+      .eq("id", id);
+    if (err) throw new Error(err.message);
+    setCategories((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, image_url: imageUrl } : c))
+    );
+  };
+
   return (
-    <CategoriesContext.Provider value={{ categories, loading, error, addCategory, deleteCategory, reorderCategories }}>
+    <CategoriesContext.Provider value={{ categories, loading, error, addCategory, deleteCategory, reorderCategories, updateCategoryImage }}>
       {children}
     </CategoriesContext.Provider>
   );
