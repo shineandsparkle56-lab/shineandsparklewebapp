@@ -39,9 +39,17 @@ export function OrdersTab() {
   const [srResult, setSrResult] = useState<SrResult>(null);
   const [syncingAwbId, setSyncingAwbId] = useState<number | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [expandedItemsIds, setExpandedItemsIds] = useState<Set<number>>(new Set());
 
   const toggleExpand = (id: number) =>
     setExpandedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const toggleItems = (id: number) =>
+    setExpandedItemsIds((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
@@ -318,17 +326,39 @@ export function OrdersTab() {
                       )}
 
                       {/* Items */}
-                      {!isQuick && (
-                        <div className="flex flex-wrap gap-1.5">
-                          {order.items.map((item, i) => (
-                            <div key={i} className="flex items-center gap-1.5 bg-white border border-gray-100 rounded-lg px-2 py-1">
-                              <img src={imgUrl(item.product.image, "tiny")} alt={item.product.name} className="w-6 h-6 rounded object-cover shrink-0" />
-                              <span className="text-[11px] text-gray-700 font-medium max-w-[90px] truncate">{item.product.name}</span>
-                              <span className="text-[11px] text-gray-400 shrink-0">×{item.quantity}</span>
+                      {!isQuick && (() => {
+                        const ITEM_LIMIT = 6;
+                        const allItemsExpanded = expandedItemsIds.has(order.id);
+                        const visibleItems = allItemsExpanded ? order.items : order.items.slice(0, ITEM_LIMIT);
+                        const hiddenCount = order.items.length - ITEM_LIMIT;
+                        return (
+                          <div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {visibleItems.map((item, i) => (
+                                <div key={i} className="flex items-center gap-1.5 bg-white border border-gray-100 rounded-lg px-2 py-1">
+                                  <img src={imgUrl(item.product.image, "tiny")} alt={item.product.name} className="w-6 h-6 rounded object-cover shrink-0" />
+                                  <span className="text-[11px] text-gray-700 font-medium max-w-[90px] truncate">{item.product.name}</span>
+                                  <span className="text-[11px] text-gray-400 shrink-0">×{item.quantity}</span>
+                                </div>
+                              ))}
+                              {!allItemsExpanded && hiddenCount > 0 && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); toggleItems(order.id); }}
+                                  className="flex items-center gap-1 px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-500 text-[11px] font-semibold rounded-lg transition-colors">
+                                  +{hiddenCount} more
+                                </button>
+                              )}
                             </div>
-                          ))}
-                        </div>
-                      )}
+                            {allItemsExpanded && hiddenCount > 0 && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); toggleItems(order.id); }}
+                                className="mt-1.5 text-[11px] text-[#9B6FD1] hover:underline">
+                                Show less
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* Totals */}
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
@@ -377,16 +407,14 @@ export function OrdersTab() {
                           {order.sr_order_id ? "Shipped" : "Ship"}
                         </button>
                         {order.awb_code && (
-                          <button onClick={(e) => {
-                            e.stopPropagation();
-                            const url = `${window.location.origin}/track?awb=${order.awb_code}`;
-                            if (navigator.clipboard?.writeText) {
-                              navigator.clipboard.writeText(url).then(() => toast.show("Tracking link copied!")).catch(() => window.open(url, "_blank"));
-                            } else { window.open(url, "_blank"); }
-                          }}
+                          <a
+                            href={`/track?awb=${order.awb_code}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
                             className="flex items-center gap-1 px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-600 text-xs font-semibold rounded-lg transition-colors border border-sky-200">
                             <Link2 className="w-3.5 h-3.5" /> Track
-                          </button>
+                          </a>
                         )}
                         {order.sr_order_id && !order.awb_code && (
                           <button onClick={(e) => { e.stopPropagation(); handleSyncAwb(order); }}

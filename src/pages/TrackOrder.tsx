@@ -114,6 +114,18 @@ function fmtShort(raw: string | null | undefined): string {
   } catch { return raw; }
 }
 
+/** Split camelCase/PascalCase status labels into readable words e.g. "PickupFailed" → "Pickup Failed" */
+function splitLabel(label: string): string {
+  return label.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+}
+
+function getActivityLabel(act: TrackingActivity): string {
+  const raw = (act.activity && act.activity !== "NA") ? act.activity
+    : (act["sr-status-label"] && act["sr-status-label"] !== "NA") ? act["sr-status-label"]
+    : "";
+  return raw ? splitLabel(raw) : "Update";
+}
+
 type Tab = "status" | "items" | "details";
 
 // ── Component ───────────────────────────────────────────────────────────────
@@ -130,8 +142,9 @@ export function TrackOrder() {
   const [track,   setTrack]   = useState<ShipmentTrack | null>(null);
   const [order,   setOrder]   = useState<OrderRow | null>(null);
   const [tab,     setTab]     = useState<Tab>("status");
-  // show all timeline events or just top 3
   const [showAll, setShowAll] = useState(false);
+  const [showAllItems, setShowAllItems] = useState(false);
+  const ITEMS_LIMIT = 3;
 
   useEffect(() => { window.scrollTo({ top: 0 }); }, []);
   useEffect(() => { if (urlAwb) fetchAll(urlAwb); }, []); // eslint-disable-line
@@ -139,11 +152,11 @@ export function TrackOrder() {
   const fetchAll = async (code: string) => {
     const trimmed = code.trim();
     if (!trimmed) { setError("Please enter an AWB / tracking number."); return; }
-    setLoading(true); setError(""); setTrack(null); setOrder(null); setShowAll(false);
+    setLoading(true); setError(""); setTrack(null); setOrder(null); setShowAll(false); setShowAllItems(false);
     try {
       const [trackRes, { data: orderData }] = await Promise.all([
         fetch(`/api/track-shipment?awb=${encodeURIComponent(trimmed)}`),
-        supabase.from("orders").select("*").eq("awb_code", trimmed).maybeSingle(),
+        supabase.from("orders").select("id,items,subtotal,shipping_charge,cod_charge,grand_total,payment_mode,customer_name,customer_mobile,customer_address,customer_city,customer_state,pincode,created_at").eq("awb_code", trimmed).maybeSingle(),
       ]);
       const text = await trackRes.text();
       let tj: TrackingResponse;
@@ -357,14 +370,10 @@ export function TrackOrder() {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className={`text-xs font-semibold leading-tight ${idx === 0 ? "text-gray-900" : "text-gray-500"}`}>
-                                  {(act.activity && act.activity !== "NA")
-                                    ? act.activity
-                                    : (act["sr-status-label"] && act["sr-status-label"] !== "NA")
-                                      ? act["sr-status-label"]
-                                      : "Update"}
+                                  {getActivityLabel(act)}
                                 </p>
                                 <div className="flex flex-wrap items-center gap-x-2 mt-0.5">
-                                  {act.location && (
+                                  {act.location && act.location !== "NA" && (
                                     <span className="flex items-center gap-0.5 text-[10px] text-gray-400">
                                       <MapPin className="w-2.5 h-2.5" />{act.location}
                                     </span>
@@ -389,11 +398,14 @@ export function TrackOrder() {
                 {/* ── Items tab ── */}
                 {tab === "items" && (
                   <div className="p-4 space-y-2">
-                    {order.items?.map((item, i) => (
+                    {(showAllItems ? order.items : order.items.slice(0, ITEMS_LIMIT)).map((item, i) => (
                       <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2">
-                        <img src={imgUrl(item.product.images?.[0] ?? item.product.image, "tiny")}
+                        <img
+                          src={imgUrl(item.product.images?.[0] ?? item.product.image, "tiny")}
                           alt={item.product.name}
-                          className="w-11 h-11 rounded-lg object-cover shrink-0 border border-white shadow-sm" />
+                          loading="lazy"
+                          className="w-11 h-11 rounded-lg object-cover shrink-0 border border-white shadow-sm bg-gray-100"
+                        />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-semibold text-gray-800 truncate">{item.product.name}</p>
                           {item.variant_label && (
@@ -408,6 +420,15 @@ export function TrackOrder() {
                         </div>
                       </div>
                     ))}
+                    {order.items.length > ITEMS_LIMIT && (
+                      <button
+                        onClick={() => setShowAllItems(!showAllItems)}
+                        className="w-full text-xs text-[#9B6FD1] font-semibold py-2 rounded-xl hover:bg-[#F3EEFB] transition-colors border border-[#9B6FD1]/20">
+                        {showAllItems
+                          ? "Show less ↑"
+                          : `Show all ${order.items.length} items ↓`}
+                      </button>
+                    )}
                     {/* Order total */}
                     <div className="border-t border-gray-100 pt-2 space-y-1 text-xs text-gray-500 mt-1">
                       <div className="flex justify-between"><span>Subtotal</span><span>₹{order.subtotal}</span></div>
@@ -483,14 +504,10 @@ export function TrackOrder() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className={`text-xs font-semibold ${idx === 0 ? "text-gray-900" : "text-gray-500"}`}>
-                          {(act.activity && act.activity !== "NA")
-                            ? act.activity
-                            : (act["sr-status-label"] && act["sr-status-label"] !== "NA")
-                              ? act["sr-status-label"]
-                              : "Update"}
+                          {getActivityLabel(act)}
                         </p>
                         <div className="flex flex-wrap items-center gap-x-2 mt-0.5">
-                          {act.location && <span className="flex items-center gap-0.5 text-[10px] text-gray-400"><MapPin className="w-2.5 h-2.5" />{act.location}</span>}
+                          {act.location && act.location !== "NA" && <span className="flex items-center gap-0.5 text-[10px] text-gray-400"><MapPin className="w-2.5 h-2.5" />{act.location}</span>}
                           {act.date && <span className="text-[10px] text-gray-400">{fmtDate(act.date)}</span>}
                         </div>
                       </div>
