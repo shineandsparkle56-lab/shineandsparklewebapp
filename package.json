@@ -7,10 +7,16 @@
     "dev": "vite --host",
     "dev:api": "node --import tsx/esm dev-server.cjs",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:android": "npm run build && npx cap sync android",
+    "open:android": "npx cap open android"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.637.0",
+    "@capacitor/android": "6.2.0",
+    "@capacitor/cli": "6.2.0",
+    "@capacitor/core": "6.2.0",
+    "@capacitor/status-bar": "6.0.0",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",

@@ -47,6 +47,7 @@ const STEP_LABELS: Record<Step, string> = {
 
 import { useSettings } from "../hooks/useSettings";
 import moment from "moment";
+import { apiUrl } from "../lib/apiUrl";
 
 export function CartDrawer() {
   const { isCartOpen, setIsCartOpen, cart, removeFromCart, updateQuantity, subtotal, totalItems, shippingCredit } = useCart();
@@ -111,7 +112,7 @@ export function CartDrawer() {
     setShipping(null);
     setRateError("");
     try {
-      const res = await fetch("/api/shipping-rate", {
+      const res = await fetch(apiUrl("/api/shipping-rate"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Shine and Sparkle</string>
+    <string name="title_activity_main">Shine and Sparkle</string>
+    <string name="package_name">in.shineandsparkle.app</string>
+    <string name="custom_url_scheme">in.shineandsparkle.app</string>
+</resources>

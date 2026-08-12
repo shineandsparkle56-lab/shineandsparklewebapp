@@ -23,6 +23,7 @@ export function Navbar() {
       className={`fixed top-0 w-full bg-white/90 backdrop-blur-md z-40 border-b border-gray-100 shadow-sm transition-transform duration-300 ${
         scrollingDown ? "-translate-y-full" : "translate-y-0"
       }`}
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
       data-testid="navbar"
     >
       <div className="container mx-auto px-4 h-14 flex items-center justify-between lg:grid lg:grid-cols-3">

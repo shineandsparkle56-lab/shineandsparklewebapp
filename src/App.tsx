@@ -27,7 +27,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen w-full flex flex-col bg-white">
       <Navbar />
-      <main className="flex-1 pt-14">{children}</main>
+      <main className="flex-1 pt-14" style={{ paddingTop: "calc(3.5rem + env(safe-area-inset-top))" }}>{children}</main>
       <Footer />
       <CartDrawer />
       <FloatingCart />
@@ -37,7 +37,26 @@ function PageShell({ children }: { children: React.ReactNode }) {
 
 function AppRouter() {
   const [path] = useLocation();
-  const { showSearchBar, allCategoryImage } = useSettings();
+  const { showSearchBar, allCategoryImage, loading } = useSettings();
+
+  // ── Branded splash screen while settings load ──────────────────
+  if (loading) {
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-white z-50 gap-4">
+        <div className="flex flex-col items-center gap-3 animate-pulse">
+          <img src="/logo.png" alt="Shine and Sparkle" className="h-20 w-auto object-contain" />
+          <span className="font-serif text-2xl font-bold text-[#9B6FD1] tracking-tight">
+            Shine and Sparkle
+          </span>
+        </div>
+        <div className="flex gap-1.5 mt-2">
+          <span className="w-2 h-2 rounded-full bg-[#9B6FD1] animate-bounce" style={{ animationDelay: "0ms" }} />
+          <span className="w-2 h-2 rounded-full bg-[#9B6FD1] animate-bounce" style={{ animationDelay: "150ms" }} />
+          <span className="w-2 h-2 rounded-full bg-[#9B6FD1] animate-bounce" style={{ animationDelay: "300ms" }} />
+        </div>
+      </div>
+    );
+  }
 
   if (path === "/admin")           return <AdminLogin />;
   if (path === "/admin/dashboard") return <AdminPanel />;

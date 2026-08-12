@@ -391,7 +391,7 @@ export function ProductGrid({ showSearchBar = true, allCategoryImage }: { showSe
       </div>
 
       {/* ── Main section ──────────────────────────────────────────── */}
-      <section id="shop" className="bg-gray-50/50 pb-20" style={{ paddingTop: NAVBAR_H + filterBarHeight + 12 }}>
+      <section id="shop" className="bg-gray-50/50 pb-20" style={{ paddingTop: filterBarHeight + 8 }}>
         <div className="container mx-auto px-4">
 
           {/* First-page skeleton */}
