@@ -51,7 +51,7 @@ import { apiUrl } from "../lib/apiUrl";
 
 export function CartDrawer() {
   const { isCartOpen, setIsCartOpen, cart, removeFromCart, updateQuantity, subtotal, totalItems, shippingCredit } = useCart();
-  const { codEnabled } = useSettings();
+  const { codEnabled, minOrderValue } = useSettings();
 
   // Step state
   const [step, setStep] = useState<Step>(1);
@@ -98,7 +98,8 @@ export function CartDrawer() {
     customer.city.trim() !== "" &&
     customer.state.trim() !== "";
 
-  const canCheckout = customerComplete && shipping?.serviceable === true;
+  const belowMinOrder = minOrderValue > 0 && subtotal < minOrderValue;
+  const canCheckout = customerComplete && shipping?.serviceable === true && !belowMinOrder;
 
   // Reset step when drawer closes
   const handleOpenChange = (open: boolean) => {
@@ -687,13 +688,54 @@ export function CartDrawer() {
               {/* Step 1 footer */}
               {step === 1 && (
                 <div className="space-y-2">
+                  {/* Min order warning banner */}
+                  {belowMinOrder && (
+                    <div className="rounded-xl bg-[#F3EEFB] border border-[#9B6FD1]/30 px-3 py-3 space-y-2.5">
+                      {/* Title row */}
+                      <div className="flex items-center gap-2">
+                        <ShoppingBag className="w-4 h-4 text-[#9B6FD1] flex-shrink-0" />
+                        <p className="text-xs font-semibold text-[#6b3fa8] leading-none">
+                          Minimum order ₹{minOrderValue}
+                        </p>
+                      </div>
+                      {/* Progress bar */}
+                      <div className="h-1.5 rounded-full bg-[#9B6FD1]/20 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-[#9B6FD1] to-[#c084fc] transition-all duration-300"
+                          style={{ width: `${Math.min(100, Math.round((subtotal / minOrderValue) * 100))}%` }}
+                        />
+                      </div>
+                      <p className="text-[11px] text-[#7c52b8]">
+                        Add <span className="font-bold">₹{minOrderValue - subtotal}</span> more to unlock checkout.
+                      </p>
+                      {/* Browse button */}
+                      <button
+                        onClick={() => {
+                          setIsCartOpen(false);
+                          setTimeout(() => {
+                            const el = document.getElementById("products") ?? document.getElementById("shop");
+                            el?.scrollIntoView({ behavior: "smooth", block: "start" });
+                          }, 300);
+                        }}
+                        className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-[#9B6FD1] hover:bg-[#8a5fc0] active:scale-[0.98] text-white text-xs font-semibold transition-all shadow-sm shadow-purple-200"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Browse more products
+                      </button>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center py-1">
                     <span className="font-bold text-gray-900">Subtotal</span>
                     <span className="text-2xl font-bold font-serif text-gray-900" data-testid="cart-subtotal">₹{subtotal}</span>
                   </div>
                   <button
                     onClick={() => setStep(2)}
-                    className="w-full flex items-center justify-center gap-2 bg-[#9B6FD1] hover:bg-[#8a5fc0] active:scale-[0.98] text-white font-semibold text-base rounded-2xl py-4 transition-all shadow-md shadow-purple-200"
+                    disabled={belowMinOrder}
+                    className={`w-full flex items-center justify-center gap-2 font-semibold text-base rounded-2xl py-4 transition-all ${
+                      belowMinOrder
+                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                        : "bg-[#9B6FD1] hover:bg-[#8a5fc0] active:scale-[0.98] text-white shadow-md shadow-purple-200"
+                    }`}
                   >
                     Continue to Delivery
                     <ChevronRight className="w-5 h-5" />
@@ -745,7 +787,11 @@ export function CartDrawer() {
                   </div>
                   {!canCheckout && !checkingOut && (
                     <p className="text-center text-[11px] text-gray-400">
-                      {!customerComplete ? "Fill in all your details to continue" : "Check delivery availability first"}
+                      {belowMinOrder
+                        ? `Minimum order is ₹${minOrderValue}`
+                        : !customerComplete
+                          ? "Fill in all your details to continue"
+                          : "Check delivery availability first"}
                     </p>
                   )}
                 </div>

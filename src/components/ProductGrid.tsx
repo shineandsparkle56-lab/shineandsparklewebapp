@@ -55,7 +55,7 @@ export function ProductGrid({ showSearchBar = true, allCategoryImage }: { showSe
   const newCategories = useNewCategories();
 
   const [activeCategory, setActiveCategory] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [sortOrder, setSortOrder] = useState<SortOrder>("default");
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
