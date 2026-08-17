@@ -13,6 +13,16 @@ const CATEGORY_MAP: Record<string, string> = {
   earrings:   "191",   // Jewelry > Earrings
   necklaces:  "194",   // Jewelry > Necklaces
   bracelets:  "189",   // Jewelry > Bracelets
+  pendants:   "194",   // Jewelry > Necklaces (closest match for pendants)
+};
+
+// Human-readable product_type labels — used for WhatsApp Collections filtering
+const PRODUCT_TYPE_MAP: Record<string, string> = {
+  rings:      "Rings",
+  earrings:   "Earrings",
+  necklaces:  "Necklaces",
+  bracelets:  "Bracelets",
+  pendants:   "Pendants",
 };
 
 function escapeCsv(value: string | number | undefined | null): string {
@@ -84,6 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       "google_product_category",
       "sale_price",
       "additional_image_link",
+      "product_type",   // used for WhatsApp Collections filtering
     ];
 
     const rows: string[] = [headers.join(",")];
@@ -125,6 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             escapeCsv(googleCategory),
             escapeCsv(salePriceFormatted),
             escapeCsv(additionalImages),
+            escapeCsv(PRODUCT_TYPE_MAP[product.category?.toLowerCase()] ?? product.category),
           ];
           rows.push(row.join(","));
         }
@@ -156,6 +168,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           escapeCsv(googleCategory),
           escapeCsv(salePriceFormatted),
           escapeCsv(additionalImages),
+          escapeCsv(PRODUCT_TYPE_MAP[product.category?.toLowerCase()] ?? product.category),
         ];
         rows.push(row.join(","));
       }
