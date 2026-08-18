@@ -2,7 +2,45 @@ import { useState, useEffect } from "react";
 import {
   Plus, Trash2, ShoppingBag, Download, FileText, Loader2,
   Pencil, Truck, X, CheckCircle2, Zap, Link2, RefreshCw, ChevronDown,
+  MapPin, Calendar, Clock,
 } from "lucide-react";
+
+// ── Tracking types ─────────────────────────────────────────────────────────
+interface TrackingActivity {
+  date: string;
+  activity: string;
+  location: string;
+  "sr-status"?: string;
+  "sr-status-label"?: string;
+}
+interface TrackingInfo {
+  status: "idle" | "loading" | "done" | "error";
+  currentStatus?: string;
+  edd?: string | null;          // estimated delivery date
+  lastActivity?: TrackingActivity | null;
+  error?: string;
+}
+
+function fmtTrackDate(raw: string | null | undefined): string {
+  if (!raw) return "";
+  try {
+    return new Date(raw).toLocaleString("en-IN", {
+      day: "2-digit", month: "short", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  } catch { return raw; }
+}
+
+function trackStatusColor(status: string): string {
+  const s = status.toLowerCase();
+  if (s.includes("delivered") && !s.includes("undeliver")) return "text-green-700 bg-green-50 border-green-200";
+  if (s.includes("out for delivery")) return "text-blue-700 bg-blue-50 border-blue-200";
+  if (s.includes("rto") || s.includes("return") || s.includes("undeliver") || s.includes("cancelled") || s.includes("lost"))
+    return "text-red-700 bg-red-50 border-red-200";
+  if (s.includes("transit") || s.includes("picked") || s.includes("hub") || s.includes("dispatch"))
+    return "text-[#9B6FD1] bg-[#F3EEFB] border-[#9B6FD1]/30";
+  return "text-amber-700 bg-amber-50 border-amber-200";
+}
 import { useProducts } from "../../context/ProductsContext";
 import { supabase } from "../../lib/supabase";
 import { generateOrderPDF } from "../../utils/generateOrderPDF";
@@ -40,6 +78,8 @@ export function OrdersTab() {
   const [syncingAwbId, setSyncingAwbId] = useState<number | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [expandedItemsIds, setExpandedItemsIds] = useState<Set<number>>(new Set());
+  // tracking info keyed by order.id
+  const [trackingMap, setTrackingMap] = useState<Record<number, TrackingInfo>>({});
 
   const toggleExpand = (id: number) =>
     setExpandedIds((prev) => {
@@ -47,6 +87,44 @@ export function OrdersTab() {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+
+  /** Fetch live tracking data for an order that has an AWB code. */
+  const fetchTracking = async (order: OrderRow) => {
+    if (!order.awb_code) return;
+    setTrackingMap((prev) => ({ ...prev, [order.id]: { status: "loading" } }));
+    try {
+      const res  = await fetch(`/api/track-shipment?awb=${encodeURIComponent(order.awb_code)}`);
+      const text = await res.text();
+      let tj: Record<string, unknown>;
+      try { tj = JSON.parse(text); } catch { throw new Error("Unexpected tracking response."); }
+      if (!res.ok) throw new Error((tj as { error?: string }).error ?? `Error ${res.status}`);
+
+      const td     = (tj.tracking_data ?? tj) as Record<string, unknown>;
+      const ships  = (td.shipment_track ?? []) as { current_status?: string; edd?: string | null; shipment_track_activities?: TrackingActivity[] }[];
+      if (!ships.length) throw new Error("No tracking info found.");
+
+      const ship        = ships[0];
+      const activities: TrackingActivity[] = ship.shipment_track_activities
+        ?? (td.shipment_track_activities as TrackingActivity[] | undefined)
+        ?? [];
+      const lastActivity = activities.length ? activities[0] : null;
+
+      setTrackingMap((prev) => ({
+        ...prev,
+        [order.id]: {
+          status:       "done",
+          currentStatus: ship.current_status ?? "",
+          edd:           ship.edd ?? null,
+          lastActivity,
+        },
+      }));
+    } catch (err) {
+      setTrackingMap((prev) => ({
+        ...prev,
+        [order.id]: { status: "error", error: err instanceof Error ? err.message : "Failed to fetch tracking." },
+      }));
+    }
+  };
 
   const toggleItems = (id: number) =>
     setExpandedItemsIds((prev) => {
@@ -272,7 +350,13 @@ export function OrdersTab() {
                   {/* ── Collapsed header (always visible) ── */}
                   <div
                     className="px-4 pt-3 pb-3 cursor-pointer select-none"
-                    onClick={() => toggleExpand(order.id)}
+                    onClick={() => {
+                      toggleExpand(order.id);
+                      // Auto-fetch tracking on first expand if order has AWB
+                      if (!expandedIds.has(order.id) && order.awb_code && !trackingMap[order.id]) {
+                        fetchTracking(order);
+                      }
+                    }}
                   >
                     {/* Row 1: ID · Date · Badges · Total · Chevron */}
                     <div className="flex items-center justify-between gap-2">
@@ -324,6 +408,84 @@ export function OrdersTab() {
                       {order.customer_address && (
                         <p className="text-[11px] text-gray-400">{order.customer_address}, {order.customer_city}, {order.customer_state} — {order.pincode}</p>
                       )}
+
+                      {/* ── Delivery Status Panel ── */}
+                      {order.awb_code && (() => {
+                        const ti = trackingMap[order.id];
+                        return (
+                          <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Delivery Status</span>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); fetchTracking(order); }}
+                                disabled={ti?.status === "loading"}
+                                className="flex items-center gap-1 text-[10px] text-[#9B6FD1] hover:underline disabled:opacity-50"
+                              >
+                                {ti?.status === "loading"
+                                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                                  : <RefreshCw className="w-3 h-3" />}
+                                {ti?.status === "loading" ? "Fetching…" : "Refresh"}
+                              </button>
+                            </div>
+
+                            {(!ti || ti.status === "idle") && (
+                              <p className="text-[11px] text-gray-400">Click Refresh to load live status.</p>
+                            )}
+
+                            {ti?.status === "loading" && (
+                              <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading tracking info…
+                              </div>
+                            )}
+
+                            {ti?.status === "error" && (
+                              <p className="text-[11px] text-red-500">{ti.error}</p>
+                            )}
+
+                            {ti?.status === "done" && ti.currentStatus && (
+                              <div className="space-y-2">
+                                {/* Current status badge */}
+                                <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg border ${trackStatusColor(ti.currentStatus)}`}>
+                                  <Truck className="w-3 h-3" />
+                                  {ti.currentStatus}
+                                </span>
+
+                                <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                                  {/* EDD */}
+                                  {ti.edd && (
+                                    <div className="flex items-center gap-1 text-[11px] text-gray-600">
+                                      <Calendar className="w-3.5 h-3.5 text-[#9B6FD1] shrink-0" />
+                                      <span>Est. delivery: <strong className="text-gray-800">{fmtTrackDate(ti.edd)}</strong></span>
+                                    </div>
+                                  )}
+
+                                  {/* Last activity */}
+                                  {ti.lastActivity && (
+                                    <div className="flex items-start gap-1 text-[11px] text-gray-600">
+                                      <Clock className="w-3.5 h-3.5 text-[#9B6FD1] shrink-0 mt-0.5" />
+                                      <div>
+                                        <span className="font-medium text-gray-800">
+                                          {ti.lastActivity.activity && ti.lastActivity.activity !== "NA"
+                                            ? ti.lastActivity.activity
+                                            : ti.lastActivity["sr-status-label"] ?? "Update"}
+                                        </span>
+                                        {ti.lastActivity.location && ti.lastActivity.location !== "NA" && (
+                                          <span className="flex items-center gap-0.5 text-gray-400 mt-0.5">
+                                            <MapPin className="w-2.5 h-2.5 shrink-0" /> {ti.lastActivity.location}
+                                          </span>
+                                        )}
+                                        {ti.lastActivity.date && (
+                                          <span className="text-gray-400 block">{fmtTrackDate(ti.lastActivity.date)}</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* Items */}
                       {!isQuick && (() => {

@@ -9,20 +9,24 @@ const supabase = createClient(
 // Map your category slugs to Google Product Category IDs
 // https://www.google.com/basepages/producttype/taxonomy-with-ids.en-US.txt
 const CATEGORY_MAP: Record<string, string> = {
-  rings:      "188",   // Jewelry > Rings
-  earrings:   "191",   // Jewelry > Earrings
-  necklaces:  "194",   // Jewelry > Necklaces
-  bracelets:  "189",   // Jewelry > Bracelets
-  pendants:   "194",   // Jewelry > Necklaces (closest match for pendants)
+  rings:           "188",   // Jewelry > Rings
+  earrings:        "191",   // Jewelry > Earrings
+  necklaces:       "194",   // Jewelry > Necklaces
+  bracelets:       "189",   // Jewelry > Bracelets
+  pendants:        "194",   // Jewelry > Necklaces (closest match for pendants)
+  jhumka:          "191",   // Jhumka = Earrings
+  "cuff-bracelets":"189",   // Cuff bracelets = Bracelets
 };
 
 // Human-readable product_type labels — used for WhatsApp Collections filtering
 const PRODUCT_TYPE_MAP: Record<string, string> = {
-  rings:      "Rings",
-  earrings:   "Earrings",
-  necklaces:  "Necklaces",
-  bracelets:  "Bracelets",
-  pendants:   "Pendants",
+  rings:           "Rings",
+  earrings:        "Earrings",
+  necklaces:       "Necklaces",
+  bracelets:       "Bracelets",
+  pendants:        "Pendants",
+  jhumka:          "Earrings",       // Jhumkas appear in Earrings collection
+  "cuff-bracelets":"Bracelets",      // Cuffs appear in Bracelets collection
 };
 
 function escapeCsv(value: string | number | undefined | null): string {
