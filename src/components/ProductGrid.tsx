@@ -108,7 +108,7 @@ function FestivalCarousel({ festivals }: { festivals: Festival[] }) {
 
   return (
     <div
-      className="px-3 sm:px-4 pt-3 pb-1"
+      className="px-3 sm:px-4 py-1.5"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
@@ -528,7 +528,7 @@ export function ProductGrid({ allCategoryImage }: { allCategoryImage?: string | 
           <FestivalCarousel festivals={activeFestivals} />
         )}
 
-        <div className="px-3 sm:px-4">
+        <div className="px-3 sm:px-4 pt-1.5">
           {loading && (
             <div className={gridClass}>
               {Array.from({ length: 8 }).map((_, i) => (

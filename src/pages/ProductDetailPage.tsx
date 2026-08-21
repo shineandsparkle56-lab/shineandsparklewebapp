@@ -403,7 +403,7 @@ export function ProductDetailPage({ productId }: { productId: number }) {
   return (
     <>
       {/* Back bar */}
-      <div className="sticky top-14 z-30 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-4 h-11 flex items-center gap-3">
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-4 h-11 flex items-center gap-3">
         <button
           onClick={() => window.history.length > 1 ? window.history.back() : navigate("/")}
           className="flex items-center gap-1.5 text-gray-500 hover:text-[#9B6FD1] text-sm font-medium transition-colors"
@@ -434,7 +434,7 @@ export function ProductDetailPage({ productId }: { productId: number }) {
         <div className="flex flex-col md:flex-row gap-8 lg:gap-12 items-start">
 
           {/* ── LEFT: Image gallery ───────────────────────────── */}
-          <div className="w-full md:w-1/2 md:sticky md:top-28 flex flex-col gap-3">
+          <div className="w-full md:w-1/2 md:sticky md:top-11 flex flex-col gap-3">
 
             {/* Main image */}
             <div

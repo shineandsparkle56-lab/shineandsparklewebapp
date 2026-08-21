@@ -283,18 +283,23 @@ export function FestivalStorePage({ slug }: { slug: string }) {
               style={{ maxHeight: 280, minHeight: 160 }}
             />
             {/* Gradient overlay with text */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent
-              flex flex-col justify-end px-5 pb-5 sm:px-8 sm:pb-7">
+            <div className="absolute inset-0 flex flex-col justify-end px-5 pb-5 sm:px-8 sm:pb-7"
+              style={{
+                background: "linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.45) 40%, rgba(0,0,0,0.15) 70%, transparent 100%)",
+              }}>
               <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-[10px] font-bold text-white/60 uppercase tracking-[0.15em]">
+                <span className="text-[10px] font-bold text-white/80 uppercase tracking-[0.15em]"
+                  style={{ textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>
                   Festival Store
                 </span>
               </div>
-              <h1 className="font-serif text-2xl sm:text-4xl font-bold text-white leading-tight drop-shadow">
+              <h1 className="font-serif text-2xl sm:text-4xl font-bold text-white leading-tight"
+                style={{ textShadow: "0 2px 8px rgba(0,0,0,0.7)" }}>
                 {name}
               </h1>
               {tagline && (
-                <p className="text-white/80 text-sm sm:text-base mt-1 leading-snug drop-shadow">
+                <p className="text-white text-sm sm:text-base mt-1 leading-snug font-medium"
+                  style={{ textShadow: "0 1px 6px rgba(0,0,0,0.7)" }}>
                   {tagline}
                 </p>
               )}
