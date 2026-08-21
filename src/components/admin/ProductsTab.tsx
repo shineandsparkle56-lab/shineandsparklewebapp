@@ -133,6 +133,7 @@ export function ProductsTab() {
         variants: cleanedVariants,
         base_variant_label: form.base_variant_label.trim() || undefined,
         base_variant_color: form.base_variant_color.trim() || undefined,
+        tags: [],
       });
       setForm({ ...EMPTY_FORM, category: firstCat });
       setAddFormVariants([]); img.clear();

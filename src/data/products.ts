@@ -28,5 +28,6 @@ export interface Product {
   variants: ProductVariant[]; // [] means no variants — product works as before
   base_variant_label?: string; // label for the implicit "base" option when variants exist, e.g. "Gold"
   base_variant_color?: string; // hex swatch color for the base option, e.g. "#C9A96E" (Gold)
+  tags: string[];          // festival / collection tags e.g. ["navratri", "diwali"]
   created_at?: string;     // ISO timestamp — used to show "New" badge
 }

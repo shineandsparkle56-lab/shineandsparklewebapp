@@ -1,11 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutGrid, List, ArrowUpDown, Check, Search, X } from "lucide-react";
+import { LayoutGrid, List, ArrowUpDown, Check, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
 import { useCategories } from "../context/CategoriesContext";
 import { useScroll } from "../context/ScrollContext";
 import { useInfiniteProducts, SortOrder } from "../hooks/useInfiniteProducts";
 import { useNewCategories } from "../hooks/useNewCategories";
+import { useFestivals } from "../context/FestivalsContext";
+import type { Festival } from "../context/FestivalsContext";
 import { ProductCard } from "./ProductCard";
+
 
 type ViewMode = "grid" | "list";
 
@@ -49,10 +52,172 @@ function LoadMoreSpinner() {
   );
 }
 
-export function ProductGrid({ showSearchBar = true, allCategoryImage }: { showSearchBar?: boolean; allCategoryImage?: string | null }) {
+// ── Festival store carousel ───────────────────────────────────
+// Shows 1 card when there's only 1 festival, auto-slides when there are multiple.
+const FEST_AUTO_PLAY_MS = 4500;
+
+function FestivalCarousel({ festivals }: { festivals: Festival[] }) {
+  const [index,  setIndex]  = useState(0);
+  const [paused, setPaused] = useState(false);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const isDragging  = useRef(false);
+  const [dragOffset, setDragOffset] = useState(0);
+  const count = festivals.length;
+
+  const prev = () => setIndex((i) => (i - 1 + count) % count);
+  const next = () => setIndex((i) => (i + 1) % count);
+
+  useEffect(() => { setIndex(0); }, [count]);
+
+  useEffect(() => {
+    if (count <= 1 || paused) return;
+    const t = setInterval(next, FEST_AUTO_PLAY_MS);
+    return () => clearInterval(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [count, paused, index]);
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    isDragging.current  = false;
+    setDragOffset(0);
+    setPaused(true);
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const dx = e.touches[0].clientX - touchStartX.current;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    if (!isDragging.current) {
+      if (Math.abs(dx) < Math.abs(dy)) return;
+      isDragging.current = true;
+    }
+    const atEdge = (index === 0 && dx > 0) || (index === count - 1 && dx < 0);
+    setDragOffset(atEdge ? dx * 0.2 : dx);
+  };
+  const onTouchEnd = () => {
+    if (isDragging.current) {
+      if (dragOffset < -50) next();
+      else if (dragOffset > 50) prev();
+    }
+    setDragOffset(0);
+    isDragging.current = false;
+    touchStartX.current = null;
+    setPaused(false);
+  };
+
+  return (
+    <div
+      className="px-3 sm:px-4 pt-3 pb-1"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
+      <div
+        className="relative overflow-hidden rounded-2xl shadow-md select-none"
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        {/* Sliding strip */}
+        <div
+          className="flex"
+          style={{
+            transform:  `translateX(calc(${-index * 100}% + ${dragOffset}px))`,
+            transition: dragOffset !== 0 ? "none" : "transform 0.45s cubic-bezier(0.25, 1, 0.5, 1)",
+            willChange: "transform",
+          }}
+        >
+          {festivals.map((fest) => (
+            <a
+              key={fest.id}
+              href={`/festival/${fest.slug}`}
+              className="relative flex-shrink-0 w-full flex items-center justify-between overflow-hidden hover:opacity-95 transition-opacity"
+              style={{ background: fest.banner_bg, minHeight: 88 }}
+              aria-label={`Shop ${fest.name}`}
+              onClick={(e) => { if (isDragging.current) e.preventDefault(); }}
+            >
+              {/* Background image */}
+              {fest.banner_url && (
+                <img
+                  src={fest.banner_url}
+                  alt=""
+                  aria-hidden="true"
+                  draggable={false}
+                  className="absolute inset-0 w-full h-full object-cover opacity-25"
+                />
+              )}
+              {/* Text */}
+              <div className="relative z-10 px-5 py-4 flex-1">
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <Sparkles className="w-3.5 h-3.5 text-white/80" />
+                  <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">
+                    Festival Store
+                  </span>
+                </div>
+                <p className="font-serif font-bold text-white text-lg leading-tight drop-shadow">
+                  {fest.name}
+                </p>
+                {fest.tagline && (
+                  <p className="text-white/80 text-xs mt-0.5 leading-snug">{fest.tagline}</p>
+                )}
+              </div>
+              {/* CTA */}
+              <div className="relative z-10 pr-4 shrink-0">
+                <span className="inline-flex items-center gap-1.5 bg-white/20 text-white text-xs font-bold px-3.5 py-2 rounded-full border border-white/30 backdrop-blur-sm">
+                  Shop Now →
+                </span>
+              </div>
+            </a>
+          ))}
+        </div>
+
+        {/* Desktop arrows — only when multiple */}
+        {count > 1 && (
+          <>
+            <button
+              onClick={prev}
+              className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 z-20
+                w-7 h-7 items-center justify-center rounded-full bg-black/30 hover:bg-black/50 text-white transition-colors"
+              aria-label="Previous festival"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={next}
+              className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 z-20
+                w-7 h-7 items-center justify-center rounded-full bg-black/30 hover:bg-black/50 text-white transition-colors"
+              aria-label="Next festival"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Dot indicators — only when multiple */}
+      {count > 1 && (
+        <div className="flex items-center justify-center gap-1.5 mt-2">
+          {festivals.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => { setIndex(i); setPaused(true); setTimeout(() => setPaused(false), FEST_AUTO_PLAY_MS); }}
+              className={`rounded-full transition-all duration-300 ${
+                i === index ? "w-5 h-1.5 bg-[#9B6FD1]" : "w-1.5 h-1.5 bg-gray-300 hover:bg-gray-400"
+              }`}
+              aria-label={`Go to ${festivals[i].name}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function ProductGrid({ allCategoryImage }: { allCategoryImage?: string | null }) {
   const { categories } = useCategories();
   const { scrollingDown } = useScroll();
   const newCategories = useNewCategories();
+  const { activeFestivals } = useFestivals();
 
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
@@ -61,9 +226,6 @@ export function ProductGrid({ showSearchBar = true, allCategoryImage }: { showSe
   const sortRef = useRef<HTMLDivElement>(null);
   const filterBarRef = useRef<HTMLDivElement>(null);
   const [filterBarHeight, setFilterBarHeight] = useState(96);
-  const [searchInput, setSearchInput] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Category hierarchy ────────────────────────────────────────
   const parentCats = categories.filter((c) => c.parent_id === null);
@@ -99,7 +261,7 @@ export function ProductGrid({ showSearchBar = true, allCategoryImage }: { showSe
 
   // ── Infinite scroll data ──────────────────────────────────────
   const { products, loading, loadingMore, hasMore, error, loadMore } =
-    useInfiniteProducts(filterSlug, sortOrder, searchTerm);
+    useInfiniteProducts(filterSlug, sortOrder, "");
 
   // Keep a stable ref to loadMore so the observer callback never goes stale.
   const loadMoreRef = useRef(loadMore);
@@ -140,24 +302,10 @@ export function ProductGrid({ showSearchBar = true, allCategoryImage }: { showSe
     return () => observer.disconnect();
   }, []);
 
-  // ── Debounce search input 350ms ───────────────────────────────
-  const handleSearchChange = (val: string) => {
-    setSearchInput(val);
-    if (searchDebounce.current) clearTimeout(searchDebounce.current);
-    searchDebounce.current = setTimeout(() => setSearchTerm(val.trim()), 350);
-  };
-
-  const clearSearch = () => {
-    setSearchInput("");
-    setSearchTerm("");
-    if (searchDebounce.current) clearTimeout(searchDebounce.current);
-  };
-
-
   const gridClass =
     viewMode === "list"
-      ? "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4 lg:gap-5"
-      : "grid grid-cols-2 gap-2.5 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4 lg:gap-5";
+      ? "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 lg:gap-5"
+      : "grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-5 lg:gap-4";
 
   return (
     <>
@@ -173,25 +321,7 @@ export function ProductGrid({ showSearchBar = true, allCategoryImage }: { showSe
         }}
         data-testid="category-filter-bar"
       >
-        <div className="container mx-auto px-4 py-2">
-          {/* Search bar */}
-          {showSearchBar && (
-            <div className="relative mb-2">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-              <input
-                type="text"
-                value={searchInput}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder="Search products"
-                className="w-full pl-9 pr-8 py-1.5 text-sm rounded-full bg-[#F3EEFB] border border-transparent focus:border-[#9B6FD1] focus:outline-none focus:bg-white transition-colors placeholder-gray-400"
-              />
-              {searchInput && (
-                <button onClick={clearSearch} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          )}
+        <div className="px-3 sm:px-4 py-2">
           {/* Row 1 — Parent category image tiles */}
           <div className="flex items-center gap-4 overflow-x-auto scrollbar-none pt-1 pb-2 pl-2 pr-1"
                style={{ WebkitOverflowScrolling: "touch" }}>
@@ -392,9 +522,13 @@ export function ProductGrid({ showSearchBar = true, allCategoryImage }: { showSe
 
       {/* ── Main section ──────────────────────────────────────────── */}
       <section id="shop" className="bg-gray-50/50 pb-20" style={{ paddingTop: filterBarHeight + 8 }}>
-        <div className="container mx-auto px-4">
 
-          {/* First-page skeleton */}
+        {/* ── Festival store carousel ───────────────────────────── */}
+        {activeFestivals.length > 0 && (
+          <FestivalCarousel festivals={activeFestivals} />
+        )}
+
+        <div className="px-3 sm:px-4">
           {loading && (
             <div className={gridClass}>
               {Array.from({ length: 8 }).map((_, i) => (

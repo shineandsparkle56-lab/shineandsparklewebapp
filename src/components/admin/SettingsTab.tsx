@@ -3,7 +3,7 @@ import { Settings } from "lucide-react";
 import { useSettings } from "../../hooks/useSettings";
 
 export function SettingsTab() {
-  const { codEnabled, setCodEnabled, showSearchBar, setShowSearchBar, minOrderValue, setMinOrderValue, loading } = useSettings();
+  const { codEnabled, setCodEnabled, minOrderValue, setMinOrderValue, loading } = useSettings();
 
   // Local input state so the user can type freely before saving
   const [minOrderInput, setMinOrderInput] = useState("");
@@ -53,19 +53,6 @@ export function SettingsTab() {
             </p>
           </div>
           <Toggle checked={codEnabled} onChange={() => setCodEnabled(!codEnabled)} disabled={loading} />
-        </div>
-
-        {/* Search bar */}
-        <div className="flex items-center justify-between gap-4 p-4 rounded-2xl border border-gray-100 bg-gray-50">
-          <div>
-            <p className="text-sm font-semibold text-gray-800">Product Search Bar</p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {showSearchBar
-                ? "Search bar is visible — customers can search products on the storefront."
-                : "Search bar is hidden — the product search field won't appear on the storefront."}
-            </p>
-          </div>
-          <Toggle checked={showSearchBar} onChange={() => setShowSearchBar(!showSearchBar)} disabled={loading} />
         </div>
 
         {/* Minimum order value */}

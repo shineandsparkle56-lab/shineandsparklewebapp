@@ -10,11 +10,12 @@ import { SettingsTab }   from "../components/admin/SettingsTab";
 import { PostEditor }         from "../components/admin/PostEditor";
 import { ReportTab }          from "../components/admin/ReportTab";
 import { ShiprocketPDFPrinter } from "../components/admin/ShiprocketPDFPrinter";
+import { FestivalsTab } from "../components/admin/FestivalsTab";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, X } from "lucide-react";
 import { useToast } from "../hooks/useToast";
 
-type Tab = "products" | "orders" | "categories" | "post" | "report" | "label" | "settings";
+type Tab = "products" | "orders" | "categories" | "post" | "report" | "label" | "settings" | "festivals";
 
 const TABS: { id: Tab; icon: React.ElementType; label: string }[] = [
   { id: "products",   icon: Package,    label: "Products"    },
@@ -23,6 +24,7 @@ const TABS: { id: Tab; icon: React.ElementType; label: string }[] = [
   { id: "post",       icon: ImageIcon,  label: "Post"        },
   { id: "report",     icon: BarChart3,  label: "Report"      },
   { id: "label",      icon: Printer,    label: "Label Print" },
+  { id: "festivals",  icon: Sparkles,   label: "Festivals"   },
   { id: "settings",   icon: Settings,   label: "Settings"    },
 ];
 
@@ -89,6 +91,7 @@ export function AdminPanel() {
         {activeTab === "post"       && <PostEditor />}
         {activeTab === "report"     && <ReportTab />}
         {activeTab === "label"      && <ShiprocketPDFPrinter />}
+        {activeTab === "festivals"  && <FestivalsTab />}
         {activeTab === "settings"   && <SettingsTab />}
       </div>
 

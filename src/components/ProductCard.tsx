@@ -1,9 +1,9 @@
 import { useState, useRef } from "react";
+import { useLocation } from "wouter";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Product, variantCover } from "../data/products";
 import { Button } from "./ui/button";
 import { useCart } from "../context/CartContext";
-import { ProductDetailModal } from "./ProductDetailModal";
 import { imgUrl } from "../lib/imgUrl";
 
 interface ProductCardProps {
@@ -13,8 +13,8 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, index, view = "grid" }: ProductCardProps) {
+  const [, navigate] = useLocation();
   const { addToCart, setIsCartOpen } = useCart();
-  const [modalOpen, setModalOpen] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
   const [stockMsg, setStockMsg] = useState(false);
   const stockMsgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -22,7 +22,7 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
   // ── Variant selection state ───────────────────────────────────
   const hasVariants = (product.variants?.length ?? 0) > 0;
 
-  // allVariants mirrors ProductDetailModal logic: base first, then real variants
+  // allVariants: base first, then real variants
   const allVariants = hasVariants ? [
     {
       id: "__base",
@@ -232,11 +232,11 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
             <div
               className="absolute inset-0 flex"
               style={stripStyle}
-              onClick={() => !isDragging.current && setModalOpen(true)}
+              onClick={() => !isDragging.current && navigate(`/product/${product.id}`)}
               role="button"
               aria-label={`View details for ${product.name}`}
               tabIndex={0}
-              onKeyDown={(e) => e.key === "Enter" && setModalOpen(true)}
+              onKeyDown={(e) => e.key === "Enter" && navigate(`/product/${product.id}`)}
             >
               {images.map((src, i) => (
                 <div key={src} className="relative flex-shrink-0 w-full h-full">
@@ -358,7 +358,6 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
           </div>
         )}
 
-        <ProductDetailModal product={modalOpen ? product : null} onClose={() => setModalOpen(false)} />
       </>
     );
   }
@@ -384,11 +383,11 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
               transition: dragOffset !== 0 ? "none" : "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
               willChange: "transform",
             }}
-            onClick={() => !isDragging.current && setModalOpen(true)}
+            onClick={() => !isDragging.current && navigate(`/product/${product.id}`)}
             role="button"
             aria-label={`View details for ${product.name}`}
             tabIndex={0}
-            onKeyDown={(e) => e.key === "Enter" && setModalOpen(true)}
+            onKeyDown={(e) => e.key === "Enter" && navigate(`/product/${product.id}`)}
           >
             {images.map((src, i) => (
               <div key={src} className="relative flex-shrink-0 w-full h-full">
@@ -499,7 +498,7 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
       {/* Desktop */}
       <div className="hidden sm:flex flex-col h-full group bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100" data-testid={`card-product-${product.id}`}>
         <div className="relative aspect-square overflow-hidden bg-gray-50">
-          <button className="absolute inset-0 w-full h-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-[#9B6FD1]" onClick={() => setModalOpen(true)} aria-label={`View details for ${product.name}`}>
+          <button className="absolute inset-0 w-full h-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-[#9B6FD1]" onClick={() => navigate(`/product/${product.id}`)} aria-label={`View details for ${product.name}`}>
             <ImageStack />
           </button>
 
@@ -579,7 +578,6 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
         </div>
       </div>
 
-      <ProductDetailModal product={modalOpen ? product : null} onClose={() => setModalOpen(false)} />
     </>
   );
 }

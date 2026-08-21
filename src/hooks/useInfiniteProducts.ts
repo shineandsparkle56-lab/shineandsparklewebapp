@@ -26,11 +26,18 @@ function mapRow(row: Record<string, unknown>): Product {
     variants: Array.isArray(row.variants) ? (row.variants as import("../data/products").ProductVariant[]) : [],
     base_variant_label: typeof row.base_variant_label === "string" ? row.base_variant_label : undefined,
     base_variant_color: typeof row.base_variant_color === "string" ? row.base_variant_color : undefined,
+    tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
     created_at: row.created_at as string | undefined,
   };
 }
 
-export function useInfiniteProducts(category: string | string[], sort: SortOrder, search = "") {
+export function useInfiniteProducts(
+  category: string | string[],
+  sort: SortOrder,
+  search = "",
+  /** When set, filters products where tags @> [festivalTag] instead of by category */
+  festivalTag?: string,
+) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -66,6 +73,9 @@ export function useInfiniteProducts(category: string | string[], sort: SortOrder
       } else if (searchTerm) {
         // Name search — case-insensitive contains
         query = query.ilike("name", `%${searchTerm}%`);
+      } else if (festivalTag) {
+        // Festival tag filter — products where tags array contains the festival tag
+        query = query.contains("tags", [festivalTag]);
       } else {
         // Category filter only when not searching
         const catFilter = category;
@@ -104,7 +114,7 @@ export function useInfiniteProducts(category: string | string[], sort: SortOrder
       setLoading(false);
       setLoadingMore(false);
     },
-    [categoryKey, sort, searchTerm, searchId]
+    [categoryKey, sort, searchTerm, searchId, festivalTag] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   useEffect(() => {

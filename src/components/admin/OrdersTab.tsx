@@ -194,7 +194,7 @@ export function OrdersTab() {
           price: i.product.price, originalPrice: i.product.price,
           discount: 0, image: i.product.image,
           images: i.product.images ?? [i.product.image],
-          description: "", stock: 99, shipping_credit: 0, wholesale_price: 0, variants: [],
+          description: "", stock: 99, shipping_credit: 0, wholesale_price: 0, variants: [], tags: [],
         },
         quantity: i.quantity,
         variantId:    (i as typeof i & { variant_id?: string }).variant_id ?? undefined,

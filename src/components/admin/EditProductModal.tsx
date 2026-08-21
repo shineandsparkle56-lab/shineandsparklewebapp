@@ -1,9 +1,10 @@
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Pencil, X, CheckCircle2, ChevronDown, Image, Plus, Trash2 } from "lucide-react";
+import { Pencil, X, CheckCircle2, ChevronDown, Image, Plus, Trash2, Tag } from "lucide-react";
 import { Product, ProductVariant, variantCover } from "../../data/products";
 import { useCategories } from "../../context/CategoriesContext";
 import { useProducts } from "../../context/ProductsContext";
+import { useFestivals } from "../../context/FestivalsContext";
 import { useImageItems } from "../../hooks/useImageItems";
 import { DraggableImageGrid } from "../ui/DraggableImageGrid";
 import { compressToWebP } from "../../utils/compressToWebP";
@@ -183,6 +184,7 @@ function VariantRow({ variant, productName, onChange, onRemove }: VariantRowProp
 export function EditProductModal({ product, onClose, onSaved, onError }: Props) {
   const { categories } = useCategories();
   const { updateProduct } = useProducts();
+  const { festivals } = useFestivals();
   const img = useImageItems(MAX_IMAGES);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -192,6 +194,7 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
     base_variant_label: "", base_variant_color: "",
   });
   const [variants, setVariants] = useState<ProductVariant[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   // Sync state when product changes (modal opens)
@@ -211,9 +214,18 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
       base_variant_color: product.base_variant_color ?? "",
     });
     setVariants(product.variants ?? []);
+    setTags(product.tags ?? []);
     const urls = product.images?.length ? product.images : [product.image];
     img.seed(urls);
   }
+
+  // Collect every section tag used across all festivals — deduped
+  const allSectionTags = Array.from(
+    new Set(festivals.flatMap((f) => f.sections.map((s) => s.tag)).filter(Boolean))
+  ).sort();
+
+  const toggleTag = (tag: string) =>
+    setTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]);
 
   const set = (k: FormKey, v: string) => setForm((prev) => ({ ...prev, [k]: v }));
 
@@ -286,6 +298,7 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
         variants: cleanedVariants,
         base_variant_label: form.base_variant_label.trim() || undefined,
         base_variant_color: form.base_variant_color.trim() || undefined,
+        tags,
       });
       onSaved("Product updated!");
       onClose();
@@ -486,6 +499,87 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
                 <div className="sm:col-span-2">
                   <label className="label">Description</label>
                   <textarea rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} className="input resize-none" />
+                </div>
+
+                {/* ── Festival Tags ── */}
+                <div className="sm:col-span-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Tag className="w-3.5 h-3.5 text-[#9B6FD1]" />
+                    <label className="label mb-0">Festival Tags</label>
+                  </div>
+                  <p className="text-[11px] text-gray-400 mb-2">
+                    Tag this product to include it in festival store sections.
+                    Tags come from the sections you defined in each festival.
+                  </p>
+
+                  {allSectionTags.length === 0 ? (
+                    <p className="text-[11px] text-gray-400 italic">
+                      No festival sections defined yet — create a festival first in the Festivals tab.
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {allSectionTags.map((tag) => {
+                        const active = tags.includes(tag);
+                        // Find which festival this tag belongs to for context
+                        const festName = festivals.find((f) =>
+                          f.sections.some((s) => s.tag === tag)
+                        )?.name ?? "";
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => toggleTag(tag)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border-2 transition-all ${
+                              active
+                                ? "bg-[#9B6FD1] border-[#9B6FD1] text-white shadow-sm"
+                                : "bg-white border-gray-200 text-gray-500 hover:border-[#9B6FD1]/50 hover:text-[#9B6FD1]"
+                            }`}
+                          >
+                            <span className="font-mono">{tag}</span>
+                            {festName && (
+                              <span className={`text-[9px] ${active ? "text-white/70" : "text-gray-400"}`}>
+                                · {festName}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Manual tag input for tags not in any festival section */}
+                  <div className="mt-2">
+                    <p className="text-[11px] text-gray-400 mb-1">Custom tags (type + press Enter):</p>
+                    <input
+                      type="text"
+                      placeholder="e.g. navratri-bangles"
+                      className="input text-sm font-mono"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const val = (e.target as HTMLInputElement).value.trim().toLowerCase();
+                          if (val && !tags.includes(val)) setTags((prev) => [...prev, val]);
+                          (e.target as HTMLInputElement).value = "";
+                        }
+                      }}
+                    />
+                  </div>
+
+                  {/* Current tags badge list */}
+                  {tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {tags.map((tag) => (
+                        <span key={tag}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#F3EEFB] text-[#9B6FD1]">
+                          {tag}
+                          <button type="button" onClick={() => toggleTag(tag)}
+                            className="ml-0.5 hover:text-red-400 transition-colors">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

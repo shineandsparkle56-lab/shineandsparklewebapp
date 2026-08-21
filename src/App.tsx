@@ -20,6 +20,9 @@ import { AdminPanel } from "./pages/AdminPanel";
 import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { TermsOfService } from "./pages/TermsOfService";
 import { TrackOrder } from "./pages/TrackOrder";
+import { FestivalStorePage } from "./pages/FestivalStorePage";
+import { ProductDetailPage } from "./pages/ProductDetailPage";
+import { FestivalsProvider } from "./context/FestivalsContext";
 const queryClient = new QueryClient();
 
 // ── Shared page shell — Navbar + Footer + CartDrawer on every page ──
@@ -37,7 +40,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
 
 function AppRouter() {
   const [path] = useLocation();
-  const { showSearchBar, allCategoryImage, loading } = useSettings();
+  const { allCategoryImage, loading } = useSettings();
 
   // ── Branded splash screen while settings load ──────────────────
   if (loading) {
@@ -64,13 +67,25 @@ function AppRouter() {
   if (path === "/terms-of-service") return <TermsOfService />;
   if (path === "/track") return <PageShell><TrackOrder /></PageShell>;
 
+  // Product detail  /product/:id
+  if (path.startsWith("/product/")) {
+    const id = Number(path.split("/")[2]);
+    if (!isNaN(id) && id > 0) return <PageShell><ProductDetailPage productId={id} /></PageShell>;
+  }
+
+  // Festival store  /festival/:slug
+  if (path.startsWith("/festival/")) {
+    const slug = path.replace("/festival/", "").split("/")[0];
+    return <FestivalStorePage slug={slug} />;
+  }
+
   if (path === "/about")   return <PageShell><About /></PageShell>;
   if (path === "/contact") return <PageShell><Contact /></PageShell>;
 
   // Default: storefront
   return (
     <PageShell>
-      <ProductGrid showSearchBar={showSearchBar} allCategoryImage={allCategoryImage} />
+      <ProductGrid allCategoryImage={allCategoryImage} />
     </PageShell>
   );
 }
@@ -81,12 +96,14 @@ function App() {
       <TooltipProvider>
         <ProductsProvider>
           <CategoriesProvider>
+            <FestivalsProvider>
             <ScrollProvider>
               <CartProvider>
                 <AppRouter />
                 <Toaster />
               </CartProvider>
             </ScrollProvider>
+            </FestivalsProvider>
           </CategoriesProvider>
         </ProductsProvider>
       </TooltipProvider>

@@ -171,3 +171,54 @@ ALTER TABLE orders
   ADD COLUMN IF NOT EXISTS box_breadth numeric(6,1) DEFAULT 5,
   ADD COLUMN IF NOT EXISTS box_height  numeric(6,1) DEFAULT 3,
   ADD COLUMN IF NOT EXISTS weight_kg   numeric(6,3) DEFAULT 0.5;
+
+-- ─────────────────────────────────────────────
+-- 11. Product tags (text array for festival/collection tagging)
+--     e.g. tags = '{"navratri","diwali"}'
+-- ─────────────────────────────────────────────
+ALTER TABLE products
+  ADD COLUMN IF NOT EXISTS tags text[] NOT NULL DEFAULT '{}';
+
+-- GIN index for fast @> (array contains) queries
+CREATE INDEX IF NOT EXISTS idx_products_tags ON products USING GIN (tags);
+
+-- ─────────────────────────────────────────────
+-- 12. Festivals table
+--     Each row is one festival / seasonal store.
+--     sections: jsonb array of { title, tag } — drives the category sections
+--               on the festival store page.
+-- ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS festivals (
+  id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  slug         text NOT NULL UNIQUE,           -- e.g. "navratri-2026"  (used in URL)
+  name         text NOT NULL,                   -- e.g. "Navratri 2026"
+  tagline      text NOT NULL DEFAULT '',        -- e.g. "Celebrate with colours"
+  -- Hero banner
+  banner_url   text NOT NULL DEFAULT '',        -- hero image URL
+  banner_bg    text NOT NULL DEFAULT '#FF6B35', -- CSS colour / gradient string
+  -- Sponsor strip (optional) – jsonb array of { name, logo_url }
+  sponsors     jsonb NOT NULL DEFAULT '[]',
+  -- Sections – jsonb array of { title, tag }
+  -- tag must match a value in products.tags
+  sections     jsonb NOT NULL DEFAULT '[]',
+  -- Visibility window
+  active_from  date,
+  active_until date,
+  is_active    boolean NOT NULL DEFAULT false,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE festivals ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "anyone can read festivals"
+  ON festivals FOR SELECT USING (true);
+
+CREATE POLICY "anyone can insert festivals"
+  ON festivals FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "anyone can update festivals"
+  ON festivals FOR UPDATE USING (true) WITH CHECK (true);
+
+CREATE POLICY "anyone can delete festivals"
+  ON festivals FOR DELETE USING (true);
+
