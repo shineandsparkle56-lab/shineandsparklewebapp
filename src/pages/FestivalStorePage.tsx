@@ -10,23 +10,7 @@ import { useCart } from "../context/CartContext";
 import type { FestivalSection } from "../context/FestivalsContext";
 
 // ─────────────────────────────────────────────────────────────
-// Skeleton
-// ─────────────────────────────────────────────────────────────
-function SkeletonCard() {
-  return (
-    <div className="flex flex-col bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm flex-shrink-0 w-40 sm:w-auto">
-      <div className="aspect-square bg-gray-200 shimmer" />
-      <div className="p-2.5 flex flex-col gap-2">
-        <div className="h-3 bg-gray-200 shimmer rounded-full w-4/5" />
-        <div className="h-3 bg-gray-200 shimmer rounded-full w-2/5" />
-        <div className="h-7 bg-gray-200 shimmer rounded-xl mt-1" />
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-// Section panel — horizontal scroll on mobile, grid on desktop
+// Section panel — 2-col grid on mobile, more cols on desktop
 // ─────────────────────────────────────────────────────────────
 function SectionPanel({ tag, accentColor }: { tag: string; accentColor: string }) {
   const { products, loading, loadingMore, hasMore, loadMore } = useInfiniteProducts(
@@ -48,25 +32,18 @@ function SectionPanel({ tag, accentColor }: { tag: string; accentColor: string }
 
   if (loading) {
     return (
-      <>
-        {/* Mobile: horizontal shimmer */}
-        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none sm:hidden px-4">
-          {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
-        </div>
-        {/* Desktop: grid shimmer */}
-        <div className="hidden sm:grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 px-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="flex flex-col bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
-              <div className="aspect-square bg-gray-200 shimmer" />
-              <div className="p-2.5 flex flex-col gap-2">
-                <div className="h-3 bg-gray-200 shimmer rounded-full w-4/5" />
-                <div className="h-3 bg-gray-200 shimmer rounded-full w-2/5" />
-                <div className="h-8 bg-gray-200 shimmer rounded-xl mt-1" />
-              </div>
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 px-4">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex flex-col bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+            <div className="aspect-square bg-gray-200 shimmer" />
+            <div className="p-2.5 flex flex-col gap-2">
+              <div className="h-3 bg-gray-200 shimmer rounded-full w-4/5" />
+              <div className="h-3 bg-gray-200 shimmer rounded-full w-2/5" />
+              <div className="h-8 bg-gray-200 shimmer rounded-xl mt-1" />
             </div>
-          ))}
-        </div>
-      </>
+          </div>
+        ))}
+      </div>
     );
   }
 
@@ -85,44 +62,19 @@ function SectionPanel({ tag, accentColor }: { tag: string; accentColor: string }
   }
 
   return (
-    <div>
-      {/* ── Mobile: horizontal scroll strip ── */}
-      <div className="sm:hidden">
-        <div className="flex gap-3 overflow-x-auto pb-3 scrollbar-none px-4"
-          style={{ WebkitOverflowScrolling: "touch" }}>
-          {products.map((p, i) => (
-            <div key={p.id} className="flex-shrink-0 w-[44vw] max-w-[180px]">
-              <ProductCard product={p} index={i} view="grid" />
-            </div>
-          ))}
-          {loadingMore && (
-            <div className="flex-shrink-0 w-10 flex items-center justify-center">
-              <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin"
-                style={{ borderColor: accentColor, borderTopColor: "transparent" }} />
-            </div>
-          )}
-          {/* Sentinel for mobile infinite scroll */}
-          {hasMore && !loadingMore && (
-            <div ref={sentinelRef} className="flex-shrink-0 w-4" />
-          )}
-        </div>
+    <div className="px-3 sm:px-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        {products.map((p, i) => (
+          <ProductCard key={p.id} product={p} index={i} view="grid" />
+        ))}
       </div>
-
-      {/* ── Desktop: 3-col / 4-col grid ── */}
-      <div className="hidden sm:block px-4">
-        <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          {products.map((p, i) => (
-            <ProductCard key={p.id} product={p} index={i} view="grid" />
-          ))}
+      {loadingMore && (
+        <div className="flex justify-center py-6">
+          <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin"
+            style={{ borderColor: accentColor, borderTopColor: "transparent" }} />
         </div>
-        {loadingMore && (
-          <div className="flex justify-center py-6">
-            <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin"
-              style={{ borderColor: accentColor, borderTopColor: "transparent" }} />
-          </div>
-        )}
-        {hasMore && !loadingMore && <div ref={sentinelRef} className="h-2 w-full" />}
-      </div>
+      )}
+      {hasMore && !loadingMore && <div ref={sentinelRef} className="h-4 w-full" />}
     </div>
   );
 }

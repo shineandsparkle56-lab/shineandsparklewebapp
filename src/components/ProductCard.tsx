@@ -232,11 +232,11 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
             <div
               className="absolute inset-0 flex"
               style={stripStyle}
-              onClick={() => !isDragging.current && navigate(`/product/${product.id}`)}
+              onClick={() => { if (!isDragging.current) navigate(`/product/${product.id}`); }}
               role="button"
               aria-label={`View details for ${product.name}`}
               tabIndex={0}
-              onKeyDown={(e) => e.key === "Enter" && navigate(`/product/${product.id}`)}
+              onKeyDown={(e) => { if (e.key === "Enter") navigate(`/product/${product.id}`); }}
             >
               {images.map((src, i) => (
                 <div key={src} className="relative flex-shrink-0 w-full h-full">
@@ -383,11 +383,11 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
               transition: dragOffset !== 0 ? "none" : "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
               willChange: "transform",
             }}
-            onClick={() => !isDragging.current && navigate(`/product/${product.id}`)}
+            onClick={() => { if (!isDragging.current) navigate(`/product/${product.id}`); }}
             role="button"
             aria-label={`View details for ${product.name}`}
             tabIndex={0}
-            onKeyDown={(e) => e.key === "Enter" && navigate(`/product/${product.id}`)}
+            onKeyDown={(e) => { if (e.key === "Enter") navigate(`/product/${product.id}`); }}
           >
             {images.map((src, i) => (
               <div key={src} className="relative flex-shrink-0 w-full h-full">

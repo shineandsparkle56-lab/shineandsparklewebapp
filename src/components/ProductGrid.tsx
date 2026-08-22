@@ -132,7 +132,7 @@ function FestivalCarousel({ festivals }: { festivals: Festival[] }) {
               key={fest.id}
               href={`/festival/${fest.slug}`}
               className="relative flex-shrink-0 w-full flex items-center justify-between overflow-hidden hover:opacity-95 transition-opacity"
-              style={{ background: fest.banner_bg, minHeight: 88 }}
+              style={{ background: fest.banner_bg, minHeight: 140 }}
               aria-label={`Shop ${fest.name}`}
               onClick={(e) => { if (isDragging.current) e.preventDefault(); }}
             >
@@ -143,7 +143,7 @@ function FestivalCarousel({ festivals }: { festivals: Festival[] }) {
                   alt=""
                   aria-hidden="true"
                   draggable={false}
-                  className="absolute inset-0 w-full h-full object-cover opacity-25"
+                  className="absolute inset-0 w-full h-full object-cover opacity-50"
                 />
               )}
               {/* Text */}

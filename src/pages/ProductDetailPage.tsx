@@ -4,11 +4,11 @@ import {
   ArrowLeft, ChevronLeft, ChevronRight, ShoppingBag,
   Zap, ZoomIn, X, ZoomOut, RotateCcw, Share2, Check,
 } from "lucide-react";
+import type { Product, ProductVariant } from "../data/products";
 import { supabase } from "../lib/supabase";
 import { imgUrl } from "../lib/imgUrl";
 import { useCart } from "../context/CartContext";
 import { Button } from "../components/ui/button";
-import type { Product, ProductVariant } from "../data/products";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -238,8 +238,16 @@ export function ProductDetailPage({ productId }: { productId: number }) {
       });
   }, [productId]);
 
-  // Scroll to top on load
-  useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior }); }, [productId]);
+  // Scroll product detail to top on open
+  useEffect(() => {
+    // Find our own scroll container (the fixed overlay div)
+    const el = document.querySelector("[data-product-scroll]") as HTMLElement | null;
+    if (el) {
+      el.scrollTop = 0;
+    } else {
+      window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+    }
+  }, [productId]);
 
   // ── Variants ──────────────────────────────────────────────────
   const hasVariants = (product?.variants?.length ?? 0) > 0;
@@ -405,7 +413,13 @@ export function ProductDetailPage({ productId }: { productId: number }) {
       {/* Back bar */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-4 h-11 flex items-center gap-3">
         <button
-          onClick={() => window.history.length > 1 ? window.history.back() : navigate("/")}
+          onClick={() => {
+            if (window.history.length > 1) {
+              window.history.back();
+            } else {
+              navigate("/");
+            }
+          }}
           className="flex items-center gap-1.5 text-gray-500 hover:text-[#9B6FD1] text-sm font-medium transition-colors"
           aria-label="Go back"
         >
