@@ -27,6 +27,7 @@ const EMPTY_FORM: Omit<FestivalInput, "sponsors" | "sections"> & {
   name: "",
   tagline: "",
   banner_url: "",
+  banner_url_mobile: "",
   banner_bg: "#FF6B35",
   sponsors: [],
   sections: [],
@@ -163,6 +164,26 @@ function FestivalForm({ value, onChange, onSubmit, saving, submitLabel, onCancel
     }
   };
 
+  // ── Mobile banner upload state ───────────────────────────
+  const bannerMobileFileRef = useRef<HTMLInputElement>(null);
+  const [bannerMobileUploading, setBannerMobileUploading] = useState(false);
+
+  const handleBannerMobileFile = async (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    setBannerMobileUploading(true);
+    try {
+      const name = `festival-banner-mobile-${Date.now()}`;
+      // Mobile banners: portrait-optimised, max 900px wide
+      const compressed = await compressToWebP(file, { maxSizePx: 900, quality: 0.88, name });
+      const url = await uploadToR2(compressed, name);
+      set("banner_url_mobile", url);
+    } catch (err) {
+      console.error("Mobile banner upload failed:", err);
+    } finally {
+      setBannerMobileUploading(false);
+    }
+  };
+
   const addSection = () =>
     set("sections", [...value.sections, { title: "", tag: "" }]);
 
@@ -221,9 +242,9 @@ function FestivalForm({ value, onChange, onSubmit, saving, submitLabel, onCancel
           className="input" />
       </div>
 
-      {/* Banner image upload */}
+      {/* Desktop banner image upload */}
       <div>
-        <label className="label">Banner Image</label>
+        <label className="label">Banner Image <span className="font-normal text-gray-400 normal-case">(Desktop / Wide)</span></label>
         {value.banner_url ? (
           <div className="relative rounded-xl overflow-hidden border border-gray-200 bg-gray-100 group">
             <img
@@ -282,6 +303,74 @@ function FestivalForm({ value, onChange, onSubmit, saving, submitLabel, onCancel
           accept="image/*"
           className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBannerFile(f); e.target.value = ""; }}
+        />
+      </div>
+
+      {/* Mobile banner image upload */}
+      <div>
+        <label className="label">
+          Banner Image <span className="font-normal text-gray-400 normal-case">(Mobile / Portrait)</span>
+        </label>
+        <p className="text-[11px] text-gray-400 mb-2">
+          Shown on phones. If not set, the desktop banner is used instead. Ideal ratio: 4:3 or 16:9 portrait.
+        </p>
+        {value.banner_url_mobile ? (
+          <div className="relative rounded-xl overflow-hidden border border-gray-200 bg-gray-100 group">
+            <img
+              src={value.banner_url_mobile}
+              alt="Mobile banner preview"
+              className="w-full max-h-36 object-cover"
+            />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+              <button
+                type="button"
+                onClick={() => bannerMobileFileRef.current?.click()}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-gray-800 text-xs font-semibold rounded-lg shadow hover:bg-gray-50 transition-colors"
+              >
+                <Upload className="w-3.5 h-3.5" /> Change
+              </button>
+              <button
+                type="button"
+                onClick={() => set("banner_url_mobile", "")}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg shadow hover:bg-red-600 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" /> Remove
+              </button>
+            </div>
+            {bannerMobileUploading && (
+              <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-[#9B6FD1]" />
+              </div>
+            )}
+            <span className="absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-600/90 text-white uppercase tracking-wide">
+              Mobile WebP
+            </span>
+          </div>
+        ) : (
+          <div
+            onClick={() => bannerMobileFileRef.current?.click()}
+            className="flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 border-dashed
+              border-gray-200 bg-gray-50 hover:border-[#9B6FD1] hover:bg-[#F3EEFB] cursor-pointer transition-all"
+          >
+            {bannerMobileUploading ? (
+              <Loader2 className="w-6 h-6 animate-spin text-[#9B6FD1]" />
+            ) : (
+              <>
+                <Upload className="w-6 h-6 text-[#9B6FD1]" />
+                <p className="text-sm text-gray-500 text-center">
+                  Click to upload mobile banner
+                  <span className="block text-xs text-gray-400 mt-0.5">Portrait crop, max 900px — compressed to WebP</span>
+                </p>
+              </>
+            )}
+          </div>
+        )}
+        <input
+          ref={bannerMobileFileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBannerMobileFile(f); e.target.value = ""; }}
         />
       </div>
 
@@ -576,6 +665,7 @@ export function FestivalsTab() {
       name: fest.name,
       tagline: fest.tagline,
       banner_url: fest.banner_url,
+      banner_url_mobile: fest.banner_url_mobile ?? "",
       banner_bg: fest.banner_bg,
       sponsors: fest.sponsors.map((s) => ({ ...s })),
       sections: fest.sections.map((s) => ({ ...s })),

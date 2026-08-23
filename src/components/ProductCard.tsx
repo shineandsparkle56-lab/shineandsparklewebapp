@@ -533,9 +533,7 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
             </div>
           )}
           {!outOfStock && (
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center z-10 pointer-events-none">
-              <span className="text-white text-xs font-semibold bg-black/40 px-3 py-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 tracking-wide">Quick View</span>
-            </div>
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300 z-10 pointer-events-none" />
           )}
         </div>
 

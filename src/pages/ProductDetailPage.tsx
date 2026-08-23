@@ -168,7 +168,7 @@ function PageSkeleton() {
   return (
     <div className="min-h-screen bg-white">
       <div className="h-14 bg-gray-100 shimmer" />
-      <div className="max-w-5xl mx-auto px-4 py-6 flex flex-col md:flex-row gap-8">
+      <div className="px-4 sm:px-6 lg:px-10 py-4 flex flex-col md:flex-row gap-6 lg:gap-10">
         <div className="w-full md:w-1/2 aspect-square bg-gray-200 shimmer rounded-2xl" />
         <div className="flex-1 space-y-4">
           <div className="h-5 w-1/4 bg-gray-200 shimmer rounded-full" />
@@ -444,11 +444,11 @@ export function ProductDetailPage({ productId }: { productId: number }) {
       </div>
 
       {/* Main layout */}
-      <div className="max-w-5xl mx-auto px-4 py-6 lg:py-10">
-        <div className="flex flex-col md:flex-row gap-8 lg:gap-12 items-start">
+      <div className="px-4 sm:px-6 lg:px-10 py-4 lg:py-8 pb-32 sm:pb-10">
+        <div className="flex flex-col md:flex-row gap-6 lg:gap-10 items-start">
 
           {/* ── LEFT: Image gallery ───────────────────────────── */}
-          <div className="w-full md:w-1/2 md:sticky md:top-11 flex flex-col gap-3">
+          <div className="w-full md:w-[40%] md:sticky md:top-11 flex flex-col gap-3">
 
             {/* Main image */}
             <div
@@ -535,7 +535,7 @@ export function ProductDetailPage({ productId }: { productId: number }) {
                   <button
                     key={src}
                     onClick={() => setActiveImg(i)}
-                    className={`flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all duration-200 ${
+                    className={`flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden border-2 transition-all duration-200 ${
                       i === activeImg ? "border-[#9B6FD1] shadow-md shadow-[#9B6FD1]/20" : "border-transparent hover:border-gray-200"
                     }`}
                     aria-label={`Thumbnail ${i + 1}`}

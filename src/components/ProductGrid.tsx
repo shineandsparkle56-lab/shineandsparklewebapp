@@ -131,20 +131,27 @@ function FestivalCarousel({ festivals }: { festivals: Festival[] }) {
             <a
               key={fest.id}
               href={`/festival/${fest.slug}`}
-              className="relative flex-shrink-0 w-full flex items-center justify-between overflow-hidden hover:opacity-95 transition-opacity"
-              style={{ background: fest.banner_bg, minHeight: 140 }}
+              className="relative flex-shrink-0 w-full flex items-center justify-between overflow-hidden hover:opacity-95 transition-opacity min-h-[140px] sm:min-h-[220px]"
+              style={{ background: fest.banner_bg }}
               aria-label={`Shop ${fest.name}`}
               onClick={(e) => { if (isDragging.current) e.preventDefault(); }}
             >
-              {/* Background image */}
-              {fest.banner_url && (
-                <img
-                  src={fest.banner_url}
-                  alt=""
-                  aria-hidden="true"
-                  draggable={false}
-                  className="absolute inset-0 w-full h-full object-cover opacity-50"
-                />
+              {/* Background image — mobile uses banner_url_mobile, desktop uses banner_url */}
+              {(fest.banner_url_mobile || fest.banner_url) && (
+                <>
+                  {/* Mobile image */}
+                  <img
+                    src={fest.banner_url_mobile || fest.banner_url}
+                    alt="" aria-hidden="true" draggable={false}
+                    className="absolute inset-0 w-full h-full object-cover opacity-50 sm:hidden"
+                  />
+                  {/* Desktop image */}
+                  <img
+                    src={fest.banner_url || fest.banner_url_mobile}
+                    alt="" aria-hidden="true" draggable={false}
+                    className="absolute inset-0 w-full h-full object-cover opacity-50 hidden sm:block"
+                  />
+                </>
               )}
               {/* Text */}
               <div className="relative z-10 px-5 py-4 flex-1">

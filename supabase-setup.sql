@@ -222,3 +222,11 @@ CREATE POLICY "anyone can update festivals"
 CREATE POLICY "anyone can delete festivals"
   ON festivals FOR DELETE USING (true);
 
+
+-- ─────────────────────────────────────────────
+-- 14. Mobile banner for festivals
+--     Separate image optimised for portrait/mobile viewports.
+--     Falls back to banner_url when empty.
+-- ─────────────────────────────────────────────
+ALTER TABLE festivals
+  ADD COLUMN IF NOT EXISTS banner_url_mobile text NOT NULL DEFAULT '';

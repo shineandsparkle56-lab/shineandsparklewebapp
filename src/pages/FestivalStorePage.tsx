@@ -187,7 +187,7 @@ export function FestivalStorePage({ slug }: { slug: string }) {
     );
   }
 
-  const { name, tagline, banner_url, banner_bg, sponsors, sections } = festival;
+  const { name, tagline, banner_url, banner_url_mobile, banner_bg, sponsors, sections } = festival;
   const currentSection = sections[activeSection];
 
   return (
@@ -226,12 +226,20 @@ export function FestivalStorePage({ slug }: { slug: string }) {
 
       {/* ── Hero banner ───────────────────────────────────────── */}
       <div className="relative overflow-hidden" style={{ background: banner_bg }}>
-        {banner_url ? (
+        {(banner_url || banner_url_mobile) ? (
           <>
+            {/* Mobile image — portrait crop (shown only on small screens) */}
             <img
-              src={banner_url}
+              src={banner_url_mobile || banner_url}
               alt={name}
-              className="w-full object-cover object-top"
+              className="w-full object-cover object-top sm:hidden"
+              style={{ maxHeight: 280, minHeight: 160 }}
+            />
+            {/* Desktop image — landscape crop (hidden on mobile) */}
+            <img
+              src={banner_url || banner_url_mobile}
+              alt={name}
+              className="w-full object-cover object-top hidden sm:block"
               style={{ maxHeight: 280, minHeight: 160 }}
             />
             {/* Gradient overlay with text */}

@@ -15,14 +15,15 @@ export interface FestivalSection {
 
 export interface Festival {
   id: number;
-  slug: string;        // URL slug  e.g. "navratri-2026"
-  name: string;        // Display   e.g. "Navratri 2026"
-  tagline: string;     // Sub-title e.g. "Celebrate with colours"
-  banner_url: string;  // Hero image URL
-  banner_bg: string;   // CSS colour / gradient  e.g. "#FF6B35"
+  slug: string;
+  name: string;
+  tagline: string;
+  banner_url: string;         // desktop hero image
+  banner_url_mobile: string;  // mobile hero image (falls back to banner_url if empty)
+  banner_bg: string;
   sponsors: FestivalSponsor[];
   sections: FestivalSection[];
-  active_from: string | null;   // ISO date "YYYY-MM-DD"
+  active_from: string | null;
   active_until: string | null;
   is_active: boolean;
   created_at: string;
@@ -51,6 +52,7 @@ function mapRow(row: Record<string, unknown>): Festival {
     name: row.name as string,
     tagline: (row.tagline as string) ?? "",
     banner_url: (row.banner_url as string) ?? "",
+    banner_url_mobile: (row.banner_url_mobile as string) ?? "",
     banner_bg: (row.banner_bg as string) ?? "#9B6FD1",
     sponsors: Array.isArray(row.sponsors) ? (row.sponsors as FestivalSponsor[]) : [],
     sections: Array.isArray(row.sections) ? (row.sections as FestivalSection[]) : [],
@@ -100,8 +102,9 @@ export function FestivalsProvider({ children }: { children: ReactNode }) {
         slug:         f.slug.trim().toLowerCase().replace(/\s+/g, "-"),
         name:         f.name.trim(),
         tagline:      f.tagline.trim(),
-        banner_url:   f.banner_url.trim(),
-        banner_bg:    f.banner_bg.trim() || "#9B6FD1",
+        banner_url:        f.banner_url.trim(),
+        banner_url_mobile: f.banner_url_mobile?.trim() ?? "",
+        banner_bg:         f.banner_bg.trim() || "#9B6FD1",
         sponsors:     f.sponsors ?? [],
         sections:     f.sections ?? [],
         active_from:  f.active_from  || null,
@@ -121,7 +124,8 @@ export function FestivalsProvider({ children }: { children: ReactNode }) {
     if (f.slug        !== undefined) patch.slug         = f.slug.trim().toLowerCase().replace(/\s+/g, "-");
     if (f.name        !== undefined) patch.name         = f.name.trim();
     if (f.tagline     !== undefined) patch.tagline      = f.tagline.trim();
-    if (f.banner_url  !== undefined) patch.banner_url   = f.banner_url.trim();
+    if (f.banner_url        !== undefined) patch.banner_url        = f.banner_url.trim();
+    if (f.banner_url_mobile !== undefined) patch.banner_url_mobile = f.banner_url_mobile.trim();
     if (f.banner_bg   !== undefined) patch.banner_bg    = f.banner_bg.trim();
     if (f.sponsors    !== undefined) patch.sponsors     = f.sponsors;
     if (f.sections    !== undefined) patch.sections     = f.sections;

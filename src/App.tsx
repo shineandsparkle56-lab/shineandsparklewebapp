@@ -35,8 +35,6 @@ function PageShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <Footer />
-      <CartDrawer />
-      <FloatingCart />
     </div>
   );
 }
@@ -111,8 +109,6 @@ function AppRouter() {
           className="fixed inset-0 z-50 overflow-y-auto bg-white"
         >
           <ProductDetailPage productId={productId} />
-          <CartDrawer />
-          <FloatingCart />
         </div>
       )}
     </>
@@ -129,6 +125,9 @@ function App() {
               <ScrollProvider>
                 <CartProvider>
                   <AppRouter />
+                  {/* Cart rendered at root — above all z-index layers including product overlay */}
+                  <CartDrawer />
+                  <FloatingCart />
                   <Toaster />
                 </CartProvider>
               </ScrollProvider>
