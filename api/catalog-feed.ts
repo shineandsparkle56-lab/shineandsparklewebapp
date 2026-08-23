@@ -9,25 +9,41 @@ const supabase = createClient(
 // Map your category slugs to Google Product Category IDs
 // https://www.google.com/basepages/producttype/taxonomy-with-ids.en-US.txt
 const CATEGORY_MAP: Record<string, string> = {
-  rings:           "188",   // Jewelry > Rings
-  earrings:        "191",   // Jewelry > Earrings
-  necklaces:       "194",   // Jewelry > Necklaces
-  bracelets:       "189",   // Jewelry > Bracelets
-  pendants:        "194",   // Jewelry > Necklaces (closest match for pendants)
-  jhumka:          "191",   // Jhumka = Earrings
-  "cuff-bracelets":"189",   // Cuff bracelets = Bracelets
+  rings:            "188",   // Jewelry > Rings
+  earrings:         "191",   // Jewelry > Earrings
+  necklaces:        "194",   // Jewelry > Necklaces
+  bracelets:        "189",   // Jewelry > Bracelets
+  pendants:         "194",   // Jewelry > Necklaces (closest match for pendants)
+  jhumka:           "191",   // Jhumka = Earrings
+  jhumkas:          "191",
+  "cuff-bracelets": "189",   // Cuff bracelets = Bracelets
+  "cuff-bracelet":  "189",
+  "cuffbracelets":  "189",
 };
 
 // Human-readable product_type labels — used for WhatsApp Collections filtering
 const PRODUCT_TYPE_MAP: Record<string, string> = {
-  rings:           "Rings",
-  earrings:        "Earrings",
-  necklaces:       "Necklaces",
-  bracelets:       "Bracelets",
-  pendants:        "Pendants",
-  jhumka:          "Earrings",       // Jhumkas appear in Earrings collection
-  "cuff-bracelets":"Bracelets",      // Cuffs appear in Bracelets collection
+  rings:            "Rings",
+  earrings:         "Earrings",
+  necklaces:        "Necklaces",
+  bracelets:        "Bracelets",
+  pendants:         "Pendants",
+  // jhumka variants — all map to Earrings so they appear in the Earrings collection
+  jhumka:           "Earrings",
+  jhumkas:          "Earrings",
+  // cuff-bracelet variants — all map to Bracelets
+  "cuff-bracelets": "Bracelets",
+  "cuff-bracelet":  "Bracelets",
+  "cuffbracelets":  "Bracelets",
 };
+
+/** Normalise a raw category slug before looking it up in PRODUCT_TYPE_MAP */
+function resolveProductType(rawCategory: string): string {
+  if (!rawCategory) return "Jewelry";
+  // strip whitespace, lowercase, collapse spaces to hyphens
+  const key = rawCategory.trim().toLowerCase().replace(/\s+/g, "-");
+  return PRODUCT_TYPE_MAP[key] ?? rawCategory.trim();
+}
 
 function escapeCsv(value: string | number | undefined | null): string {
   const str = String(value ?? "");
@@ -125,7 +141,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const salePriceFormatted = `${variantPrice}.00 INR`;
 
           const googleCategory =
-            CATEGORY_MAP[product.category?.toLowerCase()] ?? "188";
+            CATEGORY_MAP[product.category?.trim().toLowerCase().replace(/\s+/g, "-")] ?? "188";
 
           const row = [
             escapeCsv(`${product.id}__${variant.id}`),
@@ -140,7 +156,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             escapeCsv(googleCategory),
             escapeCsv(salePriceFormatted),
             escapeCsv(additionalImages),
-            escapeCsv(PRODUCT_TYPE_MAP[product.category?.toLowerCase()] ?? product.category),
+            escapeCsv(resolveProductType(product.category)),
           ];
           rows.push(row.join(","));
         }
@@ -157,7 +173,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const salePriceFormatted = `${product.price}.00 INR`;
 
         const googleCategory =
-          CATEGORY_MAP[product.category?.toLowerCase()] ?? "188";
+          CATEGORY_MAP[product.category?.trim().toLowerCase().replace(/\s+/g, "-")] ?? "188";
 
         const row = [
           escapeCsv(product.id),
@@ -172,7 +188,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           escapeCsv(googleCategory),
           escapeCsv(salePriceFormatted),
           escapeCsv(additionalImages),
-          escapeCsv(PRODUCT_TYPE_MAP[product.category?.toLowerCase()] ?? product.category),
+          escapeCsv(resolveProductType(product.category)),
         ];
         rows.push(row.join(","));
       }
