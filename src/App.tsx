@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useRef } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CartProvider } from "./context/CartContext";
@@ -40,9 +41,6 @@ function PageShell({ children }: { children: React.ReactNode }) {
 }
 
 // ── Store shell — always mounted, hidden when not on store ────
-// Keeps ProductGrid in the DOM so scroll position is never lost.
-// When navigating to a product page the store is hidden (display:none)
-// but NOT unmounted — scroll position survives.
 function StoreShell({ allCategoryImage }: { allCategoryImage: string | null }) {
   const [path] = useLocation();
   const visible = path === "/" || path.startsWith("/product/");
@@ -55,9 +53,34 @@ function StoreShell({ allCategoryImage }: { allCategoryImage: string | null }) {
   );
 }
 
+// ── Festival shell — always mounted when on /festival/:slug ──
+function FestivalShell({ slug }: { slug: string }) {
+  const [path] = useLocation();
+  // Show when on this festival OR when on a product page (overlay will be on top)
+  const visible = path === `/festival/${slug}` ||
+    path.startsWith(`/festival/${slug}/`) ||
+    path.startsWith("/product/");
+  return (
+    <div style={{ display: visible ? "block" : "none" }} aria-hidden={!visible}>
+      <FestivalStorePage slug={slug} />
+    </div>
+  );
+}
+
 function AppRouter() {
   const [path] = useLocation();
   const { allCategoryImage, loading } = useSettings();
+
+  // Remember the last festival slug so when we navigate to /product/:id
+  // from a festival page, we keep the FestivalShell mounted underneath.
+  const lastFestivalSlug = useRef<string | null>(null);
+  if (path.startsWith("/festival/")) {
+    lastFestivalSlug.current = path.replace("/festival/", "").split("/")[0];
+  }
+  // Clear it when going somewhere unrelated
+  if (!path.startsWith("/festival/") && !path.startsWith("/product/")) {
+    lastFestivalSlug.current = null;
+  }
 
   // ── Splash screen while settings load ─────────────────────
   if (loading) {
@@ -78,7 +101,7 @@ function AppRouter() {
     );
   }
 
-  // ── Admin & static pages (unmount store for these) ─────────
+  // ── Admin & static pages ───────────────────────────────────
   if (path === "/admin")            return <AdminLogin />;
   if (path === "/admin/dashboard")  return <AdminPanel />;
   if (path === "/privacy-policy")   return <PrivacyPolicy />;
@@ -87,28 +110,32 @@ function AppRouter() {
   if (path === "/about")            return <PageShell><About /></PageShell>;
   if (path === "/contact")          return <PageShell><Contact /></PageShell>;
 
-  // ── Festival store ─────────────────────────────────────────
-  if (path.startsWith("/festival/")) {
-    const slug = path.replace("/festival/", "").split("/")[0];
-    return <FestivalStorePage slug={slug} />;
+  const productId = path.startsWith("/product/") ? Number(path.split("/")[2]) : null;
+  const isValidProduct = productId !== null && !isNaN(productId) && productId > 0;
+
+  // ── Festival store (+ product overlay when coming from festival) ──
+  if (path.startsWith("/festival/") || (isValidProduct && lastFestivalSlug.current)) {
+    return (
+      <>
+        {lastFestivalSlug.current && (
+          <FestivalShell slug={lastFestivalSlug.current} />
+        )}
+        {isValidProduct && (
+          <div data-product-scroll className="fixed inset-0 z-50 overflow-y-auto bg-white">
+            <ProductDetailPage productId={productId!} />
+          </div>
+        )}
+      </>
+    );
   }
 
-  // ── Store + Product detail ─────────────────────────────────
-  // StoreShell is always mounted here. When path is /product/:id
-  // the detail page renders as a fixed overlay on top — store
-  // stays alive in the background, scroll position preserved.
-  const productId = path.startsWith("/product/") ? Number(path.split("/")[2]) : null;
-
+  // ── Main store (+ product overlay when coming from store) ─────────
   return (
     <>
       <StoreShell allCategoryImage={allCategoryImage} />
-
-      {productId && !isNaN(productId) && productId > 0 && (
-        <div
-          data-product-scroll
-          className="fixed inset-0 z-50 overflow-y-auto bg-white"
-        >
-          <ProductDetailPage productId={productId} />
+      {isValidProduct && (
+        <div data-product-scroll className="fixed inset-0 z-50 overflow-y-auto bg-white">
+          <ProductDetailPage productId={productId!} />
         </div>
       )}
     </>
