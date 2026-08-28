@@ -32,6 +32,7 @@ function mapRow(row: Record<string, unknown>): Product {
     base_variant_label: typeof row.base_variant_label === "string" ? row.base_variant_label : undefined,
     base_variant_color: typeof row.base_variant_color === "string" ? row.base_variant_color : undefined,
     tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+    sizes: Array.isArray(row.sizes) ? (row.sizes as string[]) : [],
     created_at: row.created_at as string | undefined,
   };
 }
@@ -411,7 +412,10 @@ export function ProductDetailPage({ productId }: { productId: number }) {
   return (
     <>
       {/* Back bar */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-4 h-11 flex items-center gap-3">
+      <div
+        className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-4 flex items-center gap-3"
+        style={{ paddingTop: "env(safe-area-inset-top)", minHeight: "calc(env(safe-area-inset-top) + 2.75rem)" }}
+      >
         <button
           onClick={() => {
             if (window.history.length > 1) {
@@ -448,7 +452,9 @@ export function ProductDetailPage({ productId }: { productId: number }) {
         <div className="flex flex-col md:flex-row gap-6 lg:gap-10 items-start">
 
           {/* ── LEFT: Image gallery ───────────────────────────── */}
-          <div className="w-full md:w-[40%] md:sticky md:top-11 flex flex-col gap-3">
+          <div className="w-full md:w-[40%] md:sticky flex flex-col gap-3"
+            style={{ top: "calc(env(safe-area-inset-top) + 2.75rem)" }}
+          >
 
             {/* Main image */}
             <div
@@ -588,6 +594,18 @@ export function ProductDetailPage({ productId }: { productId: number }) {
                   : <Share2 className="w-4 h-4" />}
               </button>
             </div>
+
+            {/* Sizes */}
+            {product.sizes && product.sizes.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Size:</span>
+                {product.sizes.map((s) => (
+                  <span key={s} className="text-xs font-semibold px-3 py-1 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {/* Price */}
             <div className="flex flex-wrap items-baseline gap-2">

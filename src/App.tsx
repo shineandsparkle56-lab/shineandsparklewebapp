@@ -32,7 +32,10 @@ function PageShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen w-full flex flex-col bg-white">
       <Navbar />
-      <main className="flex-1 pt-14" style={{ paddingTop: "calc(3.5rem + env(safe-area-inset-top))" }}>
+      <main
+        className="flex-1"
+        style={{ paddingTop: "3.5rem" }}
+      >
         {children}
       </main>
       <Footer />
@@ -56,12 +59,21 @@ function StoreShell({ allCategoryImage }: { allCategoryImage: string | null }) {
 // ── Festival shell — always mounted when on /festival/:slug ──
 function FestivalShell({ slug }: { slug: string }) {
   const [path] = useLocation();
-  // Show when on this festival OR when on a product page (overlay will be on top)
   const visible = path === `/festival/${slug}` ||
     path.startsWith(`/festival/${slug}/`) ||
     path.startsWith("/product/");
   return (
-    <div style={{ display: visible ? "block" : "none" }} aria-hidden={!visible}>
+    <div
+      style={{
+        display: visible ? "block" : "none",
+        visibility: visible ? "visible" : "hidden",
+        pointerEvents: visible ? "auto" : "none",
+        // Pull content up behind the Android status bar
+        // (counters body padding-top: env(safe-area-inset-top))
+        marginTop: "calc(-1 * env(safe-area-inset-top))",
+      }}
+      aria-hidden={!visible}
+    >
       <FestivalStorePage slug={slug} />
     </div>
   );

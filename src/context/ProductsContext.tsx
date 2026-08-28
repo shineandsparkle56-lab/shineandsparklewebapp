@@ -34,6 +34,7 @@ function mapRow(row: Record<string, unknown>): Product {
     base_variant_label: typeof row.base_variant_label === "string" ? row.base_variant_label : undefined,
     base_variant_color: typeof row.base_variant_color === "string" ? row.base_variant_color : undefined,
     tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+    sizes: Array.isArray(row.sizes) ? (row.sizes as string[]) : [],
     created_at: row.created_at as string | undefined,
   };
 }
@@ -77,6 +78,7 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
         base_variant_label: p.base_variant_label ?? null,
         base_variant_color: p.base_variant_color ?? null,
         tags: p.tags ?? [],
+        sizes: p.sizes ?? [],
       }])
       .select()
       .single();
@@ -104,6 +106,7 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
         base_variant_label: p.base_variant_label ?? null,
         base_variant_color: p.base_variant_color ?? null,
         tags: p.tags ?? [],
+        sizes: p.sizes ?? [],
       })
       .eq("id", id);
     if (err) throw new Error(err.message);

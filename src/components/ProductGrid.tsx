@@ -108,7 +108,7 @@ function FestivalCarousel({ festivals }: { festivals: Festival[] }) {
 
   return (
     <div
-      className="px-3 sm:px-4 py-1.5"
+      className="px-3 sm:px-4 pb-1.5"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
@@ -321,9 +321,9 @@ export function ProductGrid({ allCategoryImage }: { allCategoryImage?: string | 
         ref={filterBarRef}
         className="fixed left-0 right-0 z-30 bg-white border-b border-gray-100 shadow-sm transition-transform duration-300 ease-in-out"
         style={{
-          top: `${NAVBAR_H}px`,
+          top: `calc(env(safe-area-inset-top) + ${NAVBAR_H}px)`,
           transform: scrollingDown
-            ? `translateY(-${NAVBAR_H + filterBarHeight}px)`
+            ? `translateY(calc(-${filterBarHeight}px - ${NAVBAR_H}px - env(safe-area-inset-top)))`
             : "translateY(0)",
         }}
         data-testid="category-filter-bar"
@@ -528,7 +528,11 @@ export function ProductGrid({ allCategoryImage }: { allCategoryImage?: string | 
       </div>
 
       {/* ── Main section ──────────────────────────────────────────── */}
-      <section id="shop" className="bg-gray-50/50 pb-20" style={{ paddingTop: filterBarHeight + 8 }}>
+      <section
+        id="shop"
+        className="bg-gray-50/50 pb-20"
+        style={{ paddingTop: filterBarHeight + 12 }}
+      >
 
         {/* ── Festival store carousel ───────────────────────────── */}
         {activeFestivals.length > 0 && (

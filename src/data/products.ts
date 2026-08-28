@@ -29,5 +29,6 @@ export interface Product {
   base_variant_label?: string; // label for the implicit "base" option when variants exist, e.g. "Gold"
   base_variant_color?: string; // hex swatch color for the base option, e.g. "#C9A96E" (Gold)
   tags: string[];          // festival / collection tags e.g. ["navratri", "diwali"]
+  sizes: string[];         // available sizes e.g. ["2.4", "2.6", "2.8"] for bangles
   created_at?: string;     // ISO timestamp — used to show "New" badge
 }

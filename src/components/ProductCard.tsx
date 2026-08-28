@@ -286,6 +286,15 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
           <div className="p-4 flex flex-col gap-3">
             <div>
               <h3 className="font-serif text-gray-900 text-base leading-snug">{product.name}</h3>
+              {product.sizes && product.sizes.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {product.sizes.map((s) => (
+                    <span key={s} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-lg font-bold text-gray-900">₹{product.price}</span>
                 {product.originalPrice > product.price && <span className="text-sm text-gray-400 line-through">₹{product.originalPrice}</span>}
@@ -429,6 +438,15 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
         <div className="p-2.5 flex flex-col flex-1 gap-2">
           <div className="flex-1">
             <p className="text-xs font-serif text-gray-900 leading-snug line-clamp-2">{product.name}</p>
+            {product.sizes && product.sizes.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {product.sizes.map((s) => (
+                  <span key={s} className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="text-sm font-bold text-gray-900">₹{product.price}</span>
               {product.originalPrice > product.price && <span className="text-[10px] text-gray-400 line-through">₹{product.originalPrice}</span>}
@@ -539,6 +557,15 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
 
         <div className="p-6 flex flex-col flex-1">
           <h3 className="text-xl font-serif text-gray-900 mb-2">{product.name}</h3>
+          {product.sizes && product.sizes.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-2">
+              {product.sizes.map((s) => (
+                <span key={s} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">
+                  {s}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-3 mb-3">
             <span className="text-xl font-bold text-gray-900">₹{product.price}</span>
             {product.originalPrice > product.price && <span className="text-sm text-gray-400 line-through">₹{product.originalPrice}</span>}

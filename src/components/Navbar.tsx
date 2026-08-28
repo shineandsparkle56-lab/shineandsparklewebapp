@@ -40,10 +40,10 @@ export function Navbar() {
                 </button>
               </SheetTrigger>
 
-              <SheetContent side="left" className="w-[270px] sm:w-[290px] p-0 flex flex-col border-0 shadow-2xl bg-white [&>button]:top-3.5 [&>button]:right-3.5 [&>button]:w-7 [&>button]:h-7 [&>button]:rounded-full [&>button]:bg-gray-100 [&>button]:hover:bg-gray-200 [&>button]:opacity-100 [&>button]:flex [&>button]:items-center [&>button]:justify-center">
+              <SheetContent side="left" className="w-[85vw] max-w-[320px] p-0 flex flex-col border-0 shadow-2xl bg-white [&>button]:top-[calc(env(safe-area-inset-top)+0.875rem)] [&>button]:right-3.5 [&>button]:w-7 [&>button]:h-7 [&>button]:rounded-full [&>button]:bg-gray-100 [&>button]:hover:bg-gray-200 [&>button]:opacity-100 [&>button]:flex [&>button]:items-center [&>button]:justify-center">
 
                 {/* Brand */}
-                <div className="px-5 pt-7 pb-5">
+                <div className="px-5 pb-5" style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.75rem)" }}>
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-11 h-11 rounded-2xl bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0">
                       <img src="/logo.png" alt="" className="w-8 h-8 object-contain" />

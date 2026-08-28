@@ -27,6 +27,7 @@ function mapRow(row: Record<string, unknown>): Product {
     base_variant_label: typeof row.base_variant_label === "string" ? row.base_variant_label : undefined,
     base_variant_color: typeof row.base_variant_color === "string" ? row.base_variant_color : undefined,
     tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+    sizes: Array.isArray(row.sizes) ? (row.sizes as string[]) : [],
     created_at: row.created_at as string | undefined,
   };
 }

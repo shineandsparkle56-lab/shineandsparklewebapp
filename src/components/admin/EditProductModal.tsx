@@ -195,6 +195,7 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
   });
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [tags, setTags] = useState<string[]>([]);
+  const [sizes, setSizes] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   // Sync state when product changes (modal opens)
@@ -215,6 +216,7 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
     });
     setVariants(product.variants ?? []);
     setTags(product.tags ?? []);
+    setSizes(product.sizes ?? []);
     const urls = product.images?.length ? product.images : [product.image];
     img.seed(urls);
   }
@@ -299,6 +301,7 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
         base_variant_label: form.base_variant_label.trim() || undefined,
         base_variant_color: form.base_variant_color.trim() || undefined,
         tags,
+        sizes,
       });
       onSaved("Product updated!");
       onClose();
@@ -573,6 +576,61 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
                           className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#F3EEFB] text-[#9B6FD1]">
                           {tag}
                           <button type="button" onClick={() => toggleTag(tag)}
+                            className="ml-0.5 hover:text-red-400 transition-colors">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Sizes ── */}
+                <div className="sm:col-span-2">
+                  <label className="label">Sizes <span className="font-normal text-gray-400 normal-case">(e.g. 2.4, 2.6, 2.8 for bangles)</span></label>
+                  <p className="text-[11px] text-gray-400 mb-2">
+                    Type a size and press Enter or click Add.
+                  </p>
+                  {/* Input + Add button */}
+                  {(() => {
+                    const addSize = (input: HTMLInputElement | null) => {
+                      if (!input) return;
+                      const val = input.value.trim();
+                      if (val && !sizes.includes(val)) setSizes((prev) => [...prev, val]);
+                      input.value = "";
+                      input.focus();
+                    };
+                    return (
+                      <div className="flex gap-2 mb-2">
+                        <input
+                          id="size-input"
+                          type="text"
+                          placeholder="e.g. 2.4"
+                          className="input text-sm flex-1"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addSize(e.target as HTMLInputElement);
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addSize(document.getElementById("size-input") as HTMLInputElement)}
+                          className="px-3 py-2 bg-[#9B6FD1] text-white text-xs font-semibold rounded-xl hover:bg-[#8a5fc0] transition-colors shrink-0"
+                        >
+                          + Add
+                        </button>
+                      </div>
+                    );
+                  })()}
+                  {/* Size badges */}
+                  {sizes.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {sizes.map((s) => (
+                        <span key={s} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">
+                          {s}
+                          <button type="button" onClick={() => setSizes((prev) => prev.filter((x) => x !== s))}
                             className="ml-0.5 hover:text-red-400 transition-colors">
                             <X className="w-3 h-3" />
                           </button>

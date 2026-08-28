@@ -194,7 +194,13 @@ export function FestivalStorePage({ slug }: { slug: string }) {
     <div className="min-h-screen bg-gray-50">
 
       {/* ── Sticky header ─────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 text-white" style={{ background: banner_bg }}>
+      <header
+        className="sticky top-0 z-40 text-white"
+        style={{
+          background: banner_bg,
+          paddingTop: "env(safe-area-inset-top)",
+        }}
+      >
         <div className="container mx-auto px-4 h-14 flex items-center justify-between gap-3">
           <button
             onClick={() => navigate("/")}
@@ -310,7 +316,10 @@ export function FestivalStorePage({ slug }: { slug: string }) {
       ) : (
         <>
           {/* Sticky section tab bar */}
-          <div className="sticky top-14 z-30 bg-white border-b border-gray-100 shadow-sm">
+          <div
+            className="sticky z-30 bg-white border-b border-gray-100 shadow-sm"
+            style={{ top: "calc(env(safe-area-inset-top) + 3.5rem)" }}
+          >
             {/* Section count hint */}
             <div className="flex items-center justify-between px-4 pt-2 pb-0">
               <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">

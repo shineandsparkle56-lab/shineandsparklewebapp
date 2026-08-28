@@ -294,10 +294,10 @@ export function CartDrawer() {
 
   return (
     <Sheet open={isCartOpen} onOpenChange={handleOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0 max-h-screen" data-testid="cart-drawer" ref={onSheetContent}>
+      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0 h-full [&>button]:top-[calc(env(safe-area-inset-top)+0.875rem)] [&>button]:right-3.5 [&>button]:w-7 [&>button]:h-7 [&>button]:rounded-full [&>button]:bg-gray-100 [&>button]:hover:bg-gray-200 [&>button]:opacity-100 [&>button]:flex [&>button]:items-center [&>button]:justify-center" data-testid="cart-drawer" ref={onSheetContent}>
 
         {/* Header */}
-        <SheetHeader className="px-5 pt-5 pb-3 border-b border-gray-100 shrink-0">
+        <SheetHeader className="px-5 pb-3 border-b border-gray-100 shrink-0" style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.25rem)" }}>
           <SheetTitle className="font-serif text-xl text-gray-900 flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 fill-[#9B6FD1] text-[#9B6FD1]" />
             Your Cart

@@ -205,11 +205,28 @@
 @layer utilities {
   /* Hide scrollbar while keeping scroll functionality */
   .scrollbar-none {
-    -ms-overflow-style: none;   /* IE / Edge */
-    scrollbar-width: none;      /* Firefox */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
   .scrollbar-none::-webkit-scrollbar {
-    display: none;              /* Chrome / Safari / Opera */
+    display: none;
+  }
+
+  /* Safe area padding helpers for Capacitor/Android status bar */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .mt-safe {
+    margin-top: env(safe-area-inset-top);
+  }
+  /* Use on any sticky/fixed header to push content below the status bar */
+  .top-safe {
+    top: env(safe-area-inset-top);
+  }
+  /* Combined: sticky header that clears the status bar */
+  .sticky-safe {
+    position: sticky;
+    top: env(safe-area-inset-top);
   }
 }
 

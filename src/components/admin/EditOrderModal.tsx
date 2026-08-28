@@ -76,30 +76,48 @@ interface FormState {
   subtotal: string;
   shipping_charge: string;
   cod_charge: string;
+  raw_shipping_charge: string;
+  raw_cod_charge: string;
+  courier_name: string;
+  // Shiprocket
+  sr_order_id: string;
+  sr_shipment_id: string;
+  awb_code: string;
   // Shipping box
   box_length: string;
   box_breadth: string;
   box_height: string;
   weight_kg: string;
+  // Order date
+  created_at: string;
 }
 
 function toForm(order: OrderRow): FormState {
   return {
-    customer_name:    order.customer_name    ?? "",
-    customer_mobile:  order.customer_mobile  ?? "",
-    customer_address: order.customer_address ?? "",
-    customer_city:    order.customer_city    ?? "",
-    customer_state:   order.customer_state   ?? "",
-    pincode:          order.pincode          ?? "",
-    payment_mode:     order.payment_mode     ?? "prepaid",
-    status:           order.status           ?? "pending",
-    subtotal:         String(order.subtotal),
-    shipping_charge:  String(order.shipping_charge),
-    cod_charge:       String(order.cod_charge),
-    box_length:       String(order.box_length  ?? 5),
-    box_breadth:      String(order.box_breadth ?? 5),
-    box_height:       String(order.box_height  ?? 3),
-    weight_kg:        String(order.weight_kg   ?? 0.5),
+    customer_name:      order.customer_name      ?? "",
+    customer_mobile:    order.customer_mobile    ?? "",
+    customer_address:   order.customer_address   ?? "",
+    customer_city:      order.customer_city      ?? "",
+    customer_state:     order.customer_state     ?? "",
+    pincode:            order.pincode            ?? "",
+    payment_mode:       order.payment_mode       ?? "prepaid",
+    status:             order.status             ?? "pending",
+    subtotal:           String(order.subtotal),
+    shipping_charge:    String(order.shipping_charge),
+    cod_charge:         String(order.cod_charge),
+    raw_shipping_charge: String(order.raw_shipping_charge ?? ""),
+    raw_cod_charge:     String(order.raw_cod_charge      ?? ""),
+    courier_name:       order.courier_name       ?? "",
+    sr_order_id:        String(order.sr_order_id  ?? ""),
+    sr_shipment_id:     String(order.sr_shipment_id ?? ""),
+    awb_code:           order.awb_code           ?? "",
+    box_length:         String(order.box_length  ?? 5),
+    box_breadth:        String(order.box_breadth ?? 5),
+    box_height:         String(order.box_height  ?? 3),
+    weight_kg:          String(order.weight_kg   ?? 0.5),
+    created_at:         order.created_at
+      ? new Date(order.created_at).toISOString().slice(0, 16)
+      : "",
   };
 }
 
@@ -124,23 +142,30 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
     const cod_charge      = Number(form.cod_charge)      || 0;
     const grand_total     = subtotal + shipping_charge + (form.payment_mode === "cod" ? cod_charge : 0);
 
-    const patch = {
-      customer_name:    form.customer_name.trim(),
-      customer_mobile:  form.customer_mobile.trim(),
-      customer_address: form.customer_address.trim(),
-      customer_city:    form.customer_city.trim(),
-      customer_state:   form.customer_state.trim(),
-      pincode:          form.pincode.trim(),
-      payment_mode:     form.payment_mode,
-      status:           form.status,
+    const patch: Partial<OrderRow> = {
+      customer_name:      form.customer_name.trim(),
+      customer_mobile:    form.customer_mobile.trim(),
+      customer_address:   form.customer_address.trim(),
+      customer_city:      form.customer_city.trim(),
+      customer_state:     form.customer_state.trim(),
+      pincode:            form.pincode.trim(),
+      payment_mode:       form.payment_mode,
+      status:             form.status,
       subtotal,
       shipping_charge,
       cod_charge,
       grand_total,
+      raw_shipping_charge: form.raw_shipping_charge !== "" ? Number(form.raw_shipping_charge) : undefined,
+      raw_cod_charge:      form.raw_cod_charge      !== "" ? Number(form.raw_cod_charge)      : undefined,
+      courier_name:        form.courier_name.trim()  || undefined,
+      sr_order_id:         form.sr_order_id  !== "" ? Number(form.sr_order_id)  : undefined,
+      sr_shipment_id:      form.sr_shipment_id !== "" ? Number(form.sr_shipment_id) : undefined,
+      awb_code:            form.awb_code.trim() || undefined,
       box_length:  parseFloat(form.box_length)  || 5,
       box_breadth: parseFloat(form.box_breadth) || 5,
       box_height:  parseFloat(form.box_height)  || 3,
       weight_kg:   parseFloat(form.weight_kg)   || 0.5,
+      ...(form.created_at ? { created_at: new Date(form.created_at).toISOString() } : {}),
     };
 
     const { error, count } = await supabase
@@ -263,6 +288,49 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
                   <label className="label">COD Charge (₹)</label>
                   <input type="number" min="0" value={form.cod_charge} onChange={(e) => set("cod_charge", e.target.value)} className="input" />
                 </div>
+              </div>
+
+              {/* Raw/actual charges */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Actual Shipping Cost (₹) <span className="font-normal normal-case text-gray-400">— admin only</span></label>
+                  <input type="number" min="0" value={form.raw_shipping_charge} onChange={(e) => set("raw_shipping_charge", e.target.value)} className="input" placeholder="Leave blank if same as above" />
+                </div>
+                <div>
+                  <label className="label">Actual COD Cost (₹) <span className="font-normal normal-case text-gray-400">— admin only</span></label>
+                  <input type="number" min="0" value={form.raw_cod_charge} onChange={(e) => set("raw_cod_charge", e.target.value)} className="input" placeholder="Leave blank if same as above" />
+                </div>
+              </div>
+
+              {/* Courier & AWB */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Courier Name</label>
+                  <input value={form.courier_name} onChange={(e) => set("courier_name", e.target.value)} className="input" placeholder="e.g. Xpressbees" />
+                </div>
+                <div>
+                  <label className="label">AWB / Tracking No.</label>
+                  <input value={form.awb_code} onChange={(e) => set("awb_code", e.target.value)} className="input font-mono" placeholder="e.g. 1234567890" />
+                </div>
+                <div>
+                  <label className="label">Shiprocket Order ID</label>
+                  <input type="number" value={form.sr_order_id} onChange={(e) => set("sr_order_id", e.target.value)} className="input font-mono" placeholder="SR order ID" />
+                </div>
+                <div>
+                  <label className="label">Shiprocket Shipment ID</label>
+                  <input type="number" value={form.sr_shipment_id} onChange={(e) => set("sr_shipment_id", e.target.value)} className="input font-mono" placeholder="SR shipment ID" />
+                </div>
+              </div>
+
+              {/* Order date */}
+              <div>
+                <label className="label">Order Date &amp; Time</label>
+                <input
+                  type="datetime-local"
+                  value={form.created_at}
+                  onChange={(e) => set("created_at", e.target.value)}
+                  className="input"
+                />
               </div>
 
               {/* Shipping dimensions & weight */}

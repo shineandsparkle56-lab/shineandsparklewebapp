@@ -230,3 +230,11 @@ CREATE POLICY "anyone can delete festivals"
 -- ─────────────────────────────────────────────
 ALTER TABLE festivals
   ADD COLUMN IF NOT EXISTS banner_url_mobile text NOT NULL DEFAULT '';
+
+-- ─────────────────────────────────────────────
+-- 15. Product sizes column
+--     Array of available sizes e.g. ["2.4","2.6","2.8"] for bangles.
+--     Shown as small tags on product cards.
+-- ─────────────────────────────────────────────
+ALTER TABLE products
+  ADD COLUMN IF NOT EXISTS sizes text[] NOT NULL DEFAULT '{}';
