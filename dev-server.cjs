@@ -37,8 +37,9 @@ const createOrderHandler = (require("./api/create-shiprocket-order.ts").default 
 const uploadImageHandler  = (require("./api/upload-image.ts").default  || require("./api/upload-image.ts"));
 const deleteImagesHandler = (require("./api/delete-images.ts").default  || require("./api/delete-images.ts"));
 const proxyImageHandler   = (require("./api/proxy-image.ts").default    || require("./api/proxy-image.ts"));
-const trackShipmentHandler  = (require("./api/track-shipment.ts").default   || require("./api/track-shipment.ts"));
-const getShipmentAwbHandler = (require("./api/get-shipment-awb.ts").default || require("./api/get-shipment-awb.ts"));
+const trackShipmentHandler      = (require("./api/track-shipment.ts").default        || require("./api/track-shipment.ts"));
+const getShipmentAwbHandler     = (require("./api/get-shipment-awb.ts").default       || require("./api/get-shipment-awb.ts"));
+const getPickupLocationsHandler = (require("./api/get-pickup-locations.ts").default   || require("./api/get-pickup-locations.ts"));
 
 app.post("/api/shipping-rate",           (req, res) => shippingHandler(req, res));
 app.post("/api/create-shiprocket-order", (req, res) => createOrderHandler(req, res));
@@ -47,6 +48,7 @@ app.post("/api/delete-images",           (req, res) => deleteImagesHandler(req, 
 app.get("/api/proxy-image",              (req, res) => proxyImageHandler(req, res));
 app.get("/api/track-shipment",           (req, res) => trackShipmentHandler(req, res));
 app.get("/api/get-shipment-awb",         (req, res) => getShipmentAwbHandler(req, res));
+app.get("/api/get-pickup-locations",     (req, res) => getPickupLocationsHandler(req, res));
 
 const PORT = 3001;
 app.listen(PORT, () => {

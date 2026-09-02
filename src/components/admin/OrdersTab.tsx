@@ -50,6 +50,7 @@ import { Product } from "../../data/products";
 import { useToast } from "../../hooks/useToast";
 import { imgUrl } from "../../lib/imgUrl";
 import { pushToShiprocket, saveSrIds, buildShiprocketItems, estimateWeight } from "../../lib/shiprocket";
+import { useSettings } from "../../hooks/useSettings";
 import { EditOrderModal } from "./EditOrderModal";
 import { AddOrderModal } from "./AddOrderModal";
 import { QuickAddOrderModal } from "./QuickAddOrderModal";
@@ -60,6 +61,7 @@ import { ORDER_STATUSES } from "./EditOrderModal";
 export function OrdersTab() {
   const { products, updateStock } = useProducts();
   const toast = useToast();
+  const { defaultPickupLocation } = useSettings();
 
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
@@ -225,6 +227,8 @@ export function OrdersTab() {
     }
     setPushingId(order.id); setSrResult(null);
     try {
+      // Resolution order: per-order override → settings default → env var (server-side fallback)
+      const resolvedPickup = order.pickup_location?.trim() || defaultPickupLocation || undefined;
       const result = await pushToShiprocket({
         order_id:         String(order.id),
         order_date:       new Date(order.created_at).toISOString().slice(0, 19),
@@ -244,6 +248,7 @@ export function OrdersTab() {
         breadth:          order.box_breadth ?? 5,
         height:           order.box_height  ?? 3,
         items:            buildShiprocketItems(order.items),
+        pickup_location:  resolvedPickup,
       });
       await saveSrIds(order.id, result);
       setOrders((prev) => prev.map((o) =>

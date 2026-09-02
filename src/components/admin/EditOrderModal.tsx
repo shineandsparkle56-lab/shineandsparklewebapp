@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Pencil, X, CheckCircle2, Package } from "lucide-react";
+import { Pencil, X, CheckCircle2, Package, Warehouse, Loader2 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
 type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
@@ -55,6 +55,8 @@ export interface OrderRow {
   box_breadth?: number;
   box_height?: number;
   weight_kg?: number;
+  // Shiprocket pickup location name (overrides the default set in Settings)
+  pickup_location?: string;
 }
 
 interface Props {
@@ -90,6 +92,8 @@ interface FormState {
   weight_kg: string;
   // Order date
   created_at: string;
+  // Pickup location override
+  pickup_location: string;
 }
 
 function toForm(order: OrderRow): FormState {
@@ -118,6 +122,7 @@ function toForm(order: OrderRow): FormState {
     created_at:         order.created_at
       ? new Date(order.created_at).toISOString().slice(0, 16)
       : "",
+    pickup_location:    order.pickup_location    ?? "",
   };
 }
 
@@ -129,6 +134,22 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
     if (order) setForm(toForm(order));
   }, [order?.id]);
 
+  // Pickup locations
+  interface PickupLoc { id: number; name: string; city: string; state: string; pin_code: string; is_primary: boolean; }
+  const [pickupLocations, setPickupLocations] = useState<PickupLoc[]>([]);
+  const [pickupLoading, setPickupLoading] = useState(false);
+
+  useEffect(() => {
+    if (!order) return;
+    setPickupLoading(true);
+    fetch("/api/get-pickup-locations")
+      .then((r) => r.json())
+      .then((d: { locations?: PickupLoc[]; error?: string }) => {
+        if (d.locations) setPickupLocations(d.locations);
+      })
+      .catch(() => { /* silent — the free-text input is still usable */ })
+      .finally(() => setPickupLoading(false));
+  }, [!!order]);
   const set = (k: keyof FormState, v: string) =>
     setForm((prev) => ({ ...prev, [k]: v }));
 
@@ -165,6 +186,7 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
       box_breadth: parseFloat(form.box_breadth) || 5,
       box_height:  parseFloat(form.box_height)  || 3,
       weight_kg:   parseFloat(form.weight_kg)   || 0.5,
+      pickup_location: form.pickup_location.trim() || undefined,
       ...(form.created_at ? { created_at: new Date(form.created_at).toISOString() } : {}),
     };
 
@@ -331,6 +353,39 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
                   onChange={(e) => set("created_at", e.target.value)}
                   className="input"
                 />
+              </div>
+
+              {/* Pickup location override */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Warehouse className="w-4 h-4 text-[#9B6FD1]" />
+                  <label className="label mb-0">
+                    Pickup Location
+                    <span className="ml-1 font-normal normal-case text-gray-400">— overrides default for this order</span>
+                  </label>
+                  {pickupLoading && <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" />}
+                </div>
+                {pickupLocations.length > 0 ? (
+                  <select
+                    value={form.pickup_location}
+                    onChange={(e) => set("pickup_location", e.target.value)}
+                    className="input"
+                  >
+                    <option value="">Use default (from Settings)</option>
+                    {pickupLocations.map((loc) => (
+                      <option key={loc.id} value={loc.name}>
+                        {loc.name} — {loc.city}, {loc.state} {loc.pin_code}{loc.is_primary ? " (Primary)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={form.pickup_location}
+                    onChange={(e) => set("pickup_location", e.target.value)}
+                    className="input"
+                    placeholder="Leave blank to use default (e.g. Home, Home-2)"
+                  />
+                )}
               </div>
 
               {/* Shipping dimensions & weight */}

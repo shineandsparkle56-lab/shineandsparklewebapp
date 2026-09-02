@@ -70,6 +70,7 @@ export interface CreateOrderPayload {
   length?: number;            // cm
   breadth?: number;
   height?: number;
+  pickup_location?: string;   // overrides SHIPROCKET_PICKUP_LOCATION env var
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -104,7 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const srPayload = {
       order_id: body.order_id,
       order_date: body.order_date ?? new Date().toISOString().slice(0, 19),
-      pickup_location: process.env.SHIPROCKET_PICKUP_LOCATION,
+      pickup_location: body.pickup_location?.trim() || process.env.SHIPROCKET_PICKUP_LOCATION,
       channel_id: "",
       comment: "",
       billing_customer_name: firstName,

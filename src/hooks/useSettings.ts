@@ -5,6 +5,7 @@ interface Settings {
   codEnabled: boolean;
   allCategoryImage: string | null;
   minOrderValue: number;
+  defaultPickupLocation: string;
 }
 
 interface UseSettingsReturn extends Settings {
@@ -12,12 +13,14 @@ interface UseSettingsReturn extends Settings {
   setCodEnabled: (enabled: boolean) => Promise<void>;
   setAllCategoryImage: (url: string | null) => Promise<void>;
   setMinOrderValue: (value: number) => Promise<void>;
+  setDefaultPickupLocation: (name: string) => Promise<void>;
 }
 
 export function useSettings(): UseSettingsReturn {
   const [codEnabled, setCodEnabledState] = useState(true);
   const [allCategoryImage, setAllCategoryImageState] = useState<string | null>(null);
   const [minOrderValue, setMinOrderValueState] = useState(0);
+  const [defaultPickupLocation, setDefaultPickupLocationState] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -25,10 +28,12 @@ export function useSettings(): UseSettingsReturn {
       getSetting("cod_enabled"),
       getSetting("all_category_image_url"),
       getSetting("min_order_value"),
-    ]).then(([cod, allImg, minOrder]) => {
+      getSetting("default_pickup_location"),
+    ]).then(([cod, allImg, minOrder, pickup]) => {
       if (cod !== null) setCodEnabledState(cod === "true");
       if (allImg !== null && allImg !== "") setAllCategoryImageState(allImg);
       if (minOrder !== null) setMinOrderValueState(parseInt(minOrder, 10) || 0);
+      if (pickup !== null) setDefaultPickupLocationState(pickup);
       setLoading(false);
     });
   }, []);
@@ -48,5 +53,20 @@ export function useSettings(): UseSettingsReturn {
     await setSetting("min_order_value", String(value));
   };
 
-  return { codEnabled, allCategoryImage, minOrderValue, loading, setCodEnabled, setAllCategoryImage, setMinOrderValue };
+  const setDefaultPickupLocation = async (name: string) => {
+    setDefaultPickupLocationState(name);
+    await setSetting("default_pickup_location", name);
+  };
+
+  return {
+    codEnabled,
+    allCategoryImage,
+    minOrderValue,
+    defaultPickupLocation,
+    loading,
+    setCodEnabled,
+    setAllCategoryImage,
+    setMinOrderValue,
+    setDefaultPickupLocation,
+  };
 }

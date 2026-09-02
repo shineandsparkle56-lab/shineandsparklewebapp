@@ -27,6 +27,8 @@ export interface ShiprocketPayload {
   breadth?: number;
   height?: number;
   items: ShiprocketItem[];
+  /** Shiprocket pickup location name. If omitted the API falls back to SHIPROCKET_PICKUP_LOCATION env var. */
+  pickup_location?: string;
 }
 
 export interface ShiprocketResult {
