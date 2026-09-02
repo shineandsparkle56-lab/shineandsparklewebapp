@@ -51,7 +51,7 @@ import { apiUrl } from "../lib/apiUrl";
 
 export function CartDrawer() {
   const { isCartOpen, setIsCartOpen, cart, removeFromCart, updateQuantity, subtotal, totalItems, shippingCredit } = useCart();
-  const { codEnabled, minOrderValue } = useSettings();
+  const { codEnabled, minOrderValue, defaultPickupPincode } = useSettings();
 
   // Step state
   const [step, setStep] = useState<Step>(1);
@@ -121,6 +121,7 @@ export function CartDrawer() {
           cod: mode === "cod",
           weight: estimateWeight(totalItems),
           orderValue: subtotal,
+          ...(defaultPickupPincode ? { pickupPincode: defaultPickupPincode } : {}),
         }),
       });
       const text = await res.text();

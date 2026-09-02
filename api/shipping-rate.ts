@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { log } from "console";
 
 const SR_BASE = "https://apiv2.shiprocket.in/v1/external";
 
@@ -46,13 +45,14 @@ async function getToken(): Promise<string> {
 
 async function checkServiceability(
   token: string,
+  pickupPincode: string,
   pincode: string,
   cod: boolean,
   weight: number,
   orderValue: number
 ) {
   const params = new URLSearchParams({
-    pickup_postcode: process.env.SHIPROCKET_PICKUP_PINCODE!,
+    pickup_postcode: pickupPincode,
     delivery_postcode: pincode,
     weight: String(weight),
     cod: cod ? "1" : "0",
@@ -78,16 +78,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!process.env.SHIPROCKET_EMAIL || !process.env.SHIPROCKET_PASSWORD) {
     return res.status(500).json({ error: "SHIPROCKET_EMAIL / PASSWORD not set" });
   }
-  if (!process.env.SHIPROCKET_PICKUP_PINCODE) {
-    return res.status(500).json({ error: "SHIPROCKET_PICKUP_PINCODE not set" });
-  }
 
-  const { pincode, cod = false, weight = 0.5, orderValue = 0 } = (req.body as {
+  const { pincode, cod = false, weight = 0.5, orderValue = 0, pickupPincode } = (req.body as {
     pincode: string;
     cod: boolean;
     weight: number;
     orderValue: number;
+    pickupPincode?: string;
   }) || {};
+
+  // Resolve pickup postcode: body param → env var fallback
+  const resolvedPickupPincode = pickupPincode?.trim() || process.env.SHIPROCKET_PICKUP_PINCODE;
+  if (!resolvedPickupPincode) {
+    return res.status(500).json({ error: "SHIPROCKET_PICKUP_PINCODE not set" });
+  }
 
   if (!pincode || !/^\d{6}$/.test(String(pincode))) {
     return res.status(400).json({ error: "Enter a valid 6-digit pincode" });
@@ -95,14 +99,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     let token = await getToken();
-    let srRes = await checkServiceability(token, pincode, cod, weight, orderValue);
+    let srRes = await checkServiceability(token, resolvedPickupPincode, pincode, cod, weight, orderValue);
 
     // Auto-refresh if token expired
     if (srRes.status === 401) {
       cachedToken = null;
       tokenExpiry = 0;
       token = await getToken();
-      srRes = await checkServiceability(token, pincode, cod, weight, orderValue);
+      srRes = await checkServiceability(token, resolvedPickupPincode, pincode, cod, weight, orderValue);
     }
 
     const srData = await srRes.json();
@@ -128,7 +132,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    available.sort((a, b) => a.freight_charge - b.freight_charge);
+    available.sort((a, b) =>
+      (a.freight_charge + (a.whatsapp_charges ?? 0)) -
+      (b.freight_charge + (b.whatsapp_charges ?? 0))
+    );
     const best = available[0];
 
     // freight_charge + whatsapp_charges = total charge shown in Shiprocket dashboard

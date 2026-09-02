@@ -6,6 +6,7 @@ interface Settings {
   allCategoryImage: string | null;
   minOrderValue: number;
   defaultPickupLocation: string;
+  defaultPickupPincode: string;
 }
 
 interface UseSettingsReturn extends Settings {
@@ -14,6 +15,7 @@ interface UseSettingsReturn extends Settings {
   setAllCategoryImage: (url: string | null) => Promise<void>;
   setMinOrderValue: (value: number) => Promise<void>;
   setDefaultPickupLocation: (name: string) => Promise<void>;
+  setDefaultPickupPincode: (pincode: string) => Promise<void>;
 }
 
 export function useSettings(): UseSettingsReturn {
@@ -21,6 +23,7 @@ export function useSettings(): UseSettingsReturn {
   const [allCategoryImage, setAllCategoryImageState] = useState<string | null>(null);
   const [minOrderValue, setMinOrderValueState] = useState(0);
   const [defaultPickupLocation, setDefaultPickupLocationState] = useState("");
+  const [defaultPickupPincode, setDefaultPickupPincodeState] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,11 +32,13 @@ export function useSettings(): UseSettingsReturn {
       getSetting("all_category_image_url"),
       getSetting("min_order_value"),
       getSetting("default_pickup_location"),
-    ]).then(([cod, allImg, minOrder, pickup]) => {
+      getSetting("default_pickup_pincode"),
+    ]).then(([cod, allImg, minOrder, pickup, pickupPin]) => {
       if (cod !== null) setCodEnabledState(cod === "true");
       if (allImg !== null && allImg !== "") setAllCategoryImageState(allImg);
       if (minOrder !== null) setMinOrderValueState(parseInt(minOrder, 10) || 0);
       if (pickup !== null) setDefaultPickupLocationState(pickup);
+      if (pickupPin !== null) setDefaultPickupPincodeState(pickupPin);
       setLoading(false);
     });
   }, []);
@@ -58,15 +63,22 @@ export function useSettings(): UseSettingsReturn {
     await setSetting("default_pickup_location", name);
   };
 
+  const setDefaultPickupPincode = async (pincode: string) => {
+    setDefaultPickupPincodeState(pincode);
+    await setSetting("default_pickup_pincode", pincode);
+  };
+
   return {
     codEnabled,
     allCategoryImage,
     minOrderValue,
     defaultPickupLocation,
+    defaultPickupPincode,
     loading,
     setCodEnabled,
     setAllCategoryImage,
     setMinOrderValue,
     setDefaultPickupLocation,
+    setDefaultPickupPincode,
   };
 }

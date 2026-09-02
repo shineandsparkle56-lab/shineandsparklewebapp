@@ -16,6 +16,7 @@ export function SettingsTab() {
     codEnabled, setCodEnabled,
     minOrderValue, setMinOrderValue,
     defaultPickupLocation, setDefaultPickupLocation,
+    setDefaultPickupPincode,
     loading,
   } = useSettings();
 
@@ -71,7 +72,13 @@ export function SettingsTab() {
 
   const handleSavePickup = async () => {
     setSavingPickup(true);
-    await setDefaultPickupLocation(selectedPickup);
+    // Find the pincode for the selected location so the shipping-rate API
+    // can use the correct pickup postcode for this warehouse.
+    const loc = pickupLocations.find((l) => l.name === selectedPickup);
+    await Promise.all([
+      setDefaultPickupLocation(selectedPickup),
+      setDefaultPickupPincode(loc?.pin_code ?? ""),
+    ]);
     setSavingPickup(false);
     setPickupSaved(true);
     setTimeout(() => setPickupSaved(false), 2000);
@@ -163,7 +170,7 @@ export function SettingsTab() {
               </div>
               <p className="text-xs text-gray-400 mt-0.5">
                 {defaultPickupLocation
-                  ? `Orders will be picked up from "${defaultPickupLocation}" unless overridden per order.`
+                  ? `Orders will be picked up from "${defaultPickupLocation}" unless overridden per order. Delivery charges shown to customers are calculated from this location.`
                   : "Choose which warehouse Shiprocket should pick up from by default."}
               </p>
             </div>
