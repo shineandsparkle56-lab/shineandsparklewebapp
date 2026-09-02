@@ -3,12 +3,13 @@ import { useLocation } from "wouter";
 import { useRef } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { CartProvider } from "./context/CartContext";
+import { CartProvider, useCart } from "./context/CartContext";
 import { ProductsProvider } from "./context/ProductsContext";
 import { CategoriesProvider } from "./context/CategoriesContext";
 import { ScrollProvider } from "./context/ScrollContext";
 import { useSettings } from "./hooks/useSettings";
 
+import { useAndroidBackButton } from "./hooks/useAndroidBackButton";
 import { Navbar } from "./components/Navbar";
 import { ProductGrid } from "./components/ProductGrid";
 import { About } from "./components/About";
@@ -82,6 +83,8 @@ function FestivalShell({ slug }: { slug: string }) {
 function AppRouter() {
   const [path] = useLocation();
   const { allCategoryImage, loading } = useSettings();
+  const { isCartOpen, setIsCartOpen } = useCart();
+  useAndroidBackButton(isCartOpen, setIsCartOpen);
 
   // Remember the last festival slug so when we navigate to /product/:id
   // from a festival page, we keep the FestivalShell mounted underneath.
