@@ -80,6 +80,19 @@ function FestivalShell({ slug }: { slug: string }) {
   );
 }
 
+function CartVisibility() {
+  const [path] = useLocation();
+  const { loading } = useSettings();
+  const isAdmin = path === "/admin" || path.startsWith("/admin/");
+  if (isAdmin || loading) return null;
+  return (
+    <>
+      <CartDrawer />
+      <FloatingCart />
+    </>
+  );
+}
+
 function AppRouter() {
   const [path] = useLocation();
   const { allCategoryImage, loading } = useSettings();
@@ -100,30 +113,29 @@ function AppRouter() {
   // ── Splash screen while settings load ─────────────────────
   if (loading) {
     return (
-      <div className="fixed inset-0 flex flex-col items-center justify-center bg-white z-50 gap-4">
-        <div className="flex flex-col items-center gap-3 animate-pulse">
-          <img src="/logo.png" alt="Shine and Sparkle" className="h-20 w-auto object-contain" />
-          <span className="font-serif text-2xl font-bold text-[#9B6FD1] tracking-tight">
-            Shine and Sparkle
-          </span>
-        </div>
-        <div className="flex gap-1.5 mt-2">
-          <span className="w-2 h-2 rounded-full bg-[#9B6FD1] animate-bounce" style={{ animationDelay: "0ms" }} />
-          <span className="w-2 h-2 rounded-full bg-[#9B6FD1] animate-bounce" style={{ animationDelay: "150ms" }} />
-          <span className="w-2 h-2 rounded-full bg-[#9B6FD1] animate-bounce" style={{ animationDelay: "300ms" }} />
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-white z-50">
+        <img
+          src="/logo.png"
+          alt="Shine and Sparkle"
+          className="w-48 h-48 object-contain animate-pulse"
+        />
+        <div className="flex gap-1.5 ">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#9B6FD1] animate-bounce" style={{ animationDelay: "0ms" }} />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#9B6FD1] animate-bounce" style={{ animationDelay: "150ms" }} />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#9B6FD1] animate-bounce" style={{ animationDelay: "300ms" }} />
         </div>
       </div>
     );
   }
 
   // ── Admin & static pages ───────────────────────────────────
-  if (path === "/admin")            return <AdminLogin />;
-  if (path === "/admin/dashboard")  return <AdminPanel />;
-  if (path === "/privacy-policy")   return <PrivacyPolicy />;
+  if (path === "/admin") return <AdminLogin />;
+  if (path === "/admin/dashboard") return <AdminPanel />;
+  if (path === "/privacy-policy") return <PrivacyPolicy />;
   if (path === "/terms-of-service") return <TermsOfService />;
-  if (path === "/track")            return <PageShell><TrackOrder /></PageShell>;
-  if (path === "/about")            return <PageShell><About /></PageShell>;
-  if (path === "/contact")          return <PageShell><Contact /></PageShell>;
+  if (path === "/track") return <PageShell><TrackOrder /></PageShell>;
+  if (path === "/about") return <PageShell><About /></PageShell>;
+  if (path === "/contact") return <PageShell><Contact /></PageShell>;
 
   const productId = path.startsWith("/product/") ? Number(path.split("/")[2]) : null;
   const isValidProduct = productId !== null && !isNaN(productId) && productId > 0;
@@ -167,9 +179,8 @@ function App() {
               <ScrollProvider>
                 <CartProvider>
                   <AppRouter />
-                  {/* Cart rendered at root — above all z-index layers including product overlay */}
-                  <CartDrawer />
-                  <FloatingCart />
+                  {/* Cart rendered at root — suppressed on admin pages */}
+                  <CartVisibility />
                   <Toaster />
                 </CartProvider>
               </ScrollProvider>
