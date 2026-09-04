@@ -1,6 +1,13 @@
 import { supabase } from "./supabase";
 
-export type AppSettingKey = "cod_enabled" | "all_category_image_url" | "min_order_value" | "default_pickup_location" | "default_pickup_pincodes";
+export type AppSettingKey = "cod_enabled" | "all_category_image_url" | "min_order_value" | "default_pickup_location" | "default_pickup_pincodes" | "local_delivery_zones";
+
+export interface LocalDeliveryZone {
+  pincode: string;
+  charge: number;
+  days: number;
+  label: string;
+}
 
 /** Fetch a single setting value. Returns null if not found. */
 export async function getSetting(key: AppSettingKey): Promise<string | null> {

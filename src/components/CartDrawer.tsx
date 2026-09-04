@@ -22,6 +22,7 @@ interface ShippingResult {
   codCharge?: number;
   pickupPincode?: string;
   message?: string;
+  isLocalZone?: boolean;
 }
 
 interface CustomerInfo {
@@ -52,7 +53,7 @@ import { apiUrl } from "../lib/apiUrl";
 
 export function CartDrawer() {
   const { isCartOpen, setIsCartOpen, cart, removeFromCart, updateQuantity, subtotal, totalItems, shippingCredit } = useCart();
-  const { codEnabled, minOrderValue, defaultPickupPincodes } = useSettings();
+  const { codEnabled, minOrderValue, defaultPickupPincodes, localDeliveryZones } = useSettings();
 
   // Step state
   const [step, setStep] = useState<Step>(1);
@@ -113,6 +114,23 @@ export function CartDrawer() {
     setCheckingRate(true);
     setShipping(null);
     setRateError("");
+
+    // ── Local delivery zone check (bypasses Shiprocket) ──────
+    const localZone = localDeliveryZones.find((z) => z.pincode.trim() === pc.trim());
+    if (localZone) {
+      setShipping({
+        serviceable: true,
+        courierName: localZone.label || "Local Delivery",
+        estimatedDays: localZone.days,
+        shippingCharge: localZone.charge,
+        codCharge: 0,
+        pickupPincode: undefined,
+        isLocalZone: true,
+      });
+      setCheckingRate(false);
+      return;
+    }
+
     try {
       const res = await fetch(apiUrl("/api/shipping-rate"), {
         method: "POST",
@@ -454,7 +472,7 @@ export function CartDrawer() {
                                   <div>
                                     <p className="text-sm font-semibold text-green-800">Delivery available</p>
                                     <p className="text-xs text-green-600">
-                                      By {moment().add((parseInt(String(shipping.estimatedDays ?? 0), 10) || 0) + 2, "days").format("ddd, D MMM")}
+                                      By {moment().add((parseInt(String(shipping.estimatedDays ?? 0), 10) || 0) + (shipping.isLocalZone ? 0 : 2), "days").format("ddd, D MMM")}
                                       {rawCodCharge > 0 ? ` • COD: ₹${codCharge}${codSaved > 0 ? ` (₹${codSaved} saved)` : ""}` : ""}
                                     </p>
                                   </div>
@@ -588,7 +606,7 @@ export function CartDrawer() {
                       <div className="text-xs text-green-700 space-y-0.5">
                         <p className="font-semibold">Delivering to PIN {pincode}</p>
                         <p>
-                          Arrives by {moment().add((parseInt(String(shipping?.estimatedDays ?? 0), 10) || 0) + 2, "days").format("ddd, D MMM")}
+                          Arrives by {moment().add((parseInt(String(shipping?.estimatedDays ?? 0), 10) || 0) + (shipping?.isLocalZone ? 0 : 2), "days").format("ddd, D MMM")}
                           {" "}· {paymentMode === "cod" ? "Cash on Delivery" : "Online Payment"}
                         </p>
                         <p>
