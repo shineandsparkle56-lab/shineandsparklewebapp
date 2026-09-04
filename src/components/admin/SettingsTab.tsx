@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings, Warehouse, Loader2, RefreshCw } from "lucide-react";
+import { Settings, Warehouse, Loader2, RefreshCw, CheckSquare, Square } from "lucide-react";
 import { useSettings } from "../../hooks/useSettings";
 
 interface PickupLoc {
@@ -15,8 +15,8 @@ export function SettingsTab() {
   const {
     codEnabled, setCodEnabled,
     minOrderValue, setMinOrderValue,
-    defaultPickupLocation, setDefaultPickupLocation,
-    setDefaultPickupPincode,
+    defaultPickupPincodes, setDefaultPickupPincodes,
+    setDefaultPickupLocation,
     loading,
   } = useSettings();
 
@@ -43,14 +43,14 @@ export function SettingsTab() {
   const [pickupLocations, setPickupLocations] = useState<PickupLoc[]>([]);
   const [pickupLoading, setPickupLoading] = useState(false);
   const [pickupError, setPickupError] = useState<string | null>(null);
-  const [selectedPickup, setSelectedPickup] = useState("");
+  const [selectedPincodes, setSelectedPincodes] = useState<string[]>([]);
   const [savingPickup, setSavingPickup] = useState(false);
   const [pickupSaved, setPickupSaved] = useState(false);
 
-  // Sync selector when settings load
+  // Sync checkboxes when settings load
   useEffect(() => {
-    if (!loading) setSelectedPickup(defaultPickupLocation ?? "");
-  }, [loading, defaultPickupLocation]);
+    if (!loading) setSelectedPincodes(defaultPickupPincodes ?? []);
+  }, [loading, defaultPickupPincodes]);
 
   const fetchPickupLocations = () => {
     setPickupLoading(true);
@@ -70,14 +70,20 @@ export function SettingsTab() {
     if (!loading) fetchPickupLocations();
   }, [loading]);
 
+  const togglePincode = (pincode: string) => {
+    setSelectedPincodes((prev) =>
+      prev.includes(pincode) ? prev.filter((p) => p !== pincode) : [...prev, pincode]
+    );
+  };
+
   const handleSavePickup = async () => {
     setSavingPickup(true);
-    // Find the pincode for the selected location so the shipping-rate API
-    // can use the correct pickup postcode for this warehouse.
-    const loc = pickupLocations.find((l) => l.name === selectedPickup);
+    // Also persist the primary location name for order-push (OrdersTab uses it)
+    const primary = pickupLocations.find((l) => selectedPincodes.includes(l.pin_code) && l.is_primary)
+      ?? pickupLocations.find((l) => selectedPincodes.includes(l.pin_code));
     await Promise.all([
-      setDefaultPickupLocation(selectedPickup),
-      setDefaultPickupPincode(loc?.pin_code ?? ""),
+      setDefaultPickupPincodes(selectedPincodes),
+      setDefaultPickupLocation(primary?.name ?? ""),
     ]);
     setSavingPickup(false);
     setPickupSaved(true);
@@ -159,19 +165,19 @@ export function SettingsTab() {
           </div>
         </div>
 
-        {/* Shiprocket default pickup location */}
+        {/* Shiprocket pickup locations — multi-select */}
         <div className="p-4 rounded-2xl border border-gray-100 bg-gray-50 space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-1.5">
                 <Warehouse className="w-4 h-4 text-[#9B6FD1]" />
-                <p className="text-sm font-semibold text-gray-800">Default Pickup Location</p>
+                <p className="text-sm font-semibold text-gray-800">Pickup Locations</p>
                 {pickupLoading && <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" />}
               </div>
               <p className="text-xs text-gray-400 mt-0.5">
-                {defaultPickupLocation
-                  ? `Orders will be picked up from "${defaultPickupLocation}" unless overridden per order. Delivery charges shown to customers are calculated from this location.`
-                  : "Choose which warehouse Shiprocket should pick up from by default."}
+                {selectedPincodes.length > 0
+                  ? `${selectedPincodes.length} location${selectedPincodes.length !== 1 ? "s" : ""} selected — cheapest rate across all will be shown to customers.`
+                  : "Select one or more warehouses. The cheapest shipping rate across all selected locations will be shown."}
               </p>
             </div>
             <button
@@ -191,36 +197,57 @@ export function SettingsTab() {
             </p>
           )}
 
-          <div className="flex items-center gap-2">
-            {pickupLocations.length > 0 ? (
-              <select
-                value={selectedPickup}
-                onChange={(e) => setSelectedPickup(e.target.value)}
-                disabled={loading || pickupLoading}
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9B6FD1]/40 bg-white disabled:opacity-50"
-              >
-                <option value="">— select a location —</option>
-                {pickupLocations.map((loc) => (
-                  <option key={loc.id} value={loc.name}>
-                    {loc.name} — {loc.city}, {loc.state} {loc.pin_code}
-                    {loc.is_primary ? " (Primary)" : ""}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                placeholder={pickupLoading ? "Loading locations…" : "e.g. Home, Home-2, home-1"}
-                value={selectedPickup}
-                onChange={(e) => setSelectedPickup(e.target.value)}
-                disabled={loading || pickupLoading}
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9B6FD1]/40 bg-white placeholder:text-gray-300 disabled:opacity-50"
-              />
+          {pickupLocations.length > 0 ? (
+            <div className="space-y-2">
+              {pickupLocations.map((loc) => {
+                const isChecked = selectedPincodes.includes(loc.pin_code);
+                return (
+                  <button
+                    key={loc.id}
+                    type="button"
+                    onClick={() => togglePincode(loc.pin_code)}
+                    disabled={loading || pickupLoading}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all disabled:opacity-50 ${
+                      isChecked
+                        ? "border-[#9B6FD1] bg-[#9B6FD1]/5"
+                        : "border-gray-200 bg-white hover:border-[#9B6FD1]/40"
+                    }`}
+                  >
+                    {isChecked
+                      ? <CheckSquare className="w-4 h-4 text-[#9B6FD1] shrink-0" />
+                      : <Square className="w-4 h-4 text-gray-300 shrink-0" />
+                    }
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate">
+                        {loc.name}
+                        {loc.is_primary && (
+                          <span className="ml-1.5 text-[10px] font-semibold text-[#9B6FD1] bg-[#9B6FD1]/10 px-1.5 py-0.5 rounded-full">Primary</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-400">{loc.city}, {loc.state} — {loc.pin_code}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            !pickupLoading && (
+              <p className="text-xs text-gray-400 text-center py-2">
+                No locations loaded. Click refresh to fetch from Shiprocket.
+              </p>
+            )
+          )}
+
+          <div className="flex items-center justify-between gap-3 pt-1">
+            {selectedPincodes.length > 0 && (
+              <p className="text-[11px] text-gray-400 truncate">
+                Pincodes: {selectedPincodes.join(", ")}
+              </p>
             )}
             <button
               onClick={handleSavePickup}
-              disabled={loading || savingPickup || !selectedPickup}
-              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all shrink-0 ${
+              disabled={loading || savingPickup || selectedPincodes.length === 0}
+              className={`ml-auto px-4 py-2 rounded-xl text-sm font-semibold transition-all shrink-0 ${
                 pickupSaved
                   ? "bg-emerald-500 text-white"
                   : "bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white disabled:opacity-50"
@@ -233,7 +260,6 @@ export function SettingsTab() {
           {pickupLocations.length > 0 && (
             <p className="text-[11px] text-gray-400">
               {pickupLocations.length} location{pickupLocations.length !== 1 ? "s" : ""} loaded from Shiprocket.
-              Individual orders can override this in Edit Order.
             </p>
           )}
         </div>

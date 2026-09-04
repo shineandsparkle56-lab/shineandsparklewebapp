@@ -6,7 +6,7 @@ interface Settings {
   allCategoryImage: string | null;
   minOrderValue: number;
   defaultPickupLocation: string;
-  defaultPickupPincode: string;
+  defaultPickupPincodes: string[];
 }
 
 interface UseSettingsReturn extends Settings {
@@ -15,7 +15,7 @@ interface UseSettingsReturn extends Settings {
   setAllCategoryImage: (url: string | null) => Promise<void>;
   setMinOrderValue: (value: number) => Promise<void>;
   setDefaultPickupLocation: (name: string) => Promise<void>;
-  setDefaultPickupPincode: (pincode: string) => Promise<void>;
+  setDefaultPickupPincodes: (pincodes: string[]) => Promise<void>;
 }
 
 export function useSettings(): UseSettingsReturn {
@@ -23,7 +23,7 @@ export function useSettings(): UseSettingsReturn {
   const [allCategoryImage, setAllCategoryImageState] = useState<string | null>(null);
   const [minOrderValue, setMinOrderValueState] = useState(0);
   const [defaultPickupLocation, setDefaultPickupLocationState] = useState("");
-  const [defaultPickupPincode, setDefaultPickupPincodeState] = useState("");
+  const [defaultPickupPincodes, setDefaultPickupPincodesState] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,13 +32,20 @@ export function useSettings(): UseSettingsReturn {
       getSetting("all_category_image_url"),
       getSetting("min_order_value"),
       getSetting("default_pickup_location"),
-      getSetting("default_pickup_pincode"),
-    ]).then(([cod, allImg, minOrder, pickup, pickupPin]) => {
+      getSetting("default_pickup_pincodes"),
+    ]).then(([cod, allImg, minOrder, pickupLocation, pickupPins]) => {
       if (cod !== null) setCodEnabledState(cod === "true");
       if (allImg !== null && allImg !== "") setAllCategoryImageState(allImg);
       if (minOrder !== null) setMinOrderValueState(parseInt(minOrder, 10) || 0);
-      if (pickup !== null) setDefaultPickupLocationState(pickup);
-      if (pickupPin !== null) setDefaultPickupPincodeState(pickupPin);
+      if (pickupLocation !== null) setDefaultPickupLocationState(pickupLocation);
+      if (pickupPins !== null) {
+        try {
+          const parsed = JSON.parse(pickupPins) as string[];
+          setDefaultPickupPincodesState(Array.isArray(parsed) ? parsed : []);
+        } catch {
+          setDefaultPickupPincodesState([]);
+        }
+      }
       setLoading(false);
     });
   }, []);
@@ -63,9 +70,9 @@ export function useSettings(): UseSettingsReturn {
     await setSetting("default_pickup_location", name);
   };
 
-  const setDefaultPickupPincode = async (pincode: string) => {
-    setDefaultPickupPincodeState(pincode);
-    await setSetting("default_pickup_pincode", pincode);
+  const setDefaultPickupPincodes = async (pincodes: string[]) => {
+    setDefaultPickupPincodesState(pincodes);
+    await setSetting("default_pickup_pincodes", JSON.stringify(pincodes));
   };
 
   return {
@@ -73,12 +80,12 @@ export function useSettings(): UseSettingsReturn {
     allCategoryImage,
     minOrderValue,
     defaultPickupLocation,
-    defaultPickupPincode,
+    defaultPickupPincodes,
     loading,
     setCodEnabled,
     setAllCategoryImage,
     setMinOrderValue,
     setDefaultPickupLocation,
-    setDefaultPickupPincode,
+    setDefaultPickupPincodes,
   };
 }

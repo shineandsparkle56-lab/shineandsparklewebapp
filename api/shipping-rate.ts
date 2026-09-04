@@ -5,6 +5,20 @@ const SR_BASE = "https://apiv2.shiprocket.in/v1/external";
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
 
+interface CourierCompany {
+  courier_name: string;
+  estimated_delivery_days: number;
+  freight_charge: number;
+  cod_charges?: number;
+  whatsapp_charges?: number;
+}
+
+interface BestOption {
+  pickupPincode: string;
+  courier: CourierCompany;
+  totalCharge: number;
+}
+
 function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -43,28 +57,56 @@ async function getToken(): Promise<string> {
   return cachedToken;
 }
 
-async function checkServiceability(
+// Returns available couriers for a single pickup → delivery route. Returns []
+// on non-OK responses so a bad pickup pincode doesn't kill the whole request.
+async function getCouriers(
   token: string,
   pickupPincode: string,
-  pincode: string,
+  deliveryPincode: string,
   cod: boolean,
   weight: number,
   orderValue: number
-) {
+): Promise<CourierCompany[]> {
   const params = new URLSearchParams({
     pickup_postcode: pickupPincode,
-    delivery_postcode: pincode,
+    delivery_postcode: deliveryPincode,
     weight: String(weight),
     cod: cod ? "1" : "0",
     declared_value: String(orderValue),
     is_return: "0",
   });
 
-  return fetchWithTimeout(
+  const res = await fetchWithTimeout(
     `${SR_BASE}/courier/serviceability/?${params}`,
     { headers: { Authorization: `Bearer ${token}` } },
     8000
   );
+
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data?.data?.available_courier_companies ?? []) as CourierCompany[];
+}
+
+// Query all pickup pincodes in parallel and return a flat list of options.
+async function getAllOptions(
+  token: string,
+  pickupPincodes: string[],
+  deliveryPincode: string,
+  cod: boolean,
+  weight: number,
+  orderValue: number
+): Promise<BestOption[]> {
+  const results = await Promise.all(
+    pickupPincodes.map(async (pickup) => {
+      const couriers = await getCouriers(token, pickup, deliveryPincode, cod, weight, orderValue);
+      return couriers.map((courier): BestOption => ({
+        pickupPincode: pickup,
+        courier,
+        totalCharge: courier.freight_charge + (courier.whatsapp_charges ?? 0),
+      }));
+    })
+  );
+  return results.flat();
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -79,74 +121,68 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "SHIPROCKET_EMAIL / PASSWORD not set" });
   }
 
-  const { pincode, cod = false, weight = 0.5, orderValue = 0, pickupPincode } = (req.body as {
+  const {
+    pincode,
+    cod = false,
+    weight = 0.5,
+    orderValue = 0,
+    pickupPincodes,   // array — preferred
+    pickupPincode,    // single string — legacy fallback
+  } = (req.body as {
     pincode: string;
     cod: boolean;
     weight: number;
     orderValue: number;
+    pickupPincodes?: string[];
     pickupPincode?: string;
   }) || {};
-
-  // Resolve pickup postcode: body param → env var fallback
-  const resolvedPickupPincode = pickupPincode?.trim() || process.env.SHIPROCKET_PICKUP_PINCODE;
-  if (!resolvedPickupPincode) {
-    return res.status(500).json({ error: "SHIPROCKET_PICKUP_PINCODE not set" });
-  }
 
   if (!pincode || !/^\d{6}$/.test(String(pincode))) {
     return res.status(400).json({ error: "Enter a valid 6-digit pincode" });
   }
 
+  // Resolve pickup pincodes: body array → single body param → env var
+  const resolvedPincodes: string[] = (() => {
+    if (pickupPincodes?.length) return pickupPincodes.map((p) => p.trim()).filter(Boolean);
+    if (pickupPincode?.trim()) return [pickupPincode.trim()];
+    const env = process.env.SHIPROCKET_PICKUP_PINCODES || process.env.SHIPROCKET_PICKUP_PINCODE || "";
+    return env.split(",").map((p) => p.trim()).filter(Boolean);
+  })();
+
+  if (!resolvedPincodes.length) {
+    return res.status(500).json({ error: "No pickup pincodes configured" });
+  }
+
   try {
     let token = await getToken();
-    let srRes = await checkServiceability(token, resolvedPickupPincode, pincode, cod, weight, orderValue);
+    let options = await getAllOptions(token, resolvedPincodes, pincode, cod, weight, orderValue);
 
-    // Auto-refresh if token expired
-    if (srRes.status === 401) {
+    // If everything came back empty, try a one-time token refresh and retry
+    if (!options.length) {
       cachedToken = null;
       tokenExpiry = 0;
       token = await getToken();
-      srRes = await checkServiceability(token, resolvedPickupPincode, pincode, cod, weight, orderValue);
+      options = await getAllOptions(token, resolvedPincodes, pincode, cod, weight, orderValue);
     }
 
-    const srData = await srRes.json();
-
-    if (!srRes.ok) {
-      return res.status(500).json({
-        error: `Shiprocket error (${srRes.status}): ${JSON.stringify(srData)}`,
-      });
-    }
-
-    const available: Array<{
-      courier_name: string;
-      estimated_delivery_days: number;
-      freight_charge: number;
-      cod_charges?: number;
-      whatsapp_charges?: number;
-    }> = srData?.data?.available_courier_companies ?? [];
-
-    if (!available.length) {
+    if (!options.length) {
       return res.status(200).json({
         serviceable: false,
         message: "Delivery not available to this pincode.",
       });
     }
 
-    available.sort((a, b) =>
-      (a.freight_charge + (a.whatsapp_charges ?? 0)) -
-      (b.freight_charge + (b.whatsapp_charges ?? 0))
-    );
-    const best = available[0];
-
-    // freight_charge + whatsapp_charges = total charge shown in Shiprocket dashboard
-    const totalCharge = best.freight_charge + (best.whatsapp_charges ?? 0);
+    // Pick the globally cheapest option across all pickup locations and couriers
+    options.sort((a, b) => a.totalCharge - b.totalCharge);
+    const best = options[0];
 
     return res.status(200).json({
       serviceable: true,
-      courierName: best.courier_name,
-      estimatedDays: best.estimated_delivery_days,
-      shippingCharge: Math.round(totalCharge),
-      codCharge: cod ? Math.round(best.cod_charges ?? 0) : 0,
+      courierName: best.courier.courier_name,
+      estimatedDays: best.courier.estimated_delivery_days,
+      shippingCharge: Math.round(best.totalCharge),
+      codCharge: cod ? Math.round(best.courier.cod_charges ?? 0) : 0,
+      pickupPincode: best.pickupPincode,
     });
   } catch (err) {
     const e = err as Error;
