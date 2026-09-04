@@ -21,6 +21,7 @@ export interface ShiprocketPayload {
   subtotal: number;
   shipping_charge: number;
   cod_charge: number;
+  gift_wrap_charges?: number;
   grand_total: number;
   weight: number;
   length?: number;

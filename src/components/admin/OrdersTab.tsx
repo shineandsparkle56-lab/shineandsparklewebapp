@@ -242,6 +242,7 @@ export function OrdersTab() {
         subtotal:         order.subtotal,
         shipping_charge:  order.shipping_charge,
         cod_charge:       order.cod_charge,
+        gift_wrap_charges: order.gift_wrap_charges ?? 0,
         grand_total:      order.grand_total,
         weight:           order.weight_kg ?? estimateWeight(order.items.reduce((s, i) => s + i.quantity, 0)),
         length:           order.box_length  ?? 5,

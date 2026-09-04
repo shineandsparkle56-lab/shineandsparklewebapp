@@ -58,6 +58,7 @@ export interface CreateOrderPayload {
   subtotal: number;
   shipping_charge: number;
   cod_charge: number;
+  gift_wrap_charges?: number;
   grand_total: number;
   items: {
     name: string;
@@ -145,7 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Shiprocket prints transaction_charges as "Other Charges" on the invoice,
       // which is confusing — keeping it 0 and rolling everything into shipping_charges.
       shipping_charges: (body.shipping_charge ?? 0) + (body.cod_charge ?? 0),
-      giftwrap_charges: 0,
+      giftwrap_charges: body.gift_wrap_charges ?? 0,
       transaction_charges: 0,
       total_discount: 0,
       sub_total: body.subtotal,

@@ -36,6 +36,7 @@ export interface OrderRow {
   grand_total: number;
   raw_shipping_charge?: number;
   raw_cod_charge?: number;
+  gift_wrap_charges?: number;
   courier_name?: string;
   pincode: string;
   payment_mode: string;
@@ -82,6 +83,7 @@ interface FormState {
   cod_charge: string;
   raw_shipping_charge: string;
   raw_cod_charge: string;
+  gift_wrap_charges: string;
   courier_name: string;
   // Shiprocket
   sr_order_id: string;
@@ -113,6 +115,7 @@ function toForm(order: OrderRow): FormState {
     cod_charge:         String(order.cod_charge),
     raw_shipping_charge: String(order.raw_shipping_charge ?? ""),
     raw_cod_charge:     String(order.raw_cod_charge      ?? ""),
+    gift_wrap_charges:  String(order.gift_wrap_charges   ?? 0),
     courier_name:       order.courier_name       ?? "",
     sr_order_id:        String(order.sr_order_id  ?? ""),
     sr_shipment_id:     String(order.sr_shipment_id ?? ""),
@@ -163,7 +166,8 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
     const subtotal        = Number(form.subtotal)        || 0;
     const shipping_charge = Number(form.shipping_charge) || 0;
     const cod_charge      = Number(form.cod_charge)      || 0;
-    const grand_total     = subtotal + shipping_charge + (form.payment_mode === "cod" ? cod_charge : 0);
+    const gift_wrap_charges = Number(form.gift_wrap_charges) || 0;
+    const grand_total     = subtotal + shipping_charge + gift_wrap_charges + (form.payment_mode === "cod" ? cod_charge : 0);
 
     const patch: Partial<OrderRow> = {
       customer_name:      form.customer_name.trim(),
@@ -177,6 +181,7 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
       subtotal,
       shipping_charge,
       cod_charge,
+      gift_wrap_charges,
       grand_total,
       raw_shipping_charge: form.raw_shipping_charge !== "" ? Number(form.raw_shipping_charge) : undefined,
       raw_cod_charge:      form.raw_cod_charge      !== "" ? Number(form.raw_cod_charge)      : undefined,
@@ -299,7 +304,7 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
               </div>
 
               {/* Charges */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
                   <label className="label">Subtotal (₹)</label>
                   <input type="number" min="0" value={form.subtotal} onChange={(e) => set("subtotal", e.target.value)} className="input" />
@@ -311,6 +316,10 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
                 <div>
                   <label className="label">COD Charge (₹)</label>
                   <input type="number" min="0" value={form.cod_charge} onChange={(e) => set("cod_charge", e.target.value)} className="input" />
+                </div>
+                <div>
+                  <label className="label">Gift Wrap (₹)</label>
+                  <input type="number" min="0" value={form.gift_wrap_charges} onChange={(e) => set("gift_wrap_charges", e.target.value)} className="input" placeholder="0" />
                 </div>
               </div>
 

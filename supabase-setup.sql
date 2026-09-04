@@ -245,3 +245,9 @@ ALTER TABLE products
 -- ─────────────────────────────────────────────
 ALTER TABLE orders
   ADD COLUMN IF NOT EXISTS pickup_pincode text;
+
+-- ─────────────────────────────────────────────
+-- Gift wrap charges column on orders
+-- ─────────────────────────────────────────────
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS gift_wrap_charges integer NOT NULL DEFAULT 0;
