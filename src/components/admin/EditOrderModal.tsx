@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Pencil, X, CheckCircle2, Package, Warehouse, Loader2 } from "lucide-react";
+import moment from "moment";
 import { supabase } from "../../lib/supabase";
 
 type OrderStatus = "pending" | "confirmed" | "shipped" | "delivered" | "cancelled";
@@ -125,7 +126,7 @@ function toForm(order: OrderRow): FormState {
     box_height:         String(order.box_height  ?? 3),
     weight_kg:          String(order.weight_kg   ?? 0.5),
     created_at:         order.created_at
-      ? new Date(order.created_at).toISOString().slice(0, 16)
+      ? moment(order.created_at).format("YYYY-MM-DDTHH:mm")
       : "",
     pickup_location:    order.pickup_location    ?? "",
   };
@@ -194,7 +195,8 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
       box_height:  parseFloat(form.box_height)  || 3,
       weight_kg:   parseFloat(form.weight_kg)   || 0.5,
       pickup_location: form.pickup_location.trim() || undefined,
-      ...(form.created_at ? { created_at: new Date(form.created_at).toISOString() } : {}),
+      // created_at: form value is local time (from datetime-local input), convert to UTC for storage
+      ...(form.created_at ? { created_at: moment(form.created_at, "YYYY-MM-DDTHH:mm").toISOString() } : {}),
     };
 
     const { error, count } = await supabase

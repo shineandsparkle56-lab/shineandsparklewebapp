@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Plus, Trash2, BarChart3, TrendingUp, TrendingDown, RefreshCw, IndianRupee, Package } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useProducts } from "../../context/ProductsContext";
+import moment from "moment";
 
 // ── Types ─────────────────────────────────────────────────────
 interface SaleEntry  { name: string; amount: number }
@@ -40,11 +41,8 @@ function newEntry(): ManualEntry {
 function toNum(v: string) { return parseFloat(v) || 0; }
 
 // ── Month helpers ─────────────────────────────────────────────
-function currentMonth() { return new Date().toISOString().slice(0, 7); }
-function formatMonth(m: string) {
-  const [y, mo] = m.split("-");
-  return new Date(Number(y), Number(mo) - 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
-}
+function currentMonth() { return moment().format("YYYY-MM"); }
+function formatMonth(m: string) { return moment(m, "YYYY-MM").format("MMMM YYYY"); }
 
 // ── Stat card ─────────────────────────────────────────────────
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
@@ -155,9 +153,10 @@ export function ReportTab() {
       .order("created_at", { ascending: true });
 
     if (!allTime) {
-      const from = `${month}-01`;
-      const to   = `${month}-31`;
-      query = query.gte("created_at", from).lte("created_at", `${to}T23:59:59`);
+      // Parse as local (IST) month boundaries, then convert to UTC for Supabase
+      const from = moment(month, "YYYY-MM").startOf("month").toISOString();
+      const to   = moment(month, "YYYY-MM").endOf("month").toISOString();
+      query = query.gte("created_at", from).lte("created_at", to);
     }
 
     const { data: rows } = await query;
