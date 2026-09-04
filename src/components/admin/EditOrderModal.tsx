@@ -57,6 +57,8 @@ export interface OrderRow {
   weight_kg?: number;
   // Shiprocket pickup location name (overrides the default set in Settings)
   pickup_location?: string;
+  // Winning pickup pincode from shipping rate check (set at order time)
+  pickup_pincode?: string;
 }
 
 interface Props {
@@ -371,7 +373,16 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
                     onChange={(e) => set("pickup_location", e.target.value)}
                     className="input"
                   >
-                    <option value="">Use default (from Settings)</option>
+                    {/* Show the actual location used at order time as the default label */}
+                    {(() => {
+                      const usedLoc = order?.pickup_pincode
+                        ? pickupLocations.find((l) => l.pin_code === order.pickup_pincode)
+                        : null;
+                      const label = usedLoc
+                        ? `Default — ${usedLoc.name} (${usedLoc.pin_code})`
+                        : "Use default (from Settings)";
+                      return <option value="">{label}</option>;
+                    })()}
                     {pickupLocations.map((loc) => (
                       <option key={loc.id} value={loc.name}>
                         {loc.name} — {loc.city}, {loc.state} {loc.pin_code}{loc.is_primary ? " (Primary)" : ""}

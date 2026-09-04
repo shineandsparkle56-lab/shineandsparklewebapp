@@ -238,3 +238,10 @@ ALTER TABLE festivals
 -- ─────────────────────────────────────────────
 ALTER TABLE products
   ADD COLUMN IF NOT EXISTS sizes text[] NOT NULL DEFAULT '{}';
+
+-- ─────────────────────────────────────────────
+-- pickup_pincode: winning pickup location pincode saved at order time
+--   so admin can see which warehouse was used for rate calculation
+-- ─────────────────────────────────────────────
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS pickup_pincode text;

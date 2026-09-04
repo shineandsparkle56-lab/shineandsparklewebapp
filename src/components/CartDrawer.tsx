@@ -20,6 +20,7 @@ interface ShippingResult {
   estimatedDays?: number;
   shippingCharge?: number;
   codCharge?: number;
+  pickupPincode?: string;
   message?: string;
 }
 
@@ -241,6 +242,7 @@ export function CartDrawer() {
         raw_shipping_charge: rawShippingCharge,
         raw_cod_charge: rawCodCharge,
         courier_name: shipping?.courierName ?? null,
+        pickup_pincode: shipping?.pickupPincode ?? null,
         pincode: pincode || "",
         payment_mode: paymentMode,
         customer_name: customer.name,
