@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   Plus, Trash2, ShoppingBag, Download, FileText, Loader2,
   Pencil, Truck, X, CheckCircle2, Zap, Link2, RefreshCw, ChevronDown,
-  MapPin, Calendar, Clock,
+  MapPin, Calendar, Clock, Heart,
 } from "lucide-react";
 
 // ── Tracking types ─────────────────────────────────────────────────────────
@@ -57,6 +57,7 @@ import { QuickAddOrderModal } from "./QuickAddOrderModal";
 import { ConfirmModal, Spinner, SrResult } from "./shared";
 import type { OrderRow, OrderStatus } from "./EditOrderModal";
 import { ORDER_STATUSES } from "./EditOrderModal";
+import ThankYouCard from "../ThankYouCard";
 
 export function OrdersTab() {
   const { products, updateStock } = useProducts();
@@ -82,6 +83,8 @@ export function OrdersTab() {
   const [expandedItemsIds, setExpandedItemsIds] = useState<Set<number>>(new Set());
   // tracking info keyed by order.id
   const [trackingMap, setTrackingMap] = useState<Record<number, TrackingInfo>>({});
+  // thank you card preview
+  const [thankYouOrder, setThankYouOrder] = useState<OrderRow | null>(null);
 
   const toggleExpand = (id: number) =>
     setExpandedIds((prev) => {
@@ -568,6 +571,10 @@ export function OrdersTab() {
                           className="flex items-center gap-1 px-3 py-1.5 bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-60">
                           {downloadingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} PDF
                         </button>
+                        <button onClick={(e) => { e.stopPropagation(); setThankYouOrder(order); }}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-pink-50 hover:bg-pink-100 text-pink-600 text-xs font-semibold rounded-lg transition-colors border border-pink-200">
+                          <Heart className="w-3.5 h-3.5" /> Thank You Card
+                        </button>
                         <button onClick={(e) => { e.stopPropagation(); handlePushToShiprocket(order); }}
                           disabled={pushingId === order.id || !!order.sr_order_id}
                           className={`flex items-center gap-1 px-3 py-1.5 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 ${order.sr_order_id ? "bg-orange-300 cursor-not-allowed" : "bg-orange-500 hover:bg-orange-600"}`}>
@@ -659,6 +666,35 @@ export function OrdersTab() {
       <ConfirmModal open={deleteOrderId !== null} title={`Delete order #${deleteOrderId}?`}
         body="This will permanently remove the order from Supabase. This cannot be undone."
         onConfirm={handleDeleteOrder} onCancel={() => setDeleteOrderId(null)} loading={deletingOrder} />
+
+      {/* ── Thank You Card modal ── */}
+      {thankYouOrder && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setThankYouOrder(null)}
+        >
+          <div
+            className="relative bg-white rounded-2xl shadow-2xl p-5 flex flex-col items-center gap-4 max-h-[95vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close */}
+            <button
+              onClick={() => setThankYouOrder(null)}
+              className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <p className="text-sm font-semibold text-gray-700 self-start">
+              Thank You Card — {thankYouOrder.customer_name ?? `Order #${thankYouOrder.id}`}
+            </p>
+
+            <ThankYouCard
+              customerName={thankYouOrder.customer_name ?? "Valued Customer"}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 }
