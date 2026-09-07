@@ -1,7 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { jsPDF } from "jspdf";
-
-// Import as URL so Vite inlines it as a hashed static asset path
 import cardImageUrl from "../assets/thank_you_card.webp";
 
 interface ThankYouCardProps {
@@ -10,132 +8,90 @@ interface ThankYouCardProps {
 }
 
 /*
- * Name overlay coordinates (as % of image natural dimensions).
- * Tune these if the position drifts on a different screen / zoom level.
+ * Coordinates as a fraction of the image's natural dimensions.
+ * The pill already contains "Hey" (left) and "♡," (right).
+ * We paint the name just after "Hey ".
  *
- *  NAME_X_RATIO  – left edge of name text (just after "Hey " in the pill)
- *  NAME_Y_RATIO  – vertical centre of the pill row
- *  MAX_W_RATIO   – max width the name may occupy before font shrinks
+ * NAME_X  – left edge of name text  (after "Hey ")
+ * NAME_Y  – vertical mid of pill row
+ * MAX_W   – max width name may use before font shrinks
  */
-const NAME_X_RATIO   = 0.370;
-const NAME_Y_RATIO   = 0.460;
-const MAX_W_RATIO    = 0.500;
-const BASE_FS_RATIO  = 0.065;   // starting font-size as fraction of image width
-const NAME_COLOR     = "#7b2ff7";
-
-const FONT_NAME = "Great Vibes";
-// Direct woff2 URL — bypasses Google Fonts redirect, avoids CSP issues
-const FONT_URL  =
+const NAME_X_RATIO  = 0.370;
+const NAME_Y_RATIO  = 0.460;
+const MAX_W_RATIO   = 0.500;
+const BASE_FS_RATIO = 0.065;
+const NAME_COLOR    = "#7b2ff7";
+const FONT_NAME     = "Great Vibes";
+const FONT_URL      =
   "https://fonts.gstatic.com/s/greatvibes/v19/RWmMoKWR9v4ksMfaWd_JN9XFiaQ.woff2";
 
-/* ── load Great Vibes into the browser font set ──────────────── */
-async function loadFont(): Promise<void> {
-  // already present?
+async function loadGreatVibes(): Promise<void> {
   if (document.fonts.check(`12px '${FONT_NAME}'`)) return;
   try {
-    const face = new FontFace(FONT_NAME, `url(${FONT_URL})`, {
-      style:  "normal",
-      weight: "400",
-    });
-    const loaded = await face.load();
-    document.fonts.add(loaded);
-    // warm up — ensures canvas picks it up on first use
+    const face = new FontFace(FONT_NAME, `url(${FONT_URL})`, { style: "normal", weight: "400" });
+    document.fonts.add(await face.load());
     await document.fonts.load(`48px '${FONT_NAME}'`);
-  } catch (err) {
-    console.warn("Great Vibes font load failed, falling back:", err);
+  } catch {
+    /* fall back to cursive — better than crashing */
   }
 }
 
-/* ── load an image with crossOrigin set BEFORE src ───────────── */
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img    = new Image();
-    img.crossOrigin = "anonymous";   // must be set before .src
-    img.onload  = () => resolve(img);
-    img.onerror = reject;
-    img.src     = src;
+async function buildCanvas(customerName: string): Promise<HTMLCanvasElement> {
+  await loadGreatVibes();
+
+  /* fetch the image as a blob — avoids all CORS/taint issues */
+  const blob    = await fetch(cardImageUrl).then((r) => r.blob());
+  const blobUrl = URL.createObjectURL(blob);
+
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el  = new Image();
+    el.onload  = () => resolve(el);
+    el.onerror = reject;
+    el.src     = blobUrl;
   });
-}
 
-/* ── main render ─────────────────────────────────────────────── */
-async function renderCard(
-  canvas: HTMLCanvasElement,
-  customerName: string,
-): Promise<void> {
-  // load font and image in parallel
-  const [, img] = await Promise.all([
-    loadFont(),
-    loadImage(cardImageUrl),
-  ]);
+  URL.revokeObjectURL(blobUrl);
 
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("No 2d context");
+  const canvas   = document.createElement("canvas");
+  canvas.width   = img.naturalWidth;
+  canvas.height  = img.naturalHeight;
+  const ctx      = canvas.getContext("2d")!;
+  const W        = canvas.width;
+  const H        = canvas.height;
 
-  // size canvas to the image's natural pixel dimensions
-  canvas.width  = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-
-  const W = canvas.width;
-  const H = canvas.height;
-
-  // draw base card
   ctx.drawImage(img, 0, 0);
 
-  // find largest font that fits the available gap width
-  const maxPx  = W * MAX_W_RATIO;
-  let   fs     = Math.round(W * BASE_FS_RATIO);
-  ctx.font     = `${fs}px '${FONT_NAME}'`;
-
+  /* fit font size to available gap */
+  const maxPx = W * MAX_W_RATIO;
+  let   fs    = Math.round(W * BASE_FS_RATIO);
+  ctx.font    = `${fs}px '${FONT_NAME}', cursive`;
   while (ctx.measureText(customerName).width > maxPx && fs > 8) {
     fs      -= 1;
-    ctx.font = `${fs}px '${FONT_NAME}'`;
+    ctx.font = `${fs}px '${FONT_NAME}', cursive`;
   }
 
-  // paint name
   ctx.save();
   ctx.textAlign    = "left";
   ctx.textBaseline = "middle";
   ctx.fillStyle    = NAME_COLOR;
-  ctx.font         = `${fs}px '${FONT_NAME}'`;
+  ctx.font         = `${fs}px '${FONT_NAME}', cursive`;
   ctx.fillText(customerName, W * NAME_X_RATIO, H * NAME_Y_RATIO, maxPx);
   ctx.restore();
+
+  return canvas;
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   Component
-═══════════════════════════════════════════════════════════════ */
 export default function ThankYouCard({ customerName, hideDownload = false }: ThankYouCardProps) {
-  const canvasRef             = useRef<HTMLCanvasElement>(null);
-  const [ready,   setReady]   = useState(false);
-  const [error,   setError]   = useState<string | null>(null);
+  const imgRef                = useRef<HTMLImageElement>(null);
   const [loading, setLoading] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
-  useEffect(() => {
-    setReady(false);
-    setError(null);
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    renderCard(canvas, customerName)
-      .then(()  => setReady(true))
-      .catch((e) => {
-        console.error("ThankYouCard render failed:", e);
-        setError("Could not load card image.");
-      });
-  }, [customerName]);
-
-  function handleDownload() {
-    const canvas = canvasRef.current;
-    if (!canvas || !ready) return;
+  async function handleDownload() {
     setLoading(true);
     try {
-      // toDataURL works because crossOrigin="anonymous" was set on the image
-      const imgData = canvas.toDataURL("image/jpeg", 0.96);
-      const doc     = new jsPDF({
-        unit:        "mm",
-        format:      [101.6, 152.4],   // 4 × 6 in
-        orientation: "portrait",
-      });
+      const canvas  = await buildCanvas(customerName);
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const doc     = new jsPDF({ unit: "mm", format: [101.6, 152.4], orientation: "portrait" });
       doc.addImage(imgData, "JPEG", 0, 0, 101.6, 152.4);
       doc.save(`thank-you-${customerName.replace(/\s+/g, "-").toLowerCase()}.pdf`);
     } catch (e) {
@@ -145,84 +101,73 @@ export default function ThankYouCard({ customerName, hideDownload = false }: Tha
     }
   }
 
-  /* preview display dimensions: 300 px wide, aspect preserved */
-  const PREVIEW_W = 300;
-
   return (
-    <div style={{
-      display:       "inline-flex",
-      flexDirection: "column",
-      alignItems:    "center",
-      gap:           14,
-    }}>
+    <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
 
-      {error ? (
-        <div style={{
-          width: PREVIEW_W, padding: "40px 20px",
-          textAlign: "center", color: "#9333ea",
-          fontSize: 13, fontFamily: "Poppins, sans-serif",
-          border: "1px solid #e9d5ff", borderRadius: 8,
-        }}>
-          {error}
-        </div>
-      ) : (
-        <div style={{ position: "relative", width: PREVIEW_W }}>
-          {/* skeleton shown while loading */}
-          {!ready && (
+      {/* ── preview: plain <img> tag — always works in production ── */}
+      <div style={{ position: "relative", width: 300 }}>
+        {imgError ? (
+          <div style={{
+            width: 300, height: 450,
+            background: "linear-gradient(135deg,#f3e8ff,#ede9fe)",
+            borderRadius: 8, display: "flex",
+            alignItems: "center", justifyContent: "center",
+            color: "#9333ea", fontSize: 13, fontFamily: "Poppins,sans-serif",
+          }}>
+            Could not load card image
+          </div>
+        ) : (
+          <>
+            {/* base card image */}
+            <img
+              ref={imgRef}
+              src={cardImageUrl}
+              alt="Thank You Card"
+              onError={() => setImgError(true)}
+              style={{
+                width: 300, height: "auto", display: "block",
+                borderRadius: 8,
+                border: "1px solid #e9d5ff",
+                boxShadow: "0 2px 20px rgba(123,47,247,0.13)",
+              }}
+            />
+
+            {/* name overlay using HTML on top of the img */}
             <div style={{
-              position:        "absolute", inset: 0,
-              background:      "linear-gradient(135deg,#f3e8ff 0%,#ede9fe 100%)",
-              borderRadius:    8,
-              display:         "flex",
-              alignItems:      "center",
-              justifyContent:  "center",
-              color:           "#9333ea",
-              fontSize:        13,
-              fontFamily:      "Poppins, sans-serif",
+              position:   "absolute",
+              /* these % values mirror NAME_X_RATIO / NAME_Y_RATIO */
+              left:       `${NAME_X_RATIO * 100}%`,
+              top:        `${NAME_Y_RATIO * 100}%`,
+              transform:  "translateY(-50%)",
+              fontFamily: `'Great Vibes', cursive`,
+              fontSize:   "clamp(14px, 5.8vw, 22px)",
+              color:      NAME_COLOR,
+              whiteSpace: "nowrap",
+              pointerEvents: "none",
+              lineHeight: 1,
             }}>
-              Loading card…
+              {customerName}
             </div>
-          )}
-          <canvas
-            ref={canvasRef}
-            style={{
-              width:        PREVIEW_W,
-              height:       "auto",          // browser scales height from canvas intrinsic ratio
-              display:      "block",
-              borderRadius: 8,
-              border:       "1px solid #e9d5ff",
-              boxShadow:    "0 2px 20px rgba(123,47,247,0.13)",
-              opacity:      ready ? 1 : 0,
-              transition:   "opacity 0.35s",
-            }}
-          />
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       {!hideDownload && (
         <button
           onClick={handleDownload}
-          disabled={!ready || loading}
+          disabled={loading}
           style={{
-            display:      "flex",
-            alignItems:   "center",
-            gap:          8,
-            background:   !ready || loading ? "#a855f7" : "#7b2ff7",
-            color:        "#fff",
-            border:       "none",
-            borderRadius: 10,
-            padding:      "10px 28px",
-            fontSize:     14,
-            fontWeight:   600,
+            display: "flex", alignItems: "center", gap: 8,
+            background:   loading ? "#a855f7" : "#7b2ff7",
+            color:        "#fff", border: "none", borderRadius: 10,
+            padding:      "10px 28px", fontSize: 14, fontWeight: 600,
             fontFamily:   "Poppins, sans-serif",
-            cursor:       !ready || loading ? "not-allowed" : "pointer",
+            cursor:       loading ? "not-allowed" : "pointer",
             boxShadow:    "0 2px 14px rgba(123,47,247,0.25)",
             whiteSpace:   "nowrap",
           }}
         >
-          {loading
-            ? <>⏳&nbsp;Saving…</>
-            : <>⬇️&nbsp;Download 4×6 PDF</>}
+          {loading ? <>⏳&nbsp;Saving…</> : <>⬇️&nbsp;Download 4×6 PDF</>}
         </button>
       )}
 
