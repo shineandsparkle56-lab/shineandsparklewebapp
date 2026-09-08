@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Plus, Trash2, Tag, ChevronDown, ImagePlus, Loader2, X } from "lucide-react";
+import { Plus, Trash2, Tag, ChevronDown, ChevronUp, ImagePlus, Loader2, X } from "lucide-react";
 import { useCategories } from "../../context/CategoriesContext";
 import { useToast } from "../../hooks/useToast";
 import { useSettings } from "../../hooks/useSettings";
@@ -35,6 +35,7 @@ export function CategoriesTab() {
 
   const [catName, setCatName] = useState("");
   const [catLabel, setCatLabel] = useState("");
+  const [showAddForm, setShowAddForm] = useState(false);
   const [catParentId, setCatParentId] = useState<number | "">("");
   const [catSaving, setCatSaving] = useState(false);
   const [catError, setCatError] = useState("");
@@ -77,6 +78,7 @@ export function CategoriesTab() {
     try {
       await addCategory(catName, catLabel, catParentId === "" ? null : catParentId);
       setCatName(""); setCatLabel(""); setCatParentId("");
+      setShowAddForm(false);
       toast.show("Category added!");
     } catch (err) {
       setCatError(err instanceof Error ? err.message : "Failed to add category.");
@@ -135,11 +137,19 @@ export function CategoriesTab() {
     <div className="space-y-6">
       {/* Add form */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden categories-form">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setShowAddForm((v) => !v)}
+          className="w-full px-6 py-4 flex items-center gap-2 hover:bg-gray-50 transition-colors"
+        >
           <Plus className="w-5 h-5 text-[#9B6FD1]" />
-          <h2 className="font-semibold text-gray-800">Add New Category</h2>
-        </div>
-        <form onSubmit={handleAddCategory} className="p-6 space-y-4">
+          <h2 className="font-semibold text-gray-800 flex-1 text-left">Add New Category</h2>
+          {showAddForm
+            ? <ChevronUp className="w-4 h-4 text-gray-400" />
+            : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        </button>
+        {showAddForm && (
+          <form onSubmit={handleAddCategory} className="p-6 space-y-4 border-t border-gray-100">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="label">Type</label>
@@ -179,6 +189,7 @@ export function CategoriesTab() {
             </button>
           </div>
         </form>
+        )}
       </div>
 
       {/* Category list */}
@@ -346,7 +357,7 @@ export function CategoriesTab() {
                   ))}
 
                   <div className="pl-12 pr-6 pb-2">
-                    <button onClick={() => { setCatParentId(parent.id); setCatName(""); setCatLabel(""); document.querySelector<HTMLElement>(".categories-form")?.scrollIntoView({ behavior: "smooth" }); }}
+                    <button onClick={() => { setCatParentId(parent.id); setCatName(""); setCatLabel(""); setShowAddForm(true); document.querySelector<HTMLElement>(".categories-form")?.scrollIntoView({ behavior: "smooth" }); }}
                       className="text-[11px] text-[#9B6FD1] hover:underline flex items-center gap-1">
                       <Plus className="w-3 h-3" /> Add subcategory under {parent.label}
                     </button>

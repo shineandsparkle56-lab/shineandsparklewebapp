@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Plus, Trash2, ShoppingBag, Download, FileText, Loader2,
   Pencil, Truck, X, CheckCircle2, Zap, Link2, RefreshCw, ChevronDown,
-  MapPin, Calendar, Clock, Heart,
+  MapPin, Calendar, Clock, Heart, SlidersHorizontal,
 } from "lucide-react";
 
 // ── Tracking types ─────────────────────────────────────────────────────────
@@ -79,12 +79,31 @@ export function OrdersTab() {
   const [pushingId, setPushingId] = useState<number | null>(null);
   const [srResult, setSrResult] = useState<SrResult>(null);
   const [syncingAwbId, setSyncingAwbId] = useState<number | null>(null);
+  const [deductingStockId, setDeductingStockId] = useState<number | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [expandedItemsIds, setExpandedItemsIds] = useState<Set<number>>(new Set());
   // tracking info keyed by order.id
   const [trackingMap, setTrackingMap] = useState<Record<number, TrackingInfo>>({});
   // thank you card preview
   const [thankYouOrder, setThankYouOrder] = useState<OrderRow | null>(null);
+
+  // ── filters ──────────────────────────────────────────────────
+  const [showFilters,    setShowFilters]    = useState(false);
+  const [filterShipping, setFilterShipping] = useState<"all" | "shipped" | "unshipped">("all");
+
+  const activeFilterCount = [filterShipping !== "all"].filter(Boolean).length;
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => {
+      if (filterShipping === "shipped"   && !o.awb_code)  return false;
+      if (filterShipping === "unshipped" && !!o.awb_code) return false;
+      return true;
+    });
+  }, [orders, filterShipping]);
+
+  function clearFilters() {
+    setFilterShipping("all");
+  }
 
   const toggleExpand = (id: number) =>
     setExpandedIds((prev) => {
@@ -292,6 +311,8 @@ export function OrdersTab() {
   };
 
   const handleToggleStockDeduction = async (order: OrderRow) => {
+    if (deductingStockId === order.id) return;
+    setDeductingStockId(order.id);
     const deducting = !order.stock_deducted;
     for (const item of order.items) {
       const delta = deducting ? -item.quantity : item.quantity;
@@ -301,6 +322,7 @@ export function OrdersTab() {
     }
     await supabase.from("orders").update({ stock_deducted: deducting }).eq("id", order.id);
     setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, stock_deducted: deducting } : o));
+    setDeductingStockId(null);
     toast.show(deducting ? "Stock deducted from products." : "Stock restored to products.");
   };
 
@@ -312,10 +334,31 @@ export function OrdersTab() {
           <div className="flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-[#9B6FD1]" />
             <h2 className="font-semibold text-gray-800">Placed Orders</h2>
-            <span className="text-sm text-gray-400">{orders.length}{hasMore ? "+" : ""} total</span>
+            <span className="text-sm text-gray-400">
+              {filteredOrders.length !== orders.length
+                ? `${filteredOrders.length} of ${orders.length}${hasMore ? "+" : ""}`
+                : `${orders.length}${hasMore ? "+" : ""} total`}
+            </span>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
             <button onClick={fetchOrders} className="text-xs text-[#9B6FD1] hover:underline px-2 py-1">Refresh</button>
+            {/* Filter toggle */}
+            <button
+              onClick={() => setShowFilters((v) => !v)}
+              className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-xl border transition-colors ${
+                showFilters || activeFilterCount > 0
+                  ? "bg-[#F3EEFB] border-[#9B6FD1] text-[#9B6FD1]"
+                  : "bg-white border-gray-200 text-gray-500 hover:border-[#9B6FD1]/40"
+              }`}
+            >
+              <SlidersHorizontal className="w-3 h-3" />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="ml-0.5 bg-[#9B6FD1] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
             <button onClick={() => setQuickAddOpen(true)}
               className="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-gray-50 text-[#9B6FD1] text-xs font-semibold rounded-xl border border-[#9B6FD1]/40 transition-colors">
               <Zap className="w-3 h-3" /> Quick Add
@@ -327,19 +370,48 @@ export function OrdersTab() {
           </div>
         </div>
 
+        {/* Filter panel */}
+        {showFilters && (
+          <div className="px-4 py-3 border-b border-gray-100 bg-[#FAFAFA]">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider shrink-0">Courier</p>
+              {(["all", "shipped", "unshipped"] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setFilterShipping(s)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all ${
+                    filterShipping === s
+                      ? "bg-[#9B6FD1] border-[#9B6FD1] text-white"
+                      : "bg-white border-gray-200 text-gray-500 hover:border-[#9B6FD1]/40"
+                  }`}
+                >
+                  {s === "all" ? "All" : s === "shipped" ? "Has AWB" : "No AWB"}
+                </button>
+              ))}
+              {activeFilterCount > 0 && (
+                <button onClick={clearFilters} className="flex items-center gap-1 text-[11px] text-red-500 hover:text-red-600 font-semibold ml-1">
+                  <X className="w-3 h-3" /> Clear
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Body */}
         {ordersLoading ? (
           <div className="flex items-center justify-center py-16 text-gray-400 text-sm gap-2"><Spinner />Loading orders…</div>
-        ) : orders.length === 0 ? (
+        ) : filteredOrders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
             <div className="w-14 h-14 rounded-full bg-[#F3EEFB] flex items-center justify-center"><FileText className="w-7 h-7 text-[#9B6FD1]" /></div>
-            <p className="text-gray-500 font-medium">No orders yet</p>
-            <p className="text-gray-400 text-sm">Orders appear here when customers checkout via WhatsApp.</p>
+            {orders.length === 0
+              ? <><p className="text-gray-500 font-medium">No orders yet</p><p className="text-gray-400 text-sm">Orders appear here when customers checkout via WhatsApp.</p></>
+              : <><p className="text-gray-500 font-medium">No orders match the filters</p><button onClick={clearFilters} className="text-xs text-[#9B6FD1] hover:underline font-semibold">Clear filters</button></>
+            }
           </div>
         ) : (
           <>
             <div className="divide-y divide-gray-100">
-            {orders.map((order, idx) => {
+            {filteredOrders.map((order, idx) => {
               const sm = statusMeta(order.status);
               const isQuick = order.items?.length === 0;
               const isEven = idx % 2 === 0;
@@ -379,7 +451,6 @@ export function OrdersTab() {
                         </span>
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md uppercase ${sm.color}`}>{sm.label}</span>
                         {isQuick && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-500 uppercase">Quick</span>}
-                        {order.sr_order_id && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-orange-100 text-orange-600">SR #{order.sr_order_id}</span>}
                         {order.awb_code && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-sky-100 text-sky-600">AWB: {order.awb_code}</span>}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -391,10 +462,20 @@ export function OrdersTab() {
                     {/* Row 2: Customer name · item count · profit badge */}
                     <div className="flex items-center gap-2 mt-1.5">
                       {order.customer_name && (
-                        <p className="text-xs font-semibold text-gray-700 truncate">
-                          {order.customer_name}
-                          {order.customer_mobile ? <span className="font-normal text-gray-400"> · {order.customer_mobile}</span> : ""}
-                        </p>
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-gray-700 truncate">
+                            {order.customer_name}
+                          </p>
+                          {order.customer_mobile && (
+                            <a
+                              href={`tel:${order.customer_mobile}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-xs text-[#9B6FD1] font-medium hover:underline w-fit"
+                            >
+                              {order.customer_mobile}
+                            </a>
+                          )}
+                        </div>
                       )}
                       {!isQuick && (
                         <span className="shrink-0 text-[10px] text-gray-400 ml-auto">
@@ -610,11 +691,17 @@ export function OrdersTab() {
                         {order.items?.length > 0 && (
                           <div className="ml-auto flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                             <span className="text-[11px] text-gray-400">Deduct stock</span>
-                            <button onClick={() => handleToggleStockDeduction(order)}
-                              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${order.stock_deducted ? "bg-emerald-500" : "bg-gray-300"}`}
-                              role="switch" aria-checked={!!order.stock_deducted}>
-                              <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 ${order.stock_deducted ? "translate-x-4" : "translate-x-0"}`} />
-                            </button>
+                            {deductingStockId === order.id ? (
+                              <Loader2 className="w-4 h-4 text-[#9B6FD1] animate-spin" />
+                            ) : (
+                              <button
+                                onClick={() => handleToggleStockDeduction(order)}
+                                disabled={deductingStockId !== null}
+                                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${order.stock_deducted ? "bg-emerald-500" : "bg-gray-300"}`}
+                                role="switch" aria-checked={!!order.stock_deducted}>
+                                <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 ${order.stock_deducted ? "translate-x-4" : "translate-x-0"}`} />
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

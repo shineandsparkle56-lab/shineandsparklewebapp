@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Trash2, Package, ChevronDown, Upload, X, Image,
-  Download, Loader2, Minus, Pencil, Search, SlidersHorizontal,
+  Download, Loader2, Minus, Pencil, Search, SlidersHorizontal, ChevronUp,
 } from "lucide-react";
 import { useProducts } from "../../context/ProductsContext";
 import { useCategories } from "../../context/CategoriesContext";
@@ -33,6 +33,7 @@ export function ProductsTab() {
 
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [addFormVariants, setAddFormVariants] = useState<ProductVariant[]>([]);
   const [variantUploading, setVariantUploading] = useState<Record<string, boolean>>({});
@@ -138,6 +139,7 @@ export function ProductsTab() {
       });
       setForm({ ...EMPTY_FORM, category: firstCat });
       setAddFormVariants([]); img.clear();
+      setShowAddForm(false);
       toast.show("Product saved!");
     } catch (err) {
       toast.show(err instanceof Error ? err.message : "Failed to save product.", "error");
@@ -183,10 +185,26 @@ export function ProductsTab() {
     <>
       {/* ── Add Product ── */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setShowAddForm((v) => !v)}
+          className="w-full px-6 py-4 flex items-center gap-2 hover:bg-gray-50 transition-colors"
+        >
           <Plus className="w-5 h-5 text-[#9B6FD1]" />
-          <h2 className="font-semibold text-gray-800">Add New Product</h2>
-        </div>
+          <h2 className="font-semibold text-gray-800 flex-1 text-left">Add New Product</h2>
+          {showAddForm
+            ? <ChevronUp className="w-4 h-4 text-gray-400" />
+            : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        </button>
+        <AnimatePresence initial={false}>
+          {showAddForm && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden border-t border-gray-100"
+            >
         <form onSubmit={handleAddProduct} className="p-6 space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {/* Name */}
@@ -406,6 +424,9 @@ export function ProductsTab() {
             </button>
           </div>
         </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* ── Product List ── */}

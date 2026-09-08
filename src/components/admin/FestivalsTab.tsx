@@ -649,6 +649,7 @@ export function FestivalsTab() {
 
   const [addForm, setAddForm] = useState({ ...EMPTY_FORM });
   const [addSaving, setAddSaving] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   const [editFestival, setEditFestival] = useState<Festival | null>(null);
   const [editForm, setEditForm] = useState({ ...EMPTY_FORM });
@@ -683,6 +684,7 @@ export function FestivalsTab() {
     try {
       await addFestival(addForm);
       setAddForm({ ...EMPTY_FORM });
+      setShowAddForm(false);
       toast.show("Festival created!");
     } catch (err) {
       toast.show(err instanceof Error ? err.message : "Failed to create festival.", "error");
@@ -737,19 +739,28 @@ export function FestivalsTab() {
 
       {/* ── Add form ─────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setShowAddForm((v) => !v)}
+          className="w-full px-6 py-4 flex items-center gap-2 hover:bg-gray-50 transition-colors"
+        >
           <Plus className="w-5 h-5 text-[#9B6FD1]" />
-          <h2 className="font-semibold text-gray-800">Create New Festival Store</h2>
-        </div>
-        <div className="p-6">
-          <FestivalForm
-            value={addForm}
-            onChange={setAddForm}
-            onSubmit={handleAdd}
-            saving={addSaving}
-            submitLabel="Create Festival"
-          />
-        </div>
+          <h2 className="font-semibold text-gray-800 flex-1 text-left">Create New Festival Store</h2>
+          {showAddForm
+            ? <ChevronUp className="w-4 h-4 text-gray-400" />
+            : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        </button>
+        {showAddForm && (
+          <div className="p-6 border-t border-gray-100">
+            <FestivalForm
+              value={addForm}
+              onChange={setAddForm}
+              onSubmit={handleAdd}
+              saving={addSaving}
+              submitLabel="Create Festival"
+            />
+          </div>
+        )}
       </div>
 
       {/* ── Festival list ─────────────────────────────────────── */}

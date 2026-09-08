@@ -8,6 +8,7 @@ interface Settings {
   defaultPickupLocation: string;
   defaultPickupPincodes: string[];
   localDeliveryZones: LocalDeliveryZone[];
+  thankYouCardUrl: string | null;
 }
 
 interface UseSettingsReturn extends Settings {
@@ -18,6 +19,7 @@ interface UseSettingsReturn extends Settings {
   setDefaultPickupLocation: (name: string) => Promise<void>;
   setDefaultPickupPincodes: (pincodes: string[]) => Promise<void>;
   setLocalDeliveryZones: (zones: LocalDeliveryZone[]) => Promise<void>;
+  setThankYouCardUrl: (url: string | null) => Promise<void>;
 }
 
 export function useSettings(): UseSettingsReturn {
@@ -28,6 +30,7 @@ export function useSettings(): UseSettingsReturn {
   const [defaultPickupPincodes, setDefaultPickupPincodesState] = useState<string[]>([]);
   const [localDeliveryZones, setLocalDeliveryZonesState] = useState<LocalDeliveryZone[]>([]);
   const [loading, setLoading] = useState(true);
+  const [thankYouCardUrl, setThankYouCardUrlState] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -37,7 +40,8 @@ export function useSettings(): UseSettingsReturn {
       getSetting("default_pickup_location"),
       getSetting("default_pickup_pincodes"),
       getSetting("local_delivery_zones"),
-    ]).then(([cod, allImg, minOrder, pickupLocation, pickupPins, localZones]) => {
+      getSetting("thank_you_card_url"),
+    ]).then(([cod, allImg, minOrder, pickupLocation, pickupPins, localZones, tyCard]) => {
       if (cod !== null) setCodEnabledState(cod === "true");
       if (allImg !== null && allImg !== "") setAllCategoryImageState(allImg);
       if (minOrder !== null) setMinOrderValueState(parseInt(minOrder, 10) || 0);
@@ -58,6 +62,7 @@ export function useSettings(): UseSettingsReturn {
           setLocalDeliveryZonesState([]);
         }
       }
+      if (tyCard !== null && tyCard !== "") setThankYouCardUrlState(tyCard);
       setLoading(false);
     });
   }, []);
@@ -92,6 +97,11 @@ export function useSettings(): UseSettingsReturn {
     await setSetting("local_delivery_zones", JSON.stringify(zones));
   };
 
+  const setThankYouCardUrl = async (url: string | null) => {
+    setThankYouCardUrlState(url);
+    await setSetting("thank_you_card_url", url ?? "");
+  };
+
   return {
     codEnabled,
     allCategoryImage,
@@ -99,6 +109,7 @@ export function useSettings(): UseSettingsReturn {
     defaultPickupLocation,
     defaultPickupPincodes,
     localDeliveryZones,
+    thankYouCardUrl,
     loading,
     setCodEnabled,
     setAllCategoryImage,
@@ -106,5 +117,6 @@ export function useSettings(): UseSettingsReturn {
     setDefaultPickupLocation,
     setDefaultPickupPincodes,
     setLocalDeliveryZones,
+    setThankYouCardUrl,
   };
 }

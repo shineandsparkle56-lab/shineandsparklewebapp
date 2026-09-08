@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 
-export type AppSettingKey = "cod_enabled" | "all_category_image_url" | "min_order_value" | "default_pickup_location" | "default_pickup_pincodes" | "local_delivery_zones";
+export type AppSettingKey = "cod_enabled" | "all_category_image_url" | "min_order_value" | "default_pickup_location" | "default_pickup_pincodes" | "local_delivery_zones" | "thank_you_card_url";
 
 export interface LocalDeliveryZone {
   pincode: string;

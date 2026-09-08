@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
-import { Settings, Warehouse, Loader2, RefreshCw, CheckSquare, Square, MapPin, Plus, Trash2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Settings, Warehouse, Loader2, RefreshCw, CheckSquare, Square, MapPin, Plus, Trash2, ImageIcon, X } from "lucide-react";
 import { useSettings } from "../../hooks/useSettings";
 import { LocalDeliveryZone } from "../../lib/settings";
+import { uploadToStorage } from "./shared";
 
 interface PickupLoc {
   id: number;
@@ -25,6 +26,7 @@ export function SettingsTab() {
     defaultPickupPincodes, setDefaultPickupPincodes,
     setDefaultPickupLocation,
     localDeliveryZones, setLocalDeliveryZones,
+    thankYouCardUrl, setThankYouCardUrl,
     loading,
   } = useSettings();
 
@@ -104,6 +106,41 @@ export function SettingsTab() {
   useEffect(() => {
     if (!loading) setZones(localDeliveryZones ?? []);
   }, [loading, localDeliveryZones]);
+
+  // ── Thank You Card ───────────────────────────────────────────
+  const tyCardInputRef                    = useRef<HTMLInputElement>(null);
+  const [tyCardUploading, setTyCardUploading] = useState(false);
+  const [tyCardSaved,     setTyCardSaved]     = useState(false);
+  const [tyCardError,     setTyCardError]     = useState<string | null>(null);
+  const [tyCardPreview,   setTyCardPreview]   = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!loading) setTyCardPreview(thankYouCardUrl ?? null);
+  }, [loading, thankYouCardUrl]);
+
+  const handleTyCardFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setTyCardError(null);
+    setTyCardUploading(true);
+    try {
+      const url = await uploadToStorage(file, "thank-you-card");
+      setTyCardPreview(url);
+      await setThankYouCardUrl(url);
+      setTyCardSaved(true);
+      setTimeout(() => setTyCardSaved(false), 2500);
+    } catch (err) {
+      setTyCardError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setTyCardUploading(false);
+      if (tyCardInputRef.current) tyCardInputRef.current.value = "";
+    }
+  };
+
+  const handleTyCardRemove = async () => {
+    setTyCardPreview(null);
+    await setThankYouCardUrl(null);
+  };
 
   const addZone = () => setZones((prev) => [...prev, { pincode: "", ...EMPTY_ZONE }]);
   const removeZone = (idx: number) => setZones((prev) => prev.filter((_, i) => i !== idx));
@@ -378,6 +415,73 @@ export function SettingsTab() {
               />
             </div>
           )}
+        </div>
+
+        {/* ── Thank You Card ── */}
+        <div className={`${SECTION} space-y-2`}>
+          <div className="flex items-center gap-1.5">
+            <ImageIcon className="w-3.5 h-3.5 text-[#9B6FD1] shrink-0" />
+            <p className="text-sm font-semibold text-gray-800">Thank You Card</p>
+          </div>
+          <p className="text-xs text-gray-400">
+            Upload your card image (PNG/JPG/WebP). The customer's name will be printed on it automatically when generating the 4×6 PDF.
+          </p>
+
+          {tyCardError && (
+            <p className="text-xs text-red-500 bg-red-50 rounded-lg px-2.5 py-1.5">{tyCardError}</p>
+          )}
+
+          {tyCardPreview ? (
+            <div className="relative inline-block">
+              <img
+                src={tyCardPreview}
+                alt="Thank You Card preview"
+                className="w-40 rounded-xl border border-[#9B6FD1]/20 shadow-sm object-contain"
+              />
+              <button
+                onClick={handleTyCardRemove}
+                className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow transition-colors"
+                title="Remove card"
+              >
+                <X className="w-3 h-3" />
+              </button>
+              {tyCardSaved && (
+                <div className="absolute bottom-2 left-0 right-0 text-center">
+                  <span className="text-[10px] font-semibold bg-emerald-500 text-white px-2 py-0.5 rounded-full">Saved ✓</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={() => tyCardInputRef.current?.click()}
+              disabled={tyCardUploading || loading}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl border-2 border-dashed border-[#9B6FD1]/40 hover:border-[#9B6FD1] hover:bg-[#F3EEFB] text-[#9B6FD1] text-xs font-semibold transition-all disabled:opacity-50"
+            >
+              {tyCardUploading
+                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…</>
+                : <><ImageIcon className="w-3.5 h-3.5" /> Upload Card Image</>}
+            </button>
+          )}
+
+          {tyCardPreview && !tyCardUploading && (
+            <button
+              onClick={() => tyCardInputRef.current?.click()}
+              disabled={tyCardUploading || loading}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[#9B6FD1]/30 text-[#9B6FD1] text-xs font-semibold hover:bg-[#F3EEFB] transition-colors disabled:opacity-50"
+            >
+              {tyCardUploading
+                ? <><Loader2 className="w-3 h-3 animate-spin" /> Uploading…</>
+                : <><RefreshCw className="w-3 h-3" /> Replace Image</>}
+            </button>
+          )}
+
+          <input
+            ref={tyCardInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleTyCardFile}
+          />
         </div>
 
       </div>
