@@ -25,6 +25,7 @@ export interface Product {
   stock: number;           // used when variants is empty; otherwise sum of variant stocks
   shipping_credit: number; // ₹ discount applied to shipping per unit in cart (0 = no credit)
   wholesale_price: number; // admin-only cost price — never shown to customers
+  client_wholesale_price: number; // wholesale price offered to wholesale customers
   variants: ProductVariant[]; // [] means no variants — product works as before
   base_variant_label?: string; // label for the implicit "base" option when variants exist, e.g. "Gold"
   base_variant_color?: string; // hex swatch color for the base option, e.g. "#C9A96E" (Gold)

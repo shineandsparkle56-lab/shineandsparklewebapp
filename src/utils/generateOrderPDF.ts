@@ -427,3 +427,327 @@ export async function generateOrderPDF(
 
   return doc.output("blob");
 }
+
+// ── Wholesale PDF ─────────────────────────────────────────────────
+/**
+ * Same layout as the retail order PDF but:
+ * - Header labelled "Wholesale Invoice"
+ * - Each item priced at client_wholesale_price (falls back to price if not set)
+ * - Totals show wholesale subtotal
+ * - Margin summary block at the bottom: retail total vs wholesale total
+ */
+export async function generateWholesalePDF(
+  cart: CartItem[],
+  retailSubtotal: number,
+  meta: OrderMeta = {}
+): Promise<Blob> {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+
+  // Pre-fetch images
+  const imageDataUrls = await Promise.all(
+    cart.map((item) =>
+      toDataURL(
+        imgUrl(
+          item.variantImage ||
+            (item.product.images?.length ? item.product.images[0] : item.product.image),
+          "full"
+        )
+      )
+    )
+  );
+
+  const AMBER   = [180, 120, 20] as const;
+  const AMBER_L = [255, 248, 225] as const;
+
+  // amber continuation header for page 2+
+  function drawWholesalePageHeader(): number {
+    doc.setFillColor(...AMBER);
+    doc.rect(0, 0, PAGE_W, HEADER_H, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(...WHITE);
+    doc.text("Shine and Sparkle", MARGIN, 14);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(255, 240, 180);
+    doc.text("Trendy Indian Jewelry for Every Occasion", MARGIN, 22);
+    doc.setFontSize(8);
+    doc.setTextColor(...WHITE);
+    doc.text("Wholesale Invoice (continued)", PAGE_W - MARGIN, 14, { align: "right" });
+    doc.setFillColor(220, 160, 30);
+    doc.rect(0, HEADER_H - 2, PAGE_W, 2, "F");
+    return HEADER_H + 8;
+  }
+
+  const checkBreak = (currentY: number, neededHeight: number): number => {
+    if (currentY + neededHeight > PAGE_H - SAFE_BOTTOM) {
+      doc.addPage();
+      return drawWholesalePageHeader();
+    }
+    return currentY;
+  };
+
+  // ── HEADER (amber/gold tint to distinguish from retail PDF) ───
+  const FIRST_HEADER_H = 44;
+
+  doc.setFillColor(...AMBER);
+  doc.rect(0, 0, PAGE_W, FIRST_HEADER_H, "F");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.setTextColor(...WHITE);
+  doc.text("Shine and Sparkle", MARGIN, 17);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(255, 240, 180);
+  doc.text("Trendy Indian Jewelry for Every Occasion", MARGIN, 25);
+
+  const today = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  doc.setFontSize(9);
+  doc.setTextColor(...WHITE);
+  doc.text("Wholesale Invoice", PAGE_W - MARGIN, 17, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.text(today, PAGE_W - MARGIN, 25, { align: "right" });
+
+  // amber accent bar
+  doc.setFillColor(220, 160, 30);
+  doc.rect(0, FIRST_HEADER_H - 3, PAGE_W, 3, "F");
+
+  let y = FIRST_HEADER_H + 8;
+
+  // ── DELIVERY DETAILS ──────────────────────────────────────────
+  const hasCustomer = meta.customerName || meta.customerAddress;
+  if (hasCustomer) {
+    const leftLines: [string, string][] = [];
+    if (meta.customerName)   leftLines.push(["Name",    meta.customerName!]);
+    if (meta.customerMobile) leftLines.push(["Mobile",  meta.customerMobile!]);
+    if (meta.paymentMode)    leftLines.push(["Payment", meta.paymentMode === "cod" ? "Cash on Delivery" : "Online / Prepaid"]);
+
+    const rightLines: [string, string][] = [];
+    if (meta.customerAddress) rightLines.push(["Address", meta.customerAddress!]);
+    if (meta.customerCity)    rightLines.push(["City",    meta.customerCity!]);
+    if (meta.customerState)   rightLines.push(["State",   meta.customerState!]);
+    if (meta.pincode)         rightLines.push(["PIN",     meta.pincode!]);
+
+    const maxRows = Math.max(leftLines.length, rightLines.length);
+    const addressMaxW = PAGE_W - MARGIN - (PAGE_W / 2 + 2) - 18;
+    let extraAddressLines = 0;
+    if (meta.customerAddress) {
+      const doc2 = new jsPDF({ unit: "mm", format: "a4" });
+      doc2.setFont("helvetica", "bold");
+      doc2.setFontSize(7.5);
+      const wrapped = doc2.splitTextToSize(meta.customerAddress, addressMaxW) as string[];
+      extraAddressLines = Math.max(0, wrapped.length - 1);
+    }
+
+    const blockH = 4 + 5 + maxRows * 7 + extraAddressLines * 5 + 6 + 6;
+    y = checkBreak(y, blockH);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...DARK);
+    doc.text("Delivery Details", MARGIN, y);
+    y += 4;
+
+    doc.setDrawColor(220, 160, 30);
+    doc.setLineWidth(0.4);
+    doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+    y += 5;
+
+    const leftX  = MARGIN;
+    const rightX = PAGE_W / 2 + 2;
+    const rowH   = 7;
+    const addrMaxW = PAGE_W - MARGIN - rightX - 18;
+    let rightY = y;
+
+    for (let i = 0; i < maxRows; i++) {
+      const ly = y + i * rowH;
+      if (leftLines[i]) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(...GREY);
+        doc.text(leftLines[i][0] + ":", leftX, ly);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(...DARK);
+        doc.text(leftLines[i][1], leftX + 22, ly);
+      }
+      if (rightLines[i]) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(...GREY);
+        doc.text(rightLines[i][0] + ":", rightX, rightY);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(...DARK);
+        const wrapped = doc.splitTextToSize(rightLines[i][1], addrMaxW) as string[];
+        doc.text(wrapped, rightX + 18, rightY);
+        rightY += rowH + (wrapped.length - 1) * 5;
+      }
+    }
+
+    y += Math.max(maxRows * rowH, rightY - y) + 6;
+    doc.setDrawColor(220, 160, 30);
+    doc.setLineWidth(0.4);
+    doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+    y += 6;
+  }
+
+  // ── ITEMS SECTION ─────────────────────────────────────────────
+  y = checkBreak(y, 20);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...DARK);
+  doc.text("Items Ordered", MARGIN, y);
+  y += 4;
+
+  doc.setDrawColor(...AMBER);
+  doc.setLineWidth(0.5);
+  doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+  y += 5;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...GREY);
+  doc.text("PRODUCT", COL_TEXT,  y);
+  doc.text("QTY",     COL_QTY,   y, { align: "right" });
+  doc.text("PRICE",   COL_PRICE, y, { align: "right" });
+  y += 4;
+
+  // ── ITEM ROWS ─────────────────────────────────────────────────
+  let wholesaleSubtotal = 0;
+
+  cart.forEach((item, i) => {
+    y = checkBreak(y, ROW_H + 4);
+    const rowY = y;
+
+    if (i % 2 === 0) {
+      doc.setFillColor(...AMBER_L);
+      doc.roundedRect(MARGIN - 2, rowY - 1, PAGE_W - MARGIN * 2 + 4, ROW_H, 2, 2, "F");
+    }
+
+    const dataUrl = imageDataUrls[i];
+    if (dataUrl) {
+      try { addRoundedImage(doc, dataUrl, imageFormat(dataUrl), COL_IMG, rowY + 1, IMG_W, IMG_H, 3); }
+      catch { drawImagePlaceholder(doc, COL_IMG, rowY + 1, IMG_W, IMG_H); }
+    } else {
+      drawImagePlaceholder(doc, COL_IMG, rowY + 1, IMG_W, IMG_H);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...DARK);
+    const nameLines = doc.splitTextToSize(item.product.name, COL_QTY - COL_TEXT - 4);
+    doc.text(nameLines.slice(0, 2) as string[], COL_TEXT, rowY + 9);
+
+    const variantY = rowY + (nameLines.length > 1 ? 17 : 15);
+    if (item.variantLabel) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7);
+      doc.setTextColor(180, 120, 20);
+      doc.text(item.variantLabel, COL_TEXT, variantY);
+    }
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...GREY);
+    doc.text(
+      `${item.product.category.toUpperCase()}  ·  SKU: SNS-${item.product.id}`,
+      COL_TEXT,
+      item.variantLabel ? variantY + 5 : rowY + 17
+    );
+
+    // client_wholesale_price — falls back to retail price if not set
+    const wPrice =
+      (item.product as typeof item.product & { client_wholesale_price?: number })
+        .client_wholesale_price || item.product.price;
+
+    doc.setFontSize(8);
+    doc.setTextColor(110, 80, 160);
+    doc.text(
+      rs(wPrice) + " each",
+      COL_TEXT,
+      item.variantLabel ? variantY + 11 : rowY + 24
+    );
+
+    const lineTotal = wPrice * item.quantity;
+    wholesaleSubtotal += lineTotal;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...DARK);
+    doc.text(`x${item.quantity}`, COL_QTY, rowY + 14, { align: "right" });
+
+    doc.setFontSize(11);
+    doc.setTextColor(...PURPLE);
+    doc.text(rs(lineTotal), COL_PRICE, rowY + 14, { align: "right" });
+
+    y += ROW_H + 2;
+  });
+
+  // ── TOTALS ────────────────────────────────────────────────────
+  const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const wholesaleGrandTotal = wholesaleSubtotal;   // shipping paid separately — not included
+
+  const totalRows: [string, string, boolean][] = [
+    ["Total Items", `${totalQty} item${totalQty !== 1 ? "s" : ""}`, false],
+    ["Grand Total", rs(wholesaleGrandTotal),                         true ],
+  ];
+
+  const totalsH = 4 + 7 + totalRows.reduce((acc, [,, bold]) => acc + (bold ? 9 : 7), 0);
+  y = checkBreak(y, totalsH + FOOTER_H + 4);
+
+  y += 4;
+  doc.setDrawColor(...PURPLE_MID);
+  doc.setLineWidth(0.4);
+  doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+  y += 7;
+
+  totalRows.forEach(([label, value, isBold]) => {
+    doc.setFont("helvetica", isBold ? "bold" : "normal");
+    doc.setFontSize(isBold ? 13 : 10);
+    if (isBold) {
+      doc.setTextColor(...DARK);
+      doc.text(label, MARGIN, y);
+      doc.setTextColor(...PURPLE);
+      doc.text(value, COL_PRICE, y, { align: "right" });
+    } else {
+      doc.setTextColor(...GREY);
+      doc.text(label, MARGIN, y);
+      doc.text(value, COL_PRICE, y, { align: "right" });
+    }
+    y += isBold ? 9 : 7;
+  });
+
+  // ── NOTE ──────────────────────────────────────────────────────
+  y += 6;
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...GREY);
+  doc.text("* Delivery charges are not included in this invoice and will be charged separately.", MARGIN, y);
+
+  // ── FOOTER ────────────────────────────────────────────────────
+  const totalPages = (doc as jsPDF & { internal: { getNumberOfPages: () => number } })
+    .internal.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    const footerY = PAGE_H - FOOTER_H;
+    doc.setFillColor(...PURPLE_LIGHT);
+    doc.rect(0, footerY, PAGE_W, FOOTER_H, "F");
+    doc.setDrawColor(...PURPLE_MID);
+    doc.setLineWidth(0.3);
+    doc.line(0, footerY, PAGE_W, footerY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(...PURPLE);
+    doc.text("Thank you for your order — Shine and Sparkle!", PAGE_W / 2, footerY + 8, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...GREY);
+    doc.text(
+      `For queries, reach us on WhatsApp  |  www.shineandsparkle.in${totalPages > 1 ? `  |  Page ${p} of ${totalPages}` : ""}`,
+      PAGE_W / 2, footerY + 15, { align: "center" }
+    );
+  }
+
+  return doc.output("blob");
+}

@@ -251,3 +251,20 @@ ALTER TABLE orders
 -- ─────────────────────────────────────────────
 ALTER TABLE orders
   ADD COLUMN IF NOT EXISTS gift_wrap_charges integer NOT NULL DEFAULT 0;
+
+-- ─────────────────────────────────────────────
+-- Client wholesale price column on products
+-- Separate from wholesale_price (cost price) —
+-- this is the price offered to wholesale customers.
+-- ─────────────────────────────────────────────
+ALTER TABLE products
+  ADD COLUMN IF NOT EXISTS client_wholesale_price integer NOT NULL DEFAULT 0;
+
+-- ─────────────────────────────────────────────
+-- Backfill client_wholesale_price for existing products
+-- Run once after adding the column above.
+-- Sets client_wholesale_price = wholesale_price × 1.2 for all existing products.
+-- ─────────────────────────────────────────────
+UPDATE products
+SET client_wholesale_price = ROUND(wholesale_price * 1.2)
+WHERE wholesale_price > 0;

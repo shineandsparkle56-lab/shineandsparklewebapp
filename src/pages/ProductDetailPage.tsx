@@ -28,7 +28,7 @@ function mapRow(row: Record<string, unknown>): Product {
     stock: typeof row.stock === "number" ? row.stock : 99,
     shipping_credit: typeof row.shipping_credit === "number" ? row.shipping_credit : 0,
     wholesale_price: typeof row.wholesale_price === "number" ? row.wholesale_price : 0,
-    variants: Array.isArray(row.variants) ? (row.variants as ProductVariant[]) : [],
+    client_wholesale_price: typeof row.client_wholesale_price === "number" ? row.client_wholesale_price : 0,    variants: Array.isArray(row.variants) ? (row.variants as ProductVariant[]) : [],
     base_variant_label: typeof row.base_variant_label === "string" ? row.base_variant_label : undefined,
     base_variant_color: typeof row.base_variant_color === "string" ? row.base_variant_color : undefined,
     tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],

@@ -43,7 +43,7 @@ function trackStatusColor(status: string): string {
 }
 import { useProducts } from "../../context/ProductsContext";
 import { supabase } from "../../lib/supabase";
-import { generateOrderPDF } from "../../utils/generateOrderPDF";
+import { generateOrderPDF, generateWholesalePDF } from "../../utils/generateOrderPDF";
 import type { OrderMeta } from "../../utils/generateOrderPDF";
 import type { CartItem } from "../../context/CartContext";
 import { Product } from "../../data/products";
@@ -71,6 +71,7 @@ export function OrdersTab() {
   const [hasMore, setHasMore] = useState(true);
   const PAGE_SIZE = 10;
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [wholesaleDownloadingId, setWholesaleDownloadingId] = useState<number | null>(null);
   const [deleteOrderId, setDeleteOrderId] = useState<number | null>(null);
   const [deletingOrder, setDeletingOrder] = useState(false);
   const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
@@ -218,7 +219,7 @@ export function OrdersTab() {
           price: i.product.price, originalPrice: i.product.price,
           discount: 0, image: i.product.image,
           images: i.product.images ?? [i.product.image],
-          description: "", stock: 99, shipping_credit: 0, wholesale_price: 0, variants: [], tags: [], sizes: [],
+          description: "", stock: 99, shipping_credit: 0, wholesale_price: 0, client_wholesale_price: 0, variants: [], tags: [], sizes: [],
         },
         quantity: i.quantity,
         variantId:    (i as typeof i & { variant_id?: string }).variant_id ?? undefined,
@@ -241,6 +242,51 @@ export function OrdersTab() {
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     } catch (err) { console.error("PDF download failed:", err); }
     finally { setDownloadingId(null); }
+  };
+
+  const handleDownloadWholesalePDF = async (order: OrderRow) => {
+    setWholesaleDownloadingId(order.id);
+    try {
+      const cartItems: CartItem[] = order.items.map((i) => {
+        // client_wholesale_price is NOT stored in the order items snapshot —
+        // look it up from the live products list instead
+        const liveProduct = products.find((p) => p.id === i.product.id);
+        const clientWprice = liveProduct?.client_wholesale_price ?? 0;
+
+        return {
+          product: {
+            id: i.product.id, name: i.product.name,
+            category: i.product.category as Product["category"],
+            price: i.product.price, originalPrice: i.product.price,
+            discount: 0, image: i.product.image,
+            images: i.product.images ?? [i.product.image],
+            description: "", stock: 99, shipping_credit: 0,
+            wholesale_price: i.product.wholesale_price ?? 0,
+            client_wholesale_price: clientWprice,
+            variants: [], tags: [], sizes: [],
+          },
+          quantity: i.quantity,
+          variantId:    (i as typeof i & { variant_id?: string }).variant_id ?? undefined,
+          variantLabel: (i as typeof i & { variant_label?: string }).variant_label ?? undefined,
+          variantImage: i.product.image,
+        };
+      });
+      const meta: OrderMeta = {
+        customerName: order.customer_name, customerMobile: order.customer_mobile,
+        customerAddress: order.customer_address, customerCity: order.customer_city,
+        customerState: order.customer_state, pincode: order.pincode,
+        paymentMode: order.payment_mode, shippingCharge: order.shipping_charge,
+        codCharge: order.cod_charge, grandTotal: order.grand_total,
+      };
+      const blob = await generateWholesalePDF(cartItems, order.subtotal, meta);
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `WHOLESALE_${order.customer_name ? order.customer_name.trim().replace(/\s+/g, "_") : `Order_${order.id}`}_${new Date(order.created_at).toLocaleDateString("en-IN").replace(/\//g, "-")}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (err) { console.error("Wholesale PDF download failed:", err); }
+    finally { setWholesaleDownloadingId(null); }
   };
 
   const handlePushToShiprocket = async (order: OrderRow) => {
@@ -424,6 +470,19 @@ export function OrdersTab() {
               const profit  = order.grand_total - (wholesaleCost + rawShip + rawCod);
               const pct     = order.grand_total > 0 ? Math.round((profit / order.grand_total) * 100) : 0;
               const showProfit = order.raw_shipping_charge != null && order.items.some((i) => (i.product.wholesale_price ?? 0) > 0);
+
+              // Wholesale margin: W-Revenue (client_wholesale_price) − W-Cost (wholesale_price)
+              // Shipping excluded — customer pays it separately
+              const clientWholesaleRevenue = order.items.reduce((s, i) => {
+                const liveProduct = products.find((p) => p.id === i.product.id);
+                const cwp = liveProduct?.client_wholesale_price ?? 0;
+                return s + cwp * i.quantity;
+              }, 0);
+              const hasClientWholesale = clientWholesaleRevenue > 0;
+              const wholesaleMargin    = clientWholesaleRevenue - wholesaleCost;
+              const wholesaleMarginPct = clientWholesaleRevenue > 0
+                ? Math.round((wholesaleMargin / clientWholesaleRevenue) * 100)
+                : 0;
 
               return (
                 <div key={order.id} className={`border-l-4 ${isEven ? "bg-white border-l-[#9B6FD1]/30" : "bg-slate-50 border-l-orange-200"}`}>
@@ -646,11 +705,37 @@ export function OrdersTab() {
                         </div>
                       )}
 
+                      {/* Wholesale margin breakdown */}
+                      {hasClientWholesale && (
+                        <div className="px-3 py-2 rounded-lg text-[11px] bg-amber-50 border border-amber-100">
+                          <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wide mb-1">Wholesale Profit (excl. shipping)</p>
+                          <div className="flex flex-wrap items-center gap-1 text-gray-500 mb-1">
+                            <span className="font-medium">W-Revenue ₹{clientWholesaleRevenue}</span>
+                            <span className="opacity-40">−</span>
+                            <span>Cost ₹{wholesaleCost}</span>
+                            <span className="opacity-40">=</span>
+                            <span className={`font-bold ${wholesaleMargin >= 0 ? "text-amber-700" : "text-red-600"}`}>₹{wholesaleMargin}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`font-bold text-sm ${wholesaleMargin >= 0 ? "text-amber-700" : "text-red-600"}`}>
+                              {wholesaleMargin >= 0 ? "Profit" : "Loss"} ₹{Math.abs(wholesaleMargin)}
+                            </span>
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                              {wholesaleMarginPct}%
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Actions */}
                       <div className="flex flex-wrap items-center gap-2">
                         <button onClick={(e) => { e.stopPropagation(); handleDownloadPDF(order); }} disabled={downloadingId === order.id}
                           className="flex items-center gap-1 px-3 py-1.5 bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-60">
                           {downloadingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} PDF
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); handleDownloadWholesalePDF(order); }} disabled={wholesaleDownloadingId === order.id}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-60">
+                          {wholesaleDownloadingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} W-PDF
                         </button>
                         <button onClick={(e) => { e.stopPropagation(); setThankYouOrder(order); }}
                           className="flex items-center gap-1 px-3 py-1.5 bg-pink-50 hover:bg-pink-100 text-pink-600 text-xs font-semibold rounded-lg transition-colors border border-pink-200">

@@ -19,7 +19,7 @@ import { ConfirmModal, Spinner, uploadToStorage } from "./shared";
 const MAX_IMAGES = 6;
 const EMPTY_FORM = {
   name: "", category: "", price: "", originalPrice: "", description: "",
-  stock: "10", shipping_credit: "0", wholesale_price: "0",
+  stock: "10", shipping_credit: "0", wholesale_price: "0", client_wholesale_price: "0",
   base_variant_label: "", base_variant_color: "",
 };
 const BATCH_SIZE = 10;
@@ -131,6 +131,7 @@ export function ProductsTab() {
         image: imageUrls[0], images: imageUrls, description: form.description.trim(),
         stock: baseStock, shipping_credit: Math.max(0, Number(form.shipping_credit) || 0),
         wholesale_price: Math.max(0, Number(form.wholesale_price) || 0),
+        client_wholesale_price: Math.max(0, Number(form.client_wholesale_price) || 0),
         variants: cleanedVariants,
         base_variant_label: form.base_variant_label.trim() || undefined,
         base_variant_color: form.base_variant_color.trim() || undefined,
@@ -295,8 +296,19 @@ export function ProductsTab() {
             </div>
             <div>
               <label className="label">Wholesale Price (₹)</label>
-              <input type="number" min="0" value={form.wholesale_price} onChange={(e) => set("wholesale_price", e.target.value)} className="input" />
+              <input type="number" min="0" value={form.wholesale_price}
+                onChange={(e) => {
+                  set("wholesale_price", e.target.value);
+                  const wp = Number(e.target.value) || 0;
+                  set("client_wholesale_price", wp > 0 ? String(Math.round(wp * 1.3)) : "0");
+                }}
+                className="input" />
               <p className="text-[11px] text-gray-400 mt-1">Your cost price — admin only</p>
+            </div>
+            <div>
+              <label className="label">Client Wholesale Price (₹)</label>
+              <input type="number" min="0" value={form.client_wholesale_price} onChange={(e) => set("client_wholesale_price", e.target.value)} className="input" />
+              <p className="text-[11px] text-gray-400 mt-1">Auto: cost × 1.2 — override if needed</p>
             </div>
 
             {/* Variants */}

@@ -20,7 +20,7 @@ interface Props {
   onError: (msg: string) => void;
 }
 
-type FormKey = "name" | "category" | "price" | "originalPrice" | "description" | "stock" | "shipping_credit" | "wholesale_price" | "base_variant_label" | "base_variant_color";
+type FormKey = "name" | "category" | "price" | "originalPrice" | "description" | "stock" | "shipping_credit" | "wholesale_price" | "client_wholesale_price" | "base_variant_label" | "base_variant_color";
 
 async function uploadFile(file: File, productName?: string): Promise<string> {
   const compressed = await compressToWebP(file, { name: productName });
@@ -191,7 +191,7 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
   const [form, setForm] = useState({
     name: "", category: "", price: "", originalPrice: "",
     description: "", stock: "", shipping_credit: "", wholesale_price: "",
-    base_variant_label: "", base_variant_color: "",
+    client_wholesale_price: "", base_variant_label: "", base_variant_color: "",
   });
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [tags, setTags] = useState<string[]>([]);
@@ -211,6 +211,7 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
       stock: String(product.stock),
       shipping_credit: String(product.shipping_credit ?? 0),
       wholesale_price: String(product.wholesale_price ?? 0),
+      client_wholesale_price: String(product.client_wholesale_price ?? 0),
       base_variant_label: product.base_variant_label ?? "",
       base_variant_color: product.base_variant_color ?? "",
     });
@@ -297,7 +298,7 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
         stock: Number(form.stock) || 0,  // base stock only — variant stocks live in variants[]
         shipping_credit: Math.max(0, Number(form.shipping_credit) || 0),
         wholesale_price: Math.max(0, Number(form.wholesale_price) || 0),
-        variants: cleanedVariants,
+        client_wholesale_price: Math.max(0, Number(form.client_wholesale_price) || 0),        variants: cleanedVariants,
         base_variant_label: form.base_variant_label.trim() || undefined,
         base_variant_color: form.base_variant_color.trim() || undefined,
         tags,
@@ -386,8 +387,19 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
                 </div>
                 <div>
                   <label className="label">Wholesale Price (₹)</label>
-                  <input type="number" min="0" value={form.wholesale_price} onChange={(e) => set("wholesale_price", e.target.value)} className="input" />
+                  <input type="number" min="0" value={form.wholesale_price}
+                    onChange={(e) => {
+                      set("wholesale_price", e.target.value);
+                      const wp = Number(e.target.value) || 0;
+                      set("client_wholesale_price", wp > 0 ? String(Math.round(wp * 1.3)) : "0");
+                    }}
+                    className="input" />
                   <p className="text-[11px] text-gray-400 mt-1">Your cost price — admin only</p>
+                </div>
+                <div>
+                  <label className="label">Client Wholesale Price (₹)</label>
+                  <input type="number" min="0" value={form.client_wholesale_price} onChange={(e) => set("client_wholesale_price", e.target.value)} className="input" />
+                  <p className="text-[11px] text-gray-400 mt-1">Auto: cost × 1.2 — override if needed</p>
                 </div>
 
                 {/* Product Images */}
