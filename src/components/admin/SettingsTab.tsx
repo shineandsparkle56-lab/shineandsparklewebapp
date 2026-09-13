@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { Settings, Warehouse, Loader2, RefreshCw, CheckSquare, Square, MapPin, Plus, Trash2, ImageIcon, X } from "lucide-react";
+import { Settings, Warehouse, Loader2, RefreshCw, CheckSquare, Square, MapPin, Plus, Trash2, ImageIcon, X, MessageCircle } from "lucide-react";
 import { useSettings } from "../../hooks/useSettings";
-import { LocalDeliveryZone } from "../../lib/settings";
+import { LocalDeliveryZone, DEFAULT_WA_TEMPLATES } from "../../lib/settings";
 import { uploadToStorage } from "./shared";
 
 interface PickupLoc {
@@ -27,6 +27,11 @@ export function SettingsTab() {
     setDefaultPickupLocation,
     localDeliveryZones, setLocalDeliveryZones,
     thankYouCardUrl, setThankYouCardUrl,
+    waTplOutForDelivery, setWaTplOutForDelivery,
+    waTplDispatched,    setWaTplDispatched,
+    waTplDelayed,       setWaTplDelayed,
+    waTplFeedback,      setWaTplFeedback,
+    waTplThankYou,      setWaTplThankYou,
     loading,
   } = useSettings();
 
@@ -142,8 +147,47 @@ export function SettingsTab() {
     await setThankYouCardUrl(null);
   };
 
-  const addZone = () => setZones((prev) => [...prev, { pincode: "", ...EMPTY_ZONE }]);
-  const removeZone = (idx: number) => setZones((prev) => prev.filter((_, i) => i !== idx));
+  // ── WhatsApp Templates ───────────────────────────────────────
+  type WaTplKey = "out_for_delivery" | "dispatched" | "delayed" | "feedback" | "thank_you";
+  const WA_TEMPLATES: { key: WaTplKey; label: string; emoji: string; value: string; setter: (t: string) => Promise<void> }[] = [
+    { key: "out_for_delivery", label: "Out for Delivery",    emoji: "🚚", value: waTplOutForDelivery, setter: setWaTplOutForDelivery },
+    { key: "dispatched",       label: "Order Dispatched",    emoji: "📦", value: waTplDispatched,     setter: setWaTplDispatched },
+    { key: "delayed",          label: "Delivery Delayed",    emoji: "⏳", value: waTplDelayed,        setter: setWaTplDelayed },
+    { key: "feedback",         label: "Feedback Request",    emoji: "🌟", value: waTplFeedback,       setter: setWaTplFeedback },
+    { key: "thank_you",        label: "Thank You (Delivered)",emoji: "💜", value: waTplThankYou,      setter: setWaTplThankYou },
+  ];
+  const [waDrafts, setWaDrafts] = useState<Record<WaTplKey, string>>({
+    out_for_delivery: "", dispatched: "", delayed: "", feedback: "", thank_you: "",
+  });
+  const [waSaving, setWaSaving]   = useState<WaTplKey | null>(null);
+  const [waSaved,  setWaSaved]    = useState<WaTplKey | null>(null);
+  const [waOpen,   setWaOpen]     = useState<WaTplKey | null>(null);
+
+  useEffect(() => {
+    if (!loading) {
+      setWaDrafts({
+        out_for_delivery: waTplOutForDelivery,
+        dispatched:       waTplDispatched,
+        delayed:          waTplDelayed,
+        feedback:         waTplFeedback,
+        thank_you:        waTplThankYou,
+      });
+    }
+  }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSaveWaTpl = async (tpl: typeof WA_TEMPLATES[number]) => {
+    setWaSaving(tpl.key);
+    await tpl.setter(waDrafts[tpl.key]);
+    setWaSaving(null);
+    setWaSaved(tpl.key);
+    setTimeout(() => setWaSaved(null), 2000);
+  };
+
+  const handleResetWaTpl = (key: WaTplKey) => {
+    setWaDrafts((prev) => ({ ...prev, [key]: DEFAULT_WA_TEMPLATES[key] }));
+  };
+
+  const addZone = () => setZones((prev) => [...prev, { pincode: "", ...EMPTY_ZONE }]);  const removeZone = (idx: number) => setZones((prev) => prev.filter((_, i) => i !== idx));
 
   const updateZone = <K extends keyof LocalDeliveryZone>(idx: number, field: K, value: LocalDeliveryZone[K]) => {
     setZones((prev) => prev.map((z, i) => (i === idx ? { ...z, [field]: value } : z)));
@@ -482,6 +526,75 @@ export function SettingsTab() {
             className="hidden"
             onChange={handleTyCardFile}
           />
+        </div>
+
+        {/* ── WhatsApp Message Templates ── */}
+        <div className={`${SECTION} space-y-3`}>
+          <div className="flex items-center gap-1.5">
+            <MessageCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
+            <p className="text-sm font-semibold text-gray-800">WhatsApp Message Templates</p>
+          </div>
+          <p className="text-xs text-gray-400">
+            Customise the pre-defined messages sent to customers via WhatsApp. Use placeholders:{" "}
+            <code className="bg-gray-100 px-1 py-0.5 rounded text-[11px] text-gray-600">{"{name}"}</code>{" "}
+            <code className="bg-gray-100 px-1 py-0.5 rounded text-[11px] text-gray-600">{"{awb}"}</code>{" "}
+            <code className="bg-gray-100 px-1 py-0.5 rounded text-[11px] text-gray-600">{"{courier}"}</code>{" "}
+            <code className="bg-gray-100 px-1 py-0.5 rounded text-[11px] text-gray-600">{"{trackUrl}"}</code>
+          </p>
+
+          <div className="space-y-2">
+            {WA_TEMPLATES.map((tpl) => {
+              const isOpen = waOpen === tpl.key;
+              return (
+                <div key={tpl.key} className="border border-gray-200 rounded-xl overflow-hidden">
+                  {/* Accordion header */}
+                  <button
+                    type="button"
+                    onClick={() => setWaOpen(isOpen ? null : tpl.key)}
+                    className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-gray-50 transition-colors"
+                  >
+                    <span className="text-xs font-semibold text-gray-700">{tpl.emoji} {tpl.label}</span>
+                    <span className={`text-gray-400 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`}>
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                    </span>
+                  </button>
+
+                  {/* Accordion body */}
+                  {isOpen && (
+                    <div className="border-t border-gray-100 px-3 pt-2.5 pb-3 space-y-2 bg-gray-50">
+                      <textarea
+                        rows={8}
+                        disabled={loading}
+                        value={waDrafts[tpl.key]}
+                        onChange={(e) => setWaDrafts((prev) => ({ ...prev, [tpl.key]: e.target.value }))}
+                        className="w-full border border-gray-200 rounded-lg px-2.5 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-[#9B6FD1]/40 bg-white resize-y placeholder:text-gray-300 disabled:opacity-50"
+                        placeholder="Type your message…"
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleResetWaTpl(tpl.key)}
+                          disabled={loading}
+                          className="text-[11px] text-gray-400 hover:text-gray-600 underline underline-offset-2 transition-colors disabled:opacity-40"
+                        >
+                          Reset to default
+                        </button>
+                        <div className="ml-auto">
+                          <SaveBtn
+                            onClick={() => handleSaveWaTpl(tpl)}
+                            disabled={loading || waSaving === tpl.key}
+                            saving={waSaving === tpl.key}
+                            saved={waSaved === tpl.key}
+                            label="Save"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
       </div>

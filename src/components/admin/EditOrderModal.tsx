@@ -242,7 +242,7 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
   }, [products, search]);
 
   /* ── cart helpers ── */
-  function addLine(p: Product, variantId?: string, variantLabel?: string, variantPrice?: number) {
+  function addLine(p: Product, variantId?: string, variantLabel?: string, variantPrice?: number, variantImages?: string[]) {
     setCart((prev) => {
       const key   = variantId ?? `base-${p.id}`;
       const match = prev.find(
@@ -265,8 +265,8 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
             discount:        p.discount,
             wholesale_price: p.wholesale_price,
             shipping_credit: p.shipping_credit,
-            image:           p.images?.[0] ?? p.image,
-            images:          p.images ?? [p.image],
+            image:           (variantImages ?? p.images ?? [p.image])[0] ?? p.image,
+            images:          variantImages ?? p.images ?? [p.image],
           },
           quantity:      1,
           variant_id:    variantId    ?? null,
@@ -652,7 +652,7 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
                           >
                             {/* thumbnail */}
                             <img
-                              src={imgUrl(line.product.image, "tiny")}
+                              src={imgUrl(line.product.images?.[0] ?? line.product.image, "tiny")}
                               alt={line.product.name}
                               className="w-9 h-9 rounded-lg object-cover shrink-0"
                             />
@@ -798,7 +798,7 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
                                   <button
                                     key={v.id}
                                     type="button"
-                                    onClick={() => addLine(p, v.id, v.label, v.price ?? p.price)}
+                                    onClick={() => addLine(p, v.id, v.label, v.price ?? p.price, v.images?.length ? v.images : undefined)}
                                     className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white hover:bg-[#F3EEFB] border border-gray-100 text-left transition-colors"
                                   >
                                     {v.color && (

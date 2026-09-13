@@ -45,17 +45,51 @@ export interface ShiprocketResult {
  *   discount      = MRP - actual selling price
  */
 export function buildShiprocketItems(
-  orderItems: { product: { id: number; name: string; price: number; original_price?: number }; quantity: number }[]
+  orderItems: { product: { id: number; name: string; price: number; original_price?: number }; quantity: number; variant_id?: string | null; variant_label?: string | null }[]
 ): ShiprocketItem[] {
   return orderItems.map((i) => {
     const mrp     = i.product.original_price ?? i.product.price;
     const selling = i.product.price;
+    // Include variant suffix in SKU so same product with different variants
+    // gets unique SKUs — Shiprocket rejects duplicate SKUs in one order.
+    const sku = i.variant_id
+      ? `SNS-${i.product.id}-${i.variant_id}`
+      : `SNS-${i.product.id}`;
     return {
-      name:          i.product.name,
-      sku:           `SNS-${i.product.id}`,
+      name:          i.variant_label
+        ? `${i.product.name} (${i.variant_label})`
+        : i.product.name,
+      sku,
       units:         i.quantity,
       selling_price: mrp,
       discount:      Math.max(0, mrp - selling),
+    };
+  });
+}
+
+/**
+ * Wholesale variant — uses wholesale_price as the selling_price so the
+ * Shiprocket invoice reflects wholesale values rather than retail.
+ * Falls back to the retail price if wholesale_price is 0 or missing.
+ */
+export function buildShiprocketItemsWholesale(
+  orderItems: { product: { id: number; name: string; price: number; original_price?: number; wholesale_price?: number }; quantity: number; variant_id?: string | null; variant_label?: string | null }[]
+): ShiprocketItem[] {
+  return orderItems.map((i) => {
+    const wholesale = i.product.wholesale_price && i.product.wholesale_price > 0
+      ? i.product.wholesale_price
+      : i.product.price;
+    const sku = i.variant_id
+      ? `SNS-${i.product.id}-${i.variant_id}`
+      : `SNS-${i.product.id}`;
+    return {
+      name:          i.variant_label
+        ? `${i.product.name} (${i.variant_label})`
+        : i.product.name,
+      sku,
+      units:         i.quantity,
+      selling_price: wholesale,
+      discount:      0,
     };
   });
 }

@@ -139,15 +139,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       shipping_state: "",
       shipping_email: "",
       shipping_phone: "",
-      order_items: body.items.map((item) => ({
-        name: item.name,
-        sku: item.sku || `SNS-${item.name.slice(0, 6).replace(/\s/g, "").toUpperCase()}`,
-        units: item.units,
-        selling_price: item.selling_price,
-        discount: item.discount ?? 0,
-        tax: 0,
-        hsn: "",
-      })),
+      order_items: (() => {
+        // Merge items with identical SKUs — Shiprocket rejects duplicate SKUs.
+        // Same product + different variant has unique SKUs so stays separate.
+        const map = new Map<string, typeof body.items[0]>();
+        for (const item of body.items) {
+          const key = item.sku || item.name;
+          if (map.has(key)) {
+            map.set(key, { ...map.get(key)!, units: map.get(key)!.units + item.units });
+          } else {
+            map.set(key, { ...item });
+          }
+        }
+        return Array.from(map.values()).map((item) => ({
+          name: item.name,
+          sku: item.sku || `SNS-${item.name.slice(0, 6).replace(/\s/g, "").toUpperCase()}`,
+          units: item.units,
+          selling_price: item.selling_price,
+          discount: item.discount ?? 0,
+          tax: 0,
+          hsn: "",
+        }));
+      })(),
       payment_method: body.payment_mode === "cod" ? "COD" : "Prepaid",
       shipping_charges: body.shipping_charge ?? 0,
       giftwrap_charges: 0,

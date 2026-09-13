@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Plus, Trash2, ShoppingBag, Download, FileText, Loader2,
   Pencil, Truck, X, CheckCircle2, Zap, Link2, RefreshCw, ChevronDown,
-  MapPin, Calendar, Clock, Heart, SlidersHorizontal,
+  MapPin, Calendar, Clock, Heart, SlidersHorizontal, MessageCircle, Star, Phone,
 } from "lucide-react";
 
 // ── Tracking types ─────────────────────────────────────────────────────────
@@ -49,11 +49,12 @@ import type { CartItem } from "../../context/CartContext";
 import { Product } from "../../data/products";
 import { useToast } from "../../hooks/useToast";
 import { imgUrl } from "../../lib/imgUrl";
-import { pushToShiprocket, saveSrIds, buildShiprocketItems, estimateWeight } from "../../lib/shiprocket";
+import { pushToShiprocket, saveSrIds, buildShiprocketItems, buildShiprocketItemsWholesale, estimateWeight } from "../../lib/shiprocket";
 import { useSettings } from "../../hooks/useSettings";
 import { EditOrderModal } from "./EditOrderModal";
 import { AddOrderModal } from "./AddOrderModal";
 import { QuickAddOrderModal } from "./QuickAddOrderModal";
+import { QuickEditOrderModal } from "./QuickEditOrderModal";
 import { ConfirmModal, Spinner, SrResult } from "./shared";
 import type { OrderRow, OrderStatus } from "./EditOrderModal";
 import { ORDER_STATUSES } from "./EditOrderModal";
@@ -62,7 +63,7 @@ import ThankYouCard from "../ThankYouCard";
 export function OrdersTab() {
   const { products, updateStock } = useProducts();
   const toast = useToast();
-  const { defaultPickupLocation } = useSettings();
+  const { defaultPickupLocation, waTplOutForDelivery, waTplDispatched, waTplDelayed, waTplFeedback, waTplThankYou } = useSettings();
 
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
@@ -75,9 +76,11 @@ export function OrdersTab() {
   const [deleteOrderId, setDeleteOrderId] = useState<number | null>(null);
   const [deletingOrder, setDeletingOrder] = useState(false);
   const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
+  const [quickEditOrder, setQuickEditOrder] = useState<OrderRow | null>(null);
   const [addOrderOpen, setAddOrderOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [pushingId, setPushingId] = useState<number | null>(null);
+  const [wholesalePushingId, setWholesalePushingId] = useState<number | null>(null);
   const [srResult, setSrResult] = useState<SrResult>(null);
   const [syncingAwbId, setSyncingAwbId] = useState<number | null>(null);
   const [deductingStockId, setDeductingStockId] = useState<number | null>(null);
@@ -87,23 +90,71 @@ export function OrdersTab() {
   const [trackingMap, setTrackingMap] = useState<Record<number, TrackingInfo>>({});
   // thank you card preview
   const [thankYouOrder, setThankYouOrder] = useState<OrderRow | null>(null);
+  const [whatsappOpenId, setWhatsappOpenId] = useState<number | null>(null);
+  const whatsappRef = useRef<HTMLDivElement | null>(null);
+
+  // Close WhatsApp dropdown when clicking outside
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (whatsappRef.current && !whatsappRef.current.contains(e.target as Node)) {
+        setWhatsappOpenId(null);
+      }
+    }
+    if (whatsappOpenId !== null) {
+      document.addEventListener("mousedown", handleOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [whatsappOpenId]);
 
   // ── filters ──────────────────────────────────────────────────
   const [showFilters,    setShowFilters]    = useState(false);
   const [filterShipping, setFilterShipping] = useState<"all" | "shipped" | "unshipped">("all");
+  const [filterStatus,   setFilterStatus]   = useState<"all" | "pending" | "confirmed" | "shipped" | "delivered" | "cancelled">("all");
 
-  const activeFilterCount = [filterShipping !== "all"].filter(Boolean).length;
+  const activeFilterCount = [filterShipping !== "all", filterStatus !== "all"].filter(Boolean).length;
 
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
       if (filterShipping === "shipped"   && !o.awb_code)  return false;
       if (filterShipping === "unshipped" && !!o.awb_code) return false;
+      if (filterStatus !== "all" && o.status !== filterStatus) return false;
       return true;
     });
-  }, [orders, filterShipping]);
+  }, [orders, filterShipping, filterStatus]);
 
   function clearFilters() {
     setFilterShipping("all");
+    setFilterStatus("all");
+  }
+
+  function sendWhatsApp(mobile: string, message: string) {
+    const clean = mobile.replace(/\D/g, "");
+    const num   = clean.startsWith("91") ? clean : `91${clean}`;
+    const url   = `https://wa.me/${num}?text=${encodeURIComponent(message)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    setWhatsappOpenId(null);
+  }
+
+  function buildMessages(order: OrderRow) {
+    const name     = order.customer_name?.split(" ")[0] || "there";
+    const awb      = order.awb_code ?? "";
+    const courier  = order.courier_name ?? "our courier partner";
+    const trackUrl = awb ? `https://shineandsparkle.in/track?awb=${awb}` : "";
+
+    const fill = (tpl: string) =>
+      tpl
+        .replace(/\{name\}/g,     name)
+        .replace(/\{awb\}/g,      awb)
+        .replace(/\{courier\}/g,  courier)
+        .replace(/\{trackUrl\}/g, trackUrl);
+
+    return [
+      { label: "🚚 Out for Delivery",    category: "delivery", text: fill(waTplOutForDelivery) },
+      { label: "📦 Order Dispatched",    category: "delivery", text: fill(waTplDispatched) },
+      { label: "⏳ Delivery Delayed",    category: "delivery", text: fill(waTplDelayed) },
+      { label: "🌟 Feedback Request",    category: "feedback", text: fill(waTplFeedback) },
+      { label: "💜 Thank You (Delivered)", category: "feedback", text: fill(waTplThankYou) },
+    ];
   }
 
   const toggleExpand = (id: number) =>
@@ -334,8 +385,57 @@ export function OrdersTab() {
     } finally { setPushingId(null); }
   };
 
-  const handleSyncAwb = async (order: OrderRow) => {
-    if (!order.sr_order_id) return;
+  const handleWholesalePushToShiprocket = async (order: OrderRow) => {
+    if (!order.customer_name || !order.pincode || !order.customer_address) {
+      toast.show("Order is missing customer details. Edit it first.", "error"); return;
+    }
+    setWholesalePushingId(order.id); setSrResult(null);
+    try {
+      const resolvedPickup = order.pickup_location?.trim() || defaultPickupLocation || undefined;
+      // Compute wholesale subtotal from items
+      const wholesaleSubtotal = order.items.reduce(
+        (s, i) => s + ((i.product.wholesale_price ?? 0) > 0 ? i.product.wholesale_price! : i.product.price) * i.quantity, 0
+      );
+      const wholesaleGrandTotal = wholesaleSubtotal + (order.shipping_charge ?? 0) +
+        (order.payment_mode === "cod" ? (order.cod_charge ?? 0) : 0);
+      const result = await pushToShiprocket({
+        order_id:         `W-${order.id}`,
+        order_date:       new Date(order.created_at).toISOString().slice(0, 19),
+        customer_name:    order.customer_name,
+        customer_mobile:  order.customer_mobile ?? "",
+        customer_address: order.customer_address,
+        customer_city:    order.customer_city   ?? "",
+        customer_state:   order.customer_state  ?? "",
+        customer_pincode: order.pincode,
+        payment_mode:     order.payment_mode as "prepaid" | "cod",
+        subtotal:         wholesaleSubtotal,
+        shipping_charge:  order.shipping_charge,
+        cod_charge:       order.cod_charge,
+        gift_wrap_charges: order.gift_wrap_charges ?? 0,
+        grand_total:      wholesaleGrandTotal,
+        weight:           order.weight_kg ?? estimateWeight(order.items.reduce((s, i) => s + i.quantity, 0)),
+        length:           order.box_length  ?? 5,
+        breadth:          order.box_breadth ?? 5,
+        height:           order.box_height  ?? 3,
+        items:            buildShiprocketItemsWholesale(order.items),
+        pickup_location:  resolvedPickup,
+      });
+      await saveSrIds(order.id, result);
+      setOrders((prev) => prev.map((o) =>
+        o.id === order.id
+          ? { ...o, status: "confirmed", sr_order_id: result.sr_order_id, sr_shipment_id: result.shipment_id, awb_code: result.awb || undefined }
+          : o
+      ));
+      setSrResult({ orderId: order.id, shipmentId: result.shipment_id, awb: result.awb });
+      toast.show("Wholesale order pushed to Shiprocket!");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Network error";
+      setSrResult({ orderId: order.id, error: msg });
+      toast.show("Shiprocket push failed.", "error");
+    } finally { setWholesalePushingId(null); }
+  };
+
+  const handleSyncAwb = async (order: OrderRow) => {    if (!order.sr_order_id) return;
     setSyncingAwbId(order.id);
     try {
       const res = await fetch(`/api/get-shipment-awb?order_id=${order.sr_order_id}`);
@@ -418,7 +518,33 @@ export function OrdersTab() {
 
         {/* Filter panel */}
         {showFilters && (
-          <div className="px-4 py-3 border-b border-gray-100 bg-[#FAFAFA]">
+          <div className="px-4 py-3 border-b border-gray-100 bg-[#FAFAFA] space-y-2">
+
+            {/* Status filter */}
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider shrink-0">Status</p>
+              {(["all", "pending", "confirmed", "shipped", "delivered", "cancelled"] as const).map((s) => {
+                const colors: Record<string, string> = {
+                  all:       filterStatus === "all"       ? "bg-[#9B6FD1] border-[#9B6FD1] text-white" : "bg-white border-gray-200 text-gray-500 hover:border-[#9B6FD1]/40",
+                  pending:   filterStatus === "pending"   ? "bg-yellow-400 border-yellow-400 text-white" : "bg-white border-gray-200 text-gray-500 hover:border-yellow-300",
+                  confirmed: filterStatus === "confirmed" ? "bg-blue-500 border-blue-500 text-white"    : "bg-white border-gray-200 text-gray-500 hover:border-blue-300",
+                  shipped:   filterStatus === "shipped"   ? "bg-purple-500 border-purple-500 text-white": "bg-white border-gray-200 text-gray-500 hover:border-purple-300",
+                  delivered: filterStatus === "delivered" ? "bg-green-500 border-green-500 text-white"  : "bg-white border-gray-200 text-gray-500 hover:border-green-300",
+                  cancelled: filterStatus === "cancelled" ? "bg-red-500 border-red-500 text-white"      : "bg-white border-gray-200 text-gray-500 hover:border-red-300",
+                };
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setFilterStatus(s)}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all capitalize ${colors[s]}`}
+                  >
+                    {s === "all" ? "All" : s}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Courier / AWB filter */}
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider shrink-0">Courier</p>
               {(["all", "shipped", "unshipped"] as const).map((s) => (
@@ -526,13 +652,25 @@ export function OrdersTab() {
                             {order.customer_name}
                           </p>
                           {order.customer_mobile && (
-                            <a
-                              href={`tel:${order.customer_mobile}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-xs text-[#9B6FD1] font-medium hover:underline w-fit"
-                            >
-                              {order.customer_mobile}
-                            </a>
+                            <div className="flex items-center gap-1.5">
+                              <a
+                                href={`tel:${order.customer_mobile}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-xs text-[#9B6FD1] font-medium hover:underline"
+                              >
+                                {order.customer_mobile}
+                              </a>
+                              <a
+                                href={`https://wa.me/91${order.customer_mobile.replace(/\D/g, "")}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                title="Open in WhatsApp"
+                                className="text-green-500 hover:text-green-600 transition-colors"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5" />
+                              </a>
+                            </div>
                           )}
                         </div>
                       )}
@@ -647,7 +785,7 @@ export function OrdersTab() {
                             <div className="flex flex-wrap gap-1.5">
                               {visibleItems.map((item, i) => (
                                 <div key={i} className="flex items-center gap-1.5 bg-white border border-gray-100 rounded-lg px-2 py-1">
-                                  <img src={imgUrl(item.product.image, "tiny")} alt={item.product.name} className="w-6 h-6 rounded object-cover shrink-0" />
+                                  <img src={imgUrl(item.product.images?.[0] ?? item.product.image, "tiny")} alt={item.product.name} className="w-6 h-6 rounded object-cover shrink-0" />
                                   <span className="text-[11px] text-gray-700 font-medium max-w-[90px] truncate">{item.product.name}</span>
                                   <span className="text-[11px] text-gray-400 shrink-0">×{item.quantity}</span>
                                 </div>
@@ -741,11 +879,81 @@ export function OrdersTab() {
                           className="flex items-center gap-1 px-3 py-1.5 bg-pink-50 hover:bg-pink-100 text-pink-600 text-xs font-semibold rounded-lg transition-colors border border-pink-200">
                           <Heart className="w-3.5 h-3.5" /> Thank You Card
                         </button>
+
+                        {/* WhatsApp messages dropdown */}
+                        {order.customer_mobile && (() => {
+                          const msgs     = buildMessages(order);
+                          const delivery = msgs.filter((m) => m.category === "delivery");
+                          const feedback = msgs.filter((m) => m.category === "feedback");
+                          const isOpen   = whatsappOpenId === order.id;
+                          return (
+                            <div
+                              className="relative"
+                              ref={isOpen ? whatsappRef : null}
+                            >
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setWhatsappOpenId(isOpen ? null : order.id);
+                                }}
+                                className="flex items-center gap-1 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-semibold rounded-lg transition-colors"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5" />
+                                WhatsApp
+                                <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                              </button>
+
+                              {isOpen && (
+                                <div
+                                  className="absolute bottom-full left-0 mb-1.5 z-50 bg-white rounded-xl shadow-xl border border-gray-100 w-56 overflow-hidden"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {/* Delivery messages */}
+                                  <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-100">
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Delivery Updates</p>
+                                  </div>
+                                  {delivery.map((msg) => (
+                                    <button
+                                      key={msg.label}
+                                      onClick={() => sendWhatsApp(order.customer_mobile!, msg.text)}
+                                      className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors flex items-center gap-2"
+                                    >
+                                      <MessageCircle className="w-3 h-3 shrink-0 text-green-500" />
+                                      {msg.label}
+                                    </button>
+                                  ))}
+
+                                  {/* Feedback messages */}
+                                  <div className="px-3 py-1.5 bg-gray-50 border-y border-gray-100">
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Feedback</p>
+                                  </div>
+                                  {feedback.map((msg) => (
+                                    <button
+                                      key={msg.label}
+                                      onClick={() => sendWhatsApp(order.customer_mobile!, msg.text)}
+                                      className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-green-50 hover:text-green-700 transition-colors flex items-center gap-2"
+                                    >
+                                      <Star className="w-3 h-3 shrink-0 text-amber-400" />
+                                      {msg.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                         <button onClick={(e) => { e.stopPropagation(); handlePushToShiprocket(order); }}
-                          disabled={pushingId === order.id || !!order.sr_order_id}
+                          disabled={pushingId === order.id || wholesalePushingId === order.id || !!order.sr_order_id}
                           className={`flex items-center gap-1 px-3 py-1.5 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 ${order.sr_order_id ? "bg-orange-300 cursor-not-allowed" : "bg-orange-500 hover:bg-orange-600"}`}>
                           {pushingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
                           {order.sr_order_id ? "Shipped" : "Ship"}
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); handleWholesalePushToShiprocket(order); }}
+                          disabled={wholesalePushingId === order.id || pushingId === order.id || !!order.sr_order_id}
+                          title="Push to Shiprocket using wholesale prices"
+                          className={`flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 border ${order.sr_order_id ? "bg-amber-100 border-amber-200 text-amber-400 cursor-not-allowed" : "bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300"}`}>
+                          {wholesalePushingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
+                          {order.sr_order_id ? "W-Shipped" : "W-Ship"}
                         </button>
                         {order.awb_code && (
                           <a
@@ -765,7 +973,7 @@ export function OrdersTab() {
                             Sync AWB
                           </button>
                         )}
-                        <button onClick={(e) => { e.stopPropagation(); setEditOrder(order); }}
+                        <button onClick={(e) => { e.stopPropagation(); isQuick ? setQuickEditOrder(order) : setEditOrder(order); }}
                           className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-[#9B6FD1] hover:bg-[#F3EEFB] transition-colors border border-gray-200">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
@@ -834,6 +1042,9 @@ export function OrdersTab() {
         onError={(msg) => toast.show(msg, "error")} />
       <EditOrderModal order={editOrder} onClose={() => setEditOrder(null)}
         onSaved={(patch) => { setOrders((prev) => prev.map((o) => o.id === editOrder?.id ? { ...o, ...patch } : o)); toast.show("Order updated!"); }}
+        onError={(msg) => toast.show(msg, "error")} />
+      <QuickEditOrderModal order={quickEditOrder} onClose={() => setQuickEditOrder(null)}
+        onSaved={(patch) => { setOrders((prev) => prev.map((o) => o.id === quickEditOrder?.id ? { ...o, ...patch } : o)); toast.show("Order updated!"); }}
         onError={(msg) => toast.show(msg, "error")} />
       <ConfirmModal open={deleteOrderId !== null} title={`Delete order #${deleteOrderId}?`}
         body="This will permanently remove the order from Supabase. This cannot be undone."
