@@ -269,7 +269,17 @@ export function ProductDetailPage({ productId }: { productId: number }) {
 
   useEffect(() => {
     if (!product) return;
-    setSelectedVariantId(product.variants?.length ? "__base" : undefined);
+    if (product.variants?.length) {
+      // Auto-select the first variant that actually has stock (skip 0-stock base)
+      const all = [
+        { id: "__base", stock: product.stock },
+        ...product.variants,
+      ];
+      const firstInStock = all.find((v) => v.stock > 0);
+      setSelectedVariantId(firstInStock?.id ?? "__base");
+    } else {
+      setSelectedVariantId(undefined);
+    }
     setActiveImg(0);
     setDragOffset(0);
     setPinchZoom(1);
@@ -629,15 +639,13 @@ export function ProductDetailPage({ productId }: { productId: number }) {
                     : "Select Style"}
                 </p>
                 <div className="flex flex-wrap gap-3">
-                  {allVariants.map((v) => {
+                  {allVariants.filter((v) => v.stock > 0).map((v) => {
                     const isSelected = v.id === selectedVariantId;
-                    const isSoldOut  = v.stock === 0;
                     return (
                       <button
                         key={v.id}
-                        onClick={() => !isSoldOut && setSelectedVariantId(v.id)}
-                        disabled={isSoldOut}
-                        className={`relative flex flex-col items-center gap-1.5 transition-all duration-200 ${isSoldOut ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+                        onClick={() => setSelectedVariantId(v.id)}
+                        className={`relative flex flex-col items-center gap-1.5 transition-all duration-200 cursor-pointer`}
                       >
                         <div
                           style={{ backgroundColor: v.color || "#e5e7eb" }}
@@ -655,11 +663,6 @@ export function ProductDetailPage({ productId }: { productId: number }) {
                             <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                             </svg>
-                          </span>
-                        )}
-                        {isSoldOut && (
-                          <span className="absolute inset-0 flex items-center justify-center">
-                            <span className="w-full h-0.5 bg-gray-400 rotate-45 absolute" />
                           </span>
                         )}
                       </button>

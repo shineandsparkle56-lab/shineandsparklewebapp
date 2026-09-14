@@ -66,8 +66,8 @@ export function useInfiniteProducts(
         .select("*")
         .range(from, from + PAGE_SIZE - 1);
 
-      // Hide out-of-stock items (skip when searching by ID)
-      if (!searchId) query = query.gt("stock", 0);
+      // Stock filtering is done client-side after mapping (see below) so that
+      // products whose base stock = 0 but named variants have stock still appear.
 
       // Search by product ID
       if (searchId) {
@@ -108,10 +108,20 @@ export function useInfiniteProducts(
         return;
       }
 
-      const rows = (data ?? []).map(mapRow);
+      const allRows = (data ?? []).map(mapRow);
+      // Use raw fetch count for pagination — client-side filter must not shrink
+      // the page size used to decide hasMore or the next offset, otherwise
+      // products get skipped and "Load more" stops early.
+      const rawCount = allRows.length;
+      const rows = allRows.filter((p) => {
+        // A product is visible if the base OR any named variant has stock > 0
+        if (!p.variants?.length) return p.stock > 0;
+        const variantTotal = p.variants.reduce((s: number, v: { stock: number }) => s + v.stock, 0);
+        return p.stock > 0 || variantTotal > 0;
+      });
       setProducts((prev) => (reset ? rows : [...prev, ...rows]));
-      setHasMore(rows.length === PAGE_SIZE);
-      offsetRef.current = from + rows.length;
+      setHasMore(rawCount === PAGE_SIZE);
+      offsetRef.current = from + rawCount;
 
       setLoading(false);
       setLoadingMore(false);

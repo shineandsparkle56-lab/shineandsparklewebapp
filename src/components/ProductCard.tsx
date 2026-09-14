@@ -35,7 +35,9 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
     ...(product.variants ?? []),
   ] : [];
 
-  const [selectedVariantId, setSelectedVariantId] = useState<string>("__base");
+  // Start on the first variant that actually has stock (skip 0-stock base)
+  const firstInStockId = allVariants.find((v) => v.stock > 0)?.id ?? "__base";
+  const [selectedVariantId, setSelectedVariantId] = useState<string>(firstInStockId);
   const selectedVariant = allVariants.find((v) => v.id === selectedVariantId);
 
   // Active images — use selected variant's images, fall back to base
@@ -300,26 +302,29 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
                 {product.originalPrice > product.price && <span className="text-sm text-gray-400 line-through">₹{product.originalPrice}</span>}
               </div>
               {/* Variant pills — list view */}
-              {hasVariants && (
-                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                  {allVariants.slice(0, 4).map((v) => (
-                    <button key={v.id}
-                      onClick={(e) => selectVariant(v.id, e)}
-                      className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all text-[11px] font-semibold shrink-0 ${
-                        v.id === selectedVariantId
-                          ? "border-[#9B6FD1] bg-[#F3EEFB] text-[#9B6FD1]"
-                          : "border-gray-200 bg-white text-gray-500 hover:border-[#9B6FD1]/50"
-                      } ${v.stock === 0 ? "opacity-30" : ""}`}
-                    >
-                      <span className="w-3 h-3 rounded-full shrink-0 border border-white/60" style={{ backgroundColor: v.color || "#e5e7eb" }} />
-                      {v.label}
-                    </button>
-                  ))}
-                  {allVariants.length > 4 && (
-                    <span className="text-[10px] text-gray-400">+{allVariants.length - 4}</span>
-                  )}
-                </div>
-              )}
+              {hasVariants && (() => {
+                const inStockVariants = allVariants.filter((v) => v.stock > 0);
+                return (
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    {inStockVariants.slice(0, 4).map((v) => (
+                      <button key={v.id}
+                        onClick={(e) => selectVariant(v.id, e)}
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all text-[11px] font-semibold shrink-0 ${
+                          v.id === selectedVariantId
+                            ? "border-[#9B6FD1] bg-[#F3EEFB] text-[#9B6FD1]"
+                            : "border-gray-200 bg-white text-gray-500 hover:border-[#9B6FD1]/50"
+                        }`}
+                      >
+                        <span className="w-3 h-3 rounded-full shrink-0 border border-white/60" style={{ backgroundColor: v.color || "#e5e7eb" }} />
+                        {v.label}
+                      </button>
+                    ))}
+                    {inStockVariants.length > 4 && (
+                      <span className="text-[10px] text-gray-400">+{inStockVariants.length - 4}</span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             <div className="grid grid-cols-2 gap-2">
               <Button variant="outline" className="border-[#9B6FD1] text-[#9B6FD1] hover:bg-[#9B6FD1]/5 rounded-full text-sm disabled:opacity-40" onClick={handleAddToCart} disabled={outOfStock} data-testid={`btn-add-to-cart-${product.id}`}>Add to Cart</Button>
@@ -454,20 +459,20 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
             {/* Variant pills — mobile grid */}
             {hasVariants && (
               <div className="flex items-center gap-1 mt-1 flex-wrap">
-                {allVariants.slice(0, 3).map((v) => (
+                {allVariants.filter((v) => v.stock > 0).slice(0, 3).map((v) => (
                   <button key={v.id} onClick={(e) => selectVariant(v.id, e)}
                     className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[9px] font-semibold shrink-0 transition-all ${
                       v.id === selectedVariantId
                         ? "border-[#9B6FD1] bg-[#F3EEFB] text-[#9B6FD1]"
                         : "border-gray-200 bg-white text-gray-400"
-                    } ${v.stock === 0 ? "opacity-30" : ""}`}
+                    }`}
                   >
                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: v.color || "#e5e7eb" }} />
                     {v.label}
                   </button>
                 ))}
-                {allVariants.length > 3 && (
-                  <span className="text-[9px] text-gray-400">+{allVariants.length - 3}</span>
+                {allVariants.filter((v) => v.stock > 0).length > 3 && (
+                  <span className="text-[9px] text-gray-400">+{allVariants.filter((v) => v.stock > 0).length - 3}</span>
                 )}
               </div>
             )}
@@ -574,20 +579,20 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
           {/* Variant pills — desktop grid */}
           {hasVariants && (
             <div className="flex items-center gap-1.5 mb-4 flex-wrap">
-              {allVariants.slice(0, 4).map((v) => (
+              {allVariants.filter((v) => v.stock > 0).slice(0, 4).map((v) => (
                 <button key={v.id} onClick={(e) => selectVariant(v.id, e)}
                   className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-[11px] font-semibold shrink-0 transition-all ${
                     v.id === selectedVariantId
                       ? "border-[#9B6FD1] bg-[#F3EEFB] text-[#9B6FD1]"
                       : "border-gray-200 bg-white text-gray-500 hover:border-[#9B6FD1]/50"
-                  } ${v.stock === 0 ? "opacity-30" : ""}`}
+                  }`}
                 >
                   <span className="w-3 h-3 rounded-full shrink-0 border border-white/60" style={{ backgroundColor: v.color || "#e5e7eb" }} />
                   {v.label}
                 </button>
               ))}
-              {allVariants.length > 4 && (
-                <span className="text-[10px] text-gray-400">+{allVariants.length - 4} more</span>
+              {allVariants.filter((v) => v.stock > 0).length > 4 && (
+                <span className="text-[10px] text-gray-400">+{allVariants.filter((v) => v.stock > 0).length - 4} more</span>
               )}
             </div>
           )}
