@@ -84,6 +84,7 @@ export function OrdersTab() {
   const [srResult, setSrResult] = useState<SrResult>(null);
   const [syncingAwbId, setSyncingAwbId] = useState<number | null>(null);
   const [deductingStockId, setDeductingStockId] = useState<number | null>(null);
+  const [togglingWholesaleId, setTogglingWholesaleId] = useState<number | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [expandedItemsIds, setExpandedItemsIds] = useState<Set<number>>(new Set());
   // tracking info keyed by order.id
@@ -472,6 +473,16 @@ export function OrdersTab() {
     toast.show(deducting ? "Stock deducted from products." : "Stock restored to products.");
   };
 
+  const handleToggleWholesale = async (order: OrderRow) => {
+    if (togglingWholesaleId === order.id) return;
+    setTogglingWholesaleId(order.id);
+    const isWholesale = !order.is_wholesale;
+    await supabase.from("orders").update({ is_wholesale: isWholesale }).eq("id", order.id);
+    setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, is_wholesale: isWholesale } : o));
+    setTogglingWholesaleId(null);
+    toast.show(isWholesale ? "Marked as wholesale order." : "Marked as retail order.");
+  };
+
   return (
     <>
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -590,14 +601,15 @@ export function OrdersTab() {
               const expanded = expandedIds.has(order.id);
 
               // Profit calc
+              const PACKAGING = 10;
               const wholesaleCost = order.items.reduce((s, i) => s + (i.product.wholesale_price ?? 0) * i.quantity, 0);
               const rawShip = order.raw_shipping_charge ?? 0;
               const rawCod  = order.raw_cod_charge ?? (order.payment_mode === "cod" ? (order.cod_charge ?? 0) : 0);
-              const profit  = order.grand_total - (wholesaleCost + rawShip + rawCod);
+              const profit  = order.grand_total - (wholesaleCost + rawShip + rawCod + PACKAGING);
               const pct     = order.grand_total > 0 ? Math.round((profit / order.grand_total) * 100) : 0;
               const showProfit = order.raw_shipping_charge != null && order.items.some((i) => (i.product.wholesale_price ?? 0) > 0);
 
-              // Wholesale margin: W-Revenue (client_wholesale_price) − W-Cost (wholesale_price)
+              // Wholesale margin: W-Revenue (client_wholesale_price) − W-Cost (wholesale_price) − packaging
               // Shipping excluded — customer pays it separately
               const clientWholesaleRevenue = order.items.reduce((s, i) => {
                 const liveProduct = products.find((p) => p.id === i.product.id);
@@ -605,10 +617,18 @@ export function OrdersTab() {
                 return s + cwp * i.quantity;
               }, 0);
               const hasClientWholesale = clientWholesaleRevenue > 0;
-              const wholesaleMargin    = clientWholesaleRevenue - wholesaleCost;
+              const wholesaleMargin    = clientWholesaleRevenue - wholesaleCost - PACKAGING;
               const wholesaleMarginPct = clientWholesaleRevenue > 0
                 ? Math.round((wholesaleMargin / clientWholesaleRevenue) * 100)
                 : 0;
+
+              // Displayed total in the header: wholesale revenue + shipping for wholesale orders
+              const wholesaleGrandTotal = clientWholesaleRevenue
+                + (order.shipping_charge ?? 0)
+                + (order.payment_mode === "cod" ? (order.cod_charge ?? 0) : 0);
+              const displayTotal = order.is_wholesale && clientWholesaleRevenue > 0
+                ? wholesaleGrandTotal
+                : order.grand_total;
 
               return (
                 <div key={order.id} className={`border-l-4 ${isEven ? "bg-white border-l-[#9B6FD1]/30" : "bg-slate-50 border-l-orange-200"}`}>
@@ -636,10 +656,16 @@ export function OrdersTab() {
                         </span>
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md uppercase ${sm.color}`}>{sm.label}</span>
                         {isQuick && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-500 uppercase">Quick</span>}
+                        {order.is_wholesale && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 uppercase">Wholesale</span>}
                         {order.awb_code && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-sky-100 text-sky-600">AWB: {order.awb_code}</span>}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-sm font-bold text-gray-900">₹{order.grand_total}</span>
+                        <div className="text-right">
+                          <span className="text-sm font-bold text-gray-900">₹{displayTotal}</span>
+                          {order.is_wholesale && clientWholesaleRevenue > 0 && displayTotal !== order.grand_total && (
+                            <p className="text-[10px] text-gray-400 line-through leading-none">₹{order.grand_total}</p>
+                          )}
+                        </div>
                         <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} />
                       </div>
                     </div>
@@ -680,8 +706,14 @@ export function OrdersTab() {
                         </span>
                       )}
                       {showProfit && (
-                        <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${profit >= 0 ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-500"}`}>
-                          {profit >= 0 ? "+" : ""}₹{profit} ({pct}%)
+                        <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                          order.is_wholesale
+                            ? (wholesaleMargin >= 0 ? "bg-amber-100 text-amber-600" : "bg-red-100 text-red-500")
+                            : (profit >= 0 ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-500")
+                        }`}>
+                          {order.is_wholesale
+                            ? `${wholesaleMargin >= 0 ? "+" : ""}₹${wholesaleMargin} (${wholesaleMarginPct}%) W`
+                            : `${profit >= 0 ? "+" : ""}₹${profit} (${pct}%)`}
                         </span>
                       )}
                     </div>
@@ -830,7 +862,7 @@ export function OrdersTab() {
                           <div className="flex flex-wrap items-center gap-1 text-gray-500 mb-1">
                             <span className="font-medium">Grand ₹{order.grand_total}</span>
                             <span className="opacity-40">−</span>
-                            <span>(Wholesale ₹{wholesaleCost} + Ship ₹{rawShip}{rawCod > 0 ? ` + COD ₹${rawCod}` : ""})</span>
+                            <span>(Wholesale ₹{wholesaleCost} + Ship ₹{rawShip}{rawCod > 0 ? ` + COD ₹${rawCod}` : ""} + Pkg ₹{PACKAGING})</span>
                             <span className="opacity-40">=</span>
                             <span className={`font-bold ${profit >= 0 ? "text-emerald-700" : "text-red-600"}`}>₹{profit}</span>
                           </div>
@@ -850,7 +882,7 @@ export function OrdersTab() {
                           <div className="flex flex-wrap items-center gap-1 text-gray-500 mb-1">
                             <span className="font-medium">W-Revenue ₹{clientWholesaleRevenue}</span>
                             <span className="opacity-40">−</span>
-                            <span>Cost ₹{wholesaleCost}</span>
+                            <span>Cost ₹{wholesaleCost} + Pkg ₹{PACKAGING}</span>
                             <span className="opacity-40">=</span>
                             <span className={`font-bold ${wholesaleMargin >= 0 ? "text-amber-700" : "text-red-600"}`}>₹{wholesaleMargin}</span>
                           </div>
@@ -982,19 +1014,38 @@ export function OrdersTab() {
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                         {order.items?.length > 0 && (
-                          <div className="ml-auto flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                            <span className="text-[11px] text-gray-400">Deduct stock</span>
-                            {deductingStockId === order.id ? (
-                              <Loader2 className="w-4 h-4 text-[#9B6FD1] animate-spin" />
-                            ) : (
-                              <button
-                                onClick={() => handleToggleStockDeduction(order)}
-                                disabled={deductingStockId !== null}
-                                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${order.stock_deducted ? "bg-emerald-500" : "bg-gray-300"}`}
-                                role="switch" aria-checked={!!order.stock_deducted}>
-                                <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 ${order.stock_deducted ? "translate-x-4" : "translate-x-0"}`} />
-                              </button>
-                            )}
+                          <div className="ml-auto flex items-center gap-3 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                            {/* Wholesale toggle */}
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px] text-gray-400">Wholesale</span>
+                              {togglingWholesaleId === order.id ? (
+                                <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />
+                              ) : (
+                                <button
+                                  onClick={() => handleToggleWholesale(order)}
+                                  disabled={togglingWholesaleId !== null}
+                                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${order.is_wholesale ? "bg-amber-500" : "bg-gray-300"}`}
+                                  role="switch" aria-checked={!!order.is_wholesale}
+                                  title={order.is_wholesale ? "Marked as wholesale — click to revert to retail" : "Mark as wholesale order"}>
+                                  <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 ${order.is_wholesale ? "translate-x-4" : "translate-x-0"}`} />
+                                </button>
+                              )}
+                            </div>
+                            {/* Deduct stock toggle */}
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px] text-gray-400">Deduct stock</span>
+                              {deductingStockId === order.id ? (
+                                <Loader2 className="w-4 h-4 text-[#9B6FD1] animate-spin" />
+                              ) : (
+                                <button
+                                  onClick={() => handleToggleStockDeduction(order)}
+                                  disabled={deductingStockId !== null}
+                                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${order.stock_deducted ? "bg-emerald-500" : "bg-gray-300"}`}
+                                  role="switch" aria-checked={!!order.stock_deducted}>
+                                  <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 ${order.stock_deducted ? "translate-x-4" : "translate-x-0"}`} />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>

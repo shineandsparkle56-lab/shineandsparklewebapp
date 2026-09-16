@@ -62,6 +62,7 @@ export interface OrderRow {
   sr_shipment_id?: number;
   awb_code?: string;
   stock_deducted?: boolean;
+  is_wholesale?: boolean;
   box_length?: number;
   box_breadth?: number;
   box_height?: number;

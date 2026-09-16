@@ -5,7 +5,15 @@ import { useProducts } from "../../context/ProductsContext";
 import moment from "moment";
 
 // ── Types ─────────────────────────────────────────────────────
-interface SaleEntry  { name: string; amount: number }
+interface SaleEntry {
+  name:              string;
+  amount:            number;  // what goes into totalSale (wholesale revenue for wholesale orders, grand_total otherwise)
+  grand_total:       number;  // raw grand_total from DB
+  is_wholesale:      boolean;
+  wholesale_revenue: number;  // computed wholesale revenue (0 for retail orders)
+  estimated_profit:  number | null; // null when not enough data (no wholesale_price set or no raw_shipping)
+  profit_pct:        number | null;
+}
 interface ManualEntry { id: string; label: string; amount: string }
 
 interface ReportData {
@@ -149,7 +157,7 @@ export function ReportTab() {
     setLoading(true);
     let query = supabase
       .from("orders")
-      .select("customer_name, grand_total, created_at")
+      .select("customer_name, grand_total, created_at, is_wholesale, items, shipping_charge, payment_mode, cod_charge, raw_shipping_charge, raw_cod_charge")
       .order("created_at", { ascending: true });
 
     if (!allTime) {
@@ -161,13 +169,73 @@ export function ReportTab() {
 
     const { data: rows } = await query;
     if (rows) {
-      setSales(rows.map((r) => ({
-        name:   (r.customer_name as string) || "Unknown",
-        amount: r.grand_total as number,
-      })));
+      setSales(rows.map((r) => {
+        const isWholesale       = !!(r.is_wholesale as boolean);
+        const items             = (r.items ?? []) as Array<{ product: { id: number; wholesale_price?: number }; quantity: number }>;
+        const grandTotal        = r.grand_total as number;
+        const rawShip           = (r.raw_shipping_charge as number | null) ?? null;
+        const paymentMode       = r.payment_mode as string;
+        const rawCod            = (r.raw_cod_charge as number | null)
+          ?? (paymentMode === "cod" ? ((r.cod_charge as number) ?? 0) : 0);
+
+        // ── Wholesale revenue (from live client_wholesale_price) ──
+        let wholesaleRevenue = 0;
+        if (isWholesale) {
+          const itemsRevenue = items.reduce((s, i) => {
+            const live = products.find((p) => p.id === i.product.id);
+            const cwp  = live?.client_wholesale_price ?? 0;
+            return s + cwp * i.quantity;
+          }, 0);
+          const ship = (r.shipping_charge as number) ?? 0;
+          const cod  = paymentMode === "cod" ? ((r.cod_charge as number) ?? 0) : 0;
+          wholesaleRevenue = itemsRevenue + ship + cod;
+        }
+
+        // ── Supplier cost (snapshotted wholesale_price in items) ──
+        const supplierCost = items.reduce(
+          (s, i) => s + ((i.product.wholesale_price ?? 0) * i.quantity), 0
+        );
+        const hasCostData = items.some((i) => (i.product.wholesale_price ?? 0) > 0);
+
+        // ── Estimated profit ──
+        // Retail:    grand_total − (supplierCost + raw_shipping + raw_cod + ₹10 packaging)
+        // Wholesale: clientWholesaleRevenue − supplierCost − ₹10 packaging  (shipping paid separately)
+        const PACKAGING_COST = 10;
+        let estimatedProfit: number | null = null;
+        let profitPct: number | null = null;
+
+        if (isWholesale && hasCostData && wholesaleRevenue > 0) {
+          // use items-only wholesale revenue (excl. shipping) so margin matches OrdersTab
+          const itemsOnlyRevenue = items.reduce((s, i) => {
+            const live = products.find((p) => p.id === i.product.id);
+            const cwp  = live?.client_wholesale_price ?? 0;
+            return s + cwp * i.quantity;
+          }, 0);
+          estimatedProfit = itemsOnlyRevenue - supplierCost - PACKAGING_COST;
+          profitPct = itemsOnlyRevenue > 0
+            ? Math.round((estimatedProfit / itemsOnlyRevenue) * 100)
+            : null;
+        } else if (!isWholesale && hasCostData && rawShip !== null) {
+          estimatedProfit = grandTotal - (supplierCost + rawShip + rawCod + PACKAGING_COST);
+          profitPct = grandTotal > 0
+            ? Math.round((estimatedProfit / grandTotal) * 100)
+            : null;
+        }
+
+        const amount = isWholesale ? wholesaleRevenue : grandTotal;
+        return {
+          name:              (r.customer_name as string) || "Unknown",
+          amount,
+          grand_total:       grandTotal,
+          is_wholesale:      isWholesale,
+          wholesale_revenue: wholesaleRevenue,
+          estimated_profit:  estimatedProfit,
+          profit_pct:        profitPct,
+        };
+      }));
     }
     setLoading(false);
-  }, [month, allTime]);
+  }, [month, allTime, products]);
 
   useEffect(() => { fetchSales(); }, [fetchSales]);
 
@@ -222,6 +290,17 @@ export function ReportTab() {
   const totalCharges    = data.charges.reduce((s, e) => s + toNum(e.amount), 0);
   const totalInvestment = data.investments.reduce((s, e) => s + toNum(e.amount), 0);
   const netProfit       = totalSale - totalCharges - totalInvestment;
+
+  // Breakdown: retail vs wholesale
+  const retailSaleTotal    = sales.filter((e) => !e.is_wholesale).reduce((s, e) => s + e.grand_total, 0);
+  const wholesaleSaleTotal = sales.filter((e) =>  e.is_wholesale).reduce((s, e) => s + e.wholesale_revenue, 0);
+  const wholesaleOrderCount = sales.filter((e) => e.is_wholesale).length;
+
+  // Estimated profit across all orders that have enough data
+  const ordersWithProfit   = sales.filter((e) => e.estimated_profit !== null);
+  const totalEstProfit     = ordersWithProfit.reduce((s, e) => s + (e.estimated_profit ?? 0), 0);
+  const estProfitBase      = ordersWithProfit.reduce((s, e) => s + e.amount, 0); // revenue from those orders only
+  const estProfitPct       = estProfitBase > 0 ? Math.round((totalEstProfit / estProfitBase) * 100) : null;
 
   // ── Stock potential (live from products) ─────────────────────
   // Net revenue per unit = price - shipping_credit
@@ -282,8 +361,13 @@ export function ReportTab() {
         </div>
 
         {/* ── Summary cards ── */}
-        <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <StatCard label="Total Sale"       value={`₹${totalSale}`}       color="bg-[#F3EEFB] text-[#6B35C2]" />
+        <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <StatCard
+            label="Total Sale"
+            value={`₹${totalSale}`}
+            sub={wholesaleOrderCount > 0 ? `${wholesaleOrderCount} wholesale order${wholesaleOrderCount > 1 ? "s" : ""}` : undefined}
+            color="bg-[#F3EEFB] text-[#6B35C2]"
+          />
           <StatCard label="Total Charges"    value={`₹${totalCharges}`}    color="bg-orange-50 text-orange-700" />
           <StatCard label="Stock Investment" value={`₹${totalInvestment}`} color="bg-blue-50 text-blue-700" />
           <StatCard
@@ -292,6 +376,14 @@ export function ReportTab() {
             sub={totalSale > 0 ? `${Math.round((netProfit / totalSale) * 100)}% margin` : undefined}
             color={netProfit >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}
           />
+          {ordersWithProfit.length > 0 && (
+            <StatCard
+              label="Est. Order Profit"
+              value={`₹${totalEstProfit}`}
+              sub={estProfitPct !== null ? `${estProfitPct}% margin · ${ordersWithProfit.length} orders` : `${ordersWithProfit.length} orders`}
+              color={totalEstProfit >= 0 ? "bg-violet-50 text-violet-700" : "bg-red-50 text-red-600"}
+            />
+          )}
           <StatCard
             label="Final if All Sold"
             value={`₹${finalIfAllSold}`}
@@ -299,6 +391,27 @@ export function ReportTab() {
             color={finalIfAllSold >= 0 ? "bg-teal-50 text-teal-700" : "bg-amber-50 text-amber-700"}
           />
         </div>
+
+        {/* ── Wholesale vs Retail breakdown (only when there are wholesale orders) ── */}
+        {wholesaleOrderCount > 0 && (
+          <div className="px-4 pb-4 grid grid-cols-2 sm:grid-cols-3 gap-3 border-t border-amber-100 pt-3">
+            <div className="rounded-xl bg-amber-50 px-4 py-3">
+              <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide mb-0.5">Wholesale Revenue</p>
+              <p className="text-xl font-bold text-amber-700">₹{wholesaleSaleTotal}</p>
+              <p className="text-[11px] text-amber-600 opacity-70">{wholesaleOrderCount} order{wholesaleOrderCount > 1 ? "s" : ""} at W-rate</p>
+            </div>
+            <div className="rounded-xl bg-gray-50 px-4 py-3">
+              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-0.5">Retail Revenue</p>
+              <p className="text-xl font-bold text-gray-700">₹{retailSaleTotal}</p>
+              <p className="text-[11px] text-gray-400">{sales.length - wholesaleOrderCount} retail order{(sales.length - wholesaleOrderCount) !== 1 ? "s" : ""}</p>
+            </div>
+            <div className="rounded-xl bg-emerald-50 px-4 py-3 col-span-2 sm:col-span-1">
+              <p className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wide mb-0.5">Total (Retail + W)</p>
+              <p className="text-xl font-bold text-emerald-700">₹{totalSale}</p>
+              <p className="text-[11px] text-emerald-600 opacity-70">{sales.length} orders total</p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -326,9 +439,31 @@ export function ReportTab() {
           ) : (
             <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
               {sales.map((s, i) => (
-                <div key={i} className="flex items-center justify-between px-5 py-2.5 text-sm">
-                  <span className="text-gray-700 truncate max-w-[160px]">{s.name}</span>
-                  <span className="font-semibold text-gray-900 shrink-0">₹{s.amount}</span>
+                <div key={i} className="flex items-center justify-between px-5 py-2.5 text-sm gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-gray-700 truncate max-w-[110px]">{s.name}</span>
+                    {s.is_wholesale && (
+                      <span className="shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-amber-100 text-amber-700 uppercase">W</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {s.estimated_profit !== null && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                        s.estimated_profit >= 0
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-red-100 text-red-600"
+                      }`}>
+                        {s.estimated_profit >= 0 ? "+" : ""}₹{s.estimated_profit}
+                        {s.profit_pct !== null ? ` (${s.profit_pct}%)` : ""}
+                      </span>
+                    )}
+                    <div className="text-right">
+                      <span className="font-semibold text-gray-900">₹{s.amount}</span>
+                      {s.is_wholesale && s.grand_total !== s.amount && (
+                        <p className="text-[10px] text-gray-400 line-through">₹{s.grand_total}</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               ))}
               <div className="flex items-center justify-between px-5 py-3 bg-[#F3EEFB] font-bold text-sm text-[#6B35C2]">
@@ -497,6 +632,17 @@ export function ReportTab() {
             <span className="text-gray-800">Net Profit (so far)</span>
             <span className={netProfit >= 0 ? "text-emerald-600" : "text-red-500"}>₹{netProfit}</span>
           </div>
+          {ordersWithProfit.length > 0 && (
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500 text-sm">Est. Order-level Profit ({ordersWithProfit.length} orders)</span>
+              <span className={`font-semibold text-sm px-2 py-0.5 rounded-full ${
+                totalEstProfit >= 0 ? "bg-violet-50 text-violet-700" : "bg-red-50 text-red-600"
+              }`}>
+                {totalEstProfit >= 0 ? "+" : ""}₹{totalEstProfit}
+                {estProfitPct !== null ? ` (${estProfitPct}%)` : ""}
+              </span>
+            </div>
+          )}
           {totalStockUnits > 0 && (
             <div className="flex justify-between font-bold text-base">
               <span className="text-gray-800">Final Profit (if all stock sells)</span>
