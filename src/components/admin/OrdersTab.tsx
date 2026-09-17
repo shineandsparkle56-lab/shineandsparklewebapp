@@ -284,6 +284,10 @@ export function OrdersTab() {
         customerState: order.customer_state, pincode: order.pincode,
         paymentMode: order.payment_mode, shippingCharge: order.shipping_charge,
         codCharge: order.cod_charge, grandTotal: order.grand_total,
+        discountAmount: order.discount_amount ?? 0,
+        discountLabel: order.discount_type === "percent" && (order.discount_value ?? 0) > 0
+          ? `${order.discount_value}%`
+          : (order.discount_amount ?? 0) > 0 ? `₹${order.discount_amount}` : undefined,
       };
       const blob = await generateOrderPDF(cartItems, order.subtotal, meta);
       const url  = URL.createObjectURL(blob);
@@ -844,6 +848,14 @@ export function OrdersTab() {
                       {/* Totals */}
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
                         <span>Subtotal <strong className="text-gray-700">₹{order.subtotal}</strong></span>
+                        {(order.discount_amount ?? 0) > 0 && (
+                          <span className="text-rose-600">
+                            − Discount <strong>₹{order.discount_amount}</strong>
+                            {order.discount_type === "percent" && (order.discount_value ?? 0) > 0 && (
+                              <span className="ml-0.5 text-[10px] text-rose-400">({order.discount_value}%)</span>
+                            )}
+                          </span>
+                        )}
                         {order.shipping_charge > 0 && (
                           <span>
                             + Shipping <strong className="text-gray-700">₹{order.shipping_charge}</strong>
@@ -861,6 +873,9 @@ export function OrdersTab() {
                         <div className={`px-3 py-2 rounded-lg text-[11px] ${profit >= 0 ? "bg-emerald-50" : "bg-red-50"}`}>
                           <div className="flex flex-wrap items-center gap-1 text-gray-500 mb-1">
                             <span className="font-medium">Grand ₹{order.grand_total}</span>
+                            {(order.discount_amount ?? 0) > 0 && (
+                              <span className="text-rose-500 text-[10px]">(incl. −₹{order.discount_amount} disc.)</span>
+                            )}
                             <span className="opacity-40">−</span>
                             <span>(Wholesale ₹{wholesaleCost} + Ship ₹{rawShip}{rawCod > 0 ? ` + COD ₹${rawCod}` : ""} + Pkg ₹{PACKAGING})</span>
                             <span className="opacity-40">=</span>

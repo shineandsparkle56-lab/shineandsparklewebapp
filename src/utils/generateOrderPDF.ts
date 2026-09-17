@@ -39,6 +39,8 @@ export interface OrderMeta {
   shippingCharge?: number;
   codCharge?: number;
   grandTotal?: number;
+  discountAmount?: number;  // ₹ discount deducted from subtotal (0 or undefined = no discount)
+  discountLabel?: string;   // e.g. "10%" or "₹50"
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -390,6 +392,8 @@ export async function generateOrderPDF(
     ["Total Items", `${totalQty} item${totalQty !== 1 ? "s" : ""}`, false],
     ["Subtotal", rs(subtotal), false],
   ];
+  if (meta.discountAmount && meta.discountAmount > 0)
+    totalRows.push([`Discount${meta.discountLabel ? ` (${meta.discountLabel})` : ""}`, `- ${rs(meta.discountAmount)}`, false]);
   if (meta.shippingCharge && meta.shippingCharge > 0)
     totalRows.push(["Shipping Charge", rs(meta.shippingCharge), false]);
   if (meta.codCharge && meta.codCharge > 0)
@@ -414,6 +418,12 @@ export async function generateOrderPDF(
       doc.text(label, MARGIN, y);
       doc.setTextColor(...PURPLE);
       doc.text(value, COL_PRICE, y, { align: "right" });
+    } else if (label.startsWith("Discount")) {
+      // Green — discount is a saving for the customer, not a warning
+      doc.setTextColor(34, 139, 34);
+      doc.text(label, MARGIN, y);
+      doc.text(value, COL_PRICE, y, { align: "right" });
+      doc.setTextColor(...GREY);
     } else {
       doc.setTextColor(...GREY);
       doc.text(label, MARGIN, y);

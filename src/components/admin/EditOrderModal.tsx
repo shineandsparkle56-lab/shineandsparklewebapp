@@ -63,6 +63,9 @@ export interface OrderRow {
   awb_code?: string;
   stock_deducted?: boolean;
   is_wholesale?: boolean;
+  discount_type?:   "flat" | "percent"; // "flat" = fixed ₹ amount, "percent" = % of subtotal
+  discount_value?:  number;             // raw input (e.g. 50 or 10)
+  discount_amount?: number;             // computed ₹ deducted from subtotal
   box_length?: number;
   box_breadth?: number;
   box_height?: number;
@@ -96,8 +99,9 @@ function calcGrandTotal(
   cod: number,
   giftWrap: number,
   paymentMode: string,
+  discountAmount = 0,
 ): number {
-  return subtotal + shipping + giftWrap + (paymentMode === "cod" ? cod : 0);
+  return Math.max(0, subtotal - discountAmount) + shipping + giftWrap + (paymentMode === "cod" ? cod : 0);
 }
 
 /* ─── form state ─────────────────────────────────────────────── */
@@ -125,6 +129,8 @@ interface FormState {
   weight_kg: string;
   created_at: string;
   pickup_location: string;
+  discount_type:  "flat" | "percent";
+  discount_value: string;
 }
 
 function toForm(order: OrderRow): FormState {
@@ -154,6 +160,10 @@ function toForm(order: OrderRow): FormState {
       ? moment(order.created_at).format("YYYY-MM-DDTHH:mm")
       : "",
     pickup_location:     order.pickup_location     ?? "",
+    discount_type:       (order.discount_type as "flat" | "percent") ?? "flat",
+    discount_value:      order.discount_value != null && order.discount_value > 0
+                           ? String(order.discount_value)
+                           : "",
   };
 }
 
@@ -231,7 +241,10 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
   const shipping    = Number(form.shipping_charge)     || 0;
   const cod         = Number(form.cod_charge)          || 0;
   const giftWrap    = Number(form.gift_wrap_charges)   || 0;
-  const grandTotal  = calcGrandTotal(subtotal, shipping, cod, giftWrap, form.payment_mode);
+  const discountAmount = form.discount_type === "percent"
+    ? Math.round((subtotal * (Number(form.discount_value) || 0)) / 100)
+    : (Number(form.discount_value) || 0);
+  const grandTotal  = calcGrandTotal(subtotal, shipping, cod, giftWrap, form.payment_mode, discountAmount);
 
   /* ── product search results ── */
   const searchResults = useMemo(() => {
@@ -296,7 +309,7 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
     if (!order) return;
     setSaving(true);
 
-    const grand_total = calcGrandTotal(subtotal, shipping, cod, giftWrap, form.payment_mode);
+    const grand_total = calcGrandTotal(subtotal, shipping, cod, giftWrap, form.payment_mode, discountAmount);
 
     const patch: Partial<OrderRow> = {
       /* items */
@@ -312,6 +325,10 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
       cod_charge:          cod,
       gift_wrap_charges:   giftWrap,
       grand_total,
+      /* discount */
+      discount_type:   form.discount_type,
+      discount_value:  Number(form.discount_value) || 0,
+      discount_amount: discountAmount,
       raw_shipping_charge: form.raw_shipping_charge !== "" ? Number(form.raw_shipping_charge) : undefined,
       raw_cod_charge:      form.raw_cod_charge      !== "" ? Number(form.raw_cod_charge)      : undefined,
       /* customer */
@@ -516,6 +533,44 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
                     <div className="bg-[#F3EEFB] rounded-lg px-3 py-2 flex flex-col justify-center">
                       <p className="text-[10px] text-[#9B6FD1] font-semibold uppercase tracking-wide">Grand Total</p>
                       <p className="text-base font-bold text-[#7b2ff7]">₹{grandTotal}</p>
+                      {discountAmount > 0 && (
+                        <p className="text-[10px] text-rose-500 font-medium">−₹{discountAmount} disc.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Discount */}
+                  <div>
+                    <label className={lbl}>Discount</label>
+                    <div className="flex gap-2">
+                      <div className="flex rounded-lg border border-gray-200 overflow-hidden shrink-0">
+                        {(["flat", "percent"] as const).map((t) => (
+                          <button
+                            key={t} type="button"
+                            onClick={() => set("discount_type", t)}
+                            className={`px-3 py-2 text-xs font-semibold transition-colors ${
+                              form.discount_type === t
+                                ? "bg-rose-500 text-white"
+                                : "bg-white text-gray-500 hover:bg-gray-50"
+                            }`}
+                          >
+                            {t === "flat" ? "₹" : "%"}
+                          </button>
+                        ))}
+                      </div>
+                      <input
+                        type="number" min="0"
+                        max={form.discount_type === "percent" ? 100 : undefined}
+                        value={form.discount_value}
+                        onChange={(e) => set("discount_value", e.target.value)}
+                        placeholder={form.discount_type === "percent" ? "e.g. 10" : "e.g. 50"}
+                        className={inp}
+                      />
+                      {discountAmount > 0 && (
+                        <span className="shrink-0 flex items-center text-sm font-semibold text-rose-600 bg-rose-50 px-3 rounded-lg border border-rose-100">
+                          −₹{discountAmount}
+                        </span>
+                      )}
                     </div>
                   </div>
 

@@ -268,3 +268,14 @@ ALTER TABLE products
 UPDATE products
 SET client_wholesale_price = ROUND(wholesale_price * 1.2)
 WHERE wholesale_price > 0;
+
+-- ─────────────────────────────────────────────
+-- Order-level discount
+--   discount_type:   'flat' | 'percent'
+--   discount_value:  raw value entered (e.g. 50 or 10)
+--   discount_amount: computed ₹ amount deducted from subtotal
+-- ─────────────────────────────────────────────
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS discount_type   text    DEFAULT 'flat',
+  ADD COLUMN IF NOT EXISTS discount_value  numeric(10,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS discount_amount integer DEFAULT 0;

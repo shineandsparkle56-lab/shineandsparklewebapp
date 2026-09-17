@@ -22,6 +22,8 @@ interface FormState {
   payment_mode: "prepaid" | "cod";
   shipping_charge: string;
   cod_charge: string;
+  discount_type:  "flat" | "percent";
+  discount_value: string;
 }
 
 const EMPTY_FORM: FormState = {
@@ -34,6 +36,8 @@ const EMPTY_FORM: FormState = {
   payment_mode: "prepaid",
   shipping_charge: "0",
   cod_charge: "0",
+  discount_type:  "flat",
+  discount_value: "",
 };
 
 interface Props {
@@ -106,8 +110,11 @@ export function AddOrderModal({ open, onClose, onCreated, onError }: Props) {
   const subtotal = cart.reduce((s, l) => s + l.product.price * l.quantity, 0);
   const shippingCharge = Number(form.shipping_charge) || 0;
   const codCharge = Number(form.cod_charge) || 0;
+  const discountAmount = form.discount_type === "percent"
+    ? Math.round((subtotal * (Number(form.discount_value) || 0)) / 100)
+    : (Number(form.discount_value) || 0);
   const grandTotal =
-    subtotal + shippingCharge + (form.payment_mode === "cod" ? codCharge : 0);
+    Math.max(0, subtotal - discountAmount) + shippingCharge + (form.payment_mode === "cod" ? codCharge : 0);
 
   // ── Submit ────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
@@ -125,6 +132,9 @@ export function AddOrderModal({ open, onClose, onCreated, onError }: Props) {
       shipping_charge: shippingCharge,
       cod_charge: codCharge,
       grand_total: grandTotal,
+      discount_type:   form.discount_type,
+      discount_value:  Number(form.discount_value) || 0,
+      discount_amount: discountAmount,
       pincode: form.pincode.trim(),
       payment_mode: form.payment_mode,
       customer_name: form.customer_name.trim(),
@@ -434,6 +444,42 @@ export function AddOrderModal({ open, onClose, onCreated, onError }: Props) {
                     />
                   </div>
                 </div>
+
+                {/* Discount */}
+                <div className="mt-3">
+                  <label className="label">Discount</label>
+                  <div className="flex gap-2">
+                    <div className="flex rounded-xl border border-gray-200 overflow-hidden shrink-0">
+                      {(["flat", "percent"] as const).map((t) => (
+                        <button
+                          key={t} type="button"
+                          onClick={() => set("discount_type", t)}
+                          className={`px-3 py-2 text-xs font-semibold transition-colors ${
+                            form.discount_type === t
+                              ? "bg-rose-500 text-white"
+                              : "bg-white text-gray-500 hover:bg-gray-50"
+                          }`}
+                        >
+                          {t === "flat" ? "₹" : "%"}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      max={form.discount_type === "percent" ? 100 : undefined}
+                      value={form.discount_value}
+                      onChange={(e) => set("discount_value", e.target.value)}
+                      placeholder={form.discount_type === "percent" ? "e.g. 10" : "e.g. 50"}
+                      className="input flex-1"
+                    />
+                    {discountAmount > 0 && (
+                      <span className="shrink-0 flex items-center text-sm font-semibold text-rose-600 bg-rose-50 px-3 rounded-xl border border-rose-100">
+                        −₹{discountAmount}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </section>
 
               {/* ── Order total summary ── */}
@@ -445,6 +491,17 @@ export function AddOrderModal({ open, onClose, onCreated, onError }: Props) {
                   </span>
                   <span className="font-semibold text-gray-800">₹{subtotal}</span>
                 </div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-rose-600">
+                    <span>
+                      Discount
+                      {form.discount_type === "percent" && Number(form.discount_value) > 0
+                        ? ` (${form.discount_value}%)`
+                        : ""}
+                    </span>
+                    <span className="font-semibold">−₹{discountAmount}</span>
+                  </div>
+                )}
                 {shippingCharge > 0 && (
                   <div className="flex justify-between text-gray-600">
                     <span>Shipping</span>

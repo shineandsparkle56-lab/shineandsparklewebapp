@@ -8,11 +8,12 @@ import moment from "moment";
 interface SaleEntry {
   name:              string;
   amount:            number;  // what goes into totalSale (wholesale revenue for wholesale orders, grand_total otherwise)
-  grand_total:       number;  // raw grand_total from DB
+  grand_total:       number;  // raw grand_total from DB (already has discount baked in)
   is_wholesale:      boolean;
   wholesale_revenue: number;  // computed wholesale revenue (0 for retail orders)
   estimated_profit:  number | null; // null when not enough data (no wholesale_price set or no raw_shipping)
   profit_pct:        number | null;
+  discount_amount:   number; // ₹ discount applied on this order (0 = none)
 }
 interface ManualEntry { id: string; label: string; amount: string }
 
@@ -157,7 +158,7 @@ export function ReportTab() {
     setLoading(true);
     let query = supabase
       .from("orders")
-      .select("customer_name, grand_total, created_at, is_wholesale, items, shipping_charge, payment_mode, cod_charge, raw_shipping_charge, raw_cod_charge")
+      .select("customer_name, grand_total, created_at, is_wholesale, items, shipping_charge, payment_mode, cod_charge, raw_shipping_charge, raw_cod_charge, discount_amount")
       .order("created_at", { ascending: true });
 
     if (!allTime) {
@@ -231,6 +232,7 @@ export function ReportTab() {
           wholesale_revenue: wholesaleRevenue,
           estimated_profit:  estimatedProfit,
           profit_pct:        profitPct,
+          discount_amount:   (r.discount_amount as number) ?? 0,
         };
       }));
     }
@@ -444,6 +446,9 @@ export function ReportTab() {
                     <span className="text-gray-700 truncate max-w-[110px]">{s.name}</span>
                     {s.is_wholesale && (
                       <span className="shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-amber-100 text-amber-700 uppercase">W</span>
+                    )}
+                    {s.discount_amount > 0 && (
+                      <span className="shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-rose-100 text-rose-600">−₹{s.discount_amount}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
