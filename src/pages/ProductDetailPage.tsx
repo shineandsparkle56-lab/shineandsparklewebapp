@@ -638,14 +638,14 @@ export function ProductDetailPage({ productId }: { productId: number }) {
                     ? <>Style: <span className="text-[#9B6FD1] normal-case font-bold">{selectedVariant.label}</span></>
                     : "Select Style"}
                 </p>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-x-4 gap-y-3">
                   {allVariants.filter((v) => v.stock > 0).map((v) => {
                     const isSelected = v.id === selectedVariantId;
                     return (
                       <button
                         key={v.id}
                         onClick={() => setSelectedVariantId(v.id)}
-                        className={`relative flex flex-col items-center gap-1.5 transition-all duration-200 cursor-pointer`}
+                        className="relative flex flex-col items-center gap-1.5 w-14 transition-all duration-200 cursor-pointer"
                       >
                         <div
                           style={{ backgroundColor: v.color || "#e5e7eb" }}
@@ -655,11 +655,11 @@ export function ProductDetailPage({ productId }: { productId: number }) {
                               : "border-white ring-1 ring-gray-200 hover:ring-[#9B6FD1] hover:scale-105"
                           }`}
                         />
-                        <span className={`text-[11px] font-semibold ${isSelected ? "text-[#9B6FD1]" : "text-gray-500"}`}>
+                        <span className={`text-[10px] font-semibold text-center leading-tight break-words w-full ${isSelected ? "text-[#9B6FD1]" : "text-gray-500"}`}>
                           {v.label}
                         </span>
                         {isSelected && (
-                          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#9B6FD1] rounded-full flex items-center justify-center shadow">
+                          <span className="absolute top-0 right-1 w-4 h-4 bg-[#9B6FD1] rounded-full flex items-center justify-center shadow">
                             <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                             </svg>
