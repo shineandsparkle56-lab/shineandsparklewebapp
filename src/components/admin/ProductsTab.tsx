@@ -4,6 +4,7 @@ import {
   Plus, Trash2, Package, ChevronDown, Upload, X, Image,
   Download, Loader2, Minus, Pencil, Search, SlidersHorizontal, ChevronUp,
 } from "lucide-react";
+import JSZip from "jszip";
 import { useProducts } from "../../context/ProductsContext";
 import { useCategories } from "../../context/CategoriesContext";
 import { Product } from "../../data/products";
@@ -11,10 +12,119 @@ import type { ProductVariant } from "../../data/products";
 import { DraggableImageGrid } from "../ui/DraggableImageGrid";
 import { useImageItems } from "../../hooks/useImageItems";
 import { useToast } from "../../hooks/useToast";
-import JSZip from "jszip";
 import { imgUrl } from "../../lib/imgUrl";
 import { EditProductModal } from "./EditProductModal";
 import { ConfirmModal, Spinner, uploadToStorage } from "./shared";
+
+// ── Price-banner canvas helpers (mirrors PostEditor logic) ────────────────────
+
+const OVERLAY_SIZE   = 1080;
+const OVERLAY_BANNER = Math.round(OVERLAY_SIZE * 0.06); // ~65 px
+const OVERLAY_FONT   = "Oswald";
+const OVERLAY_FONT_URL = "https://fonts.googleapis.com/css2?family=Oswald:wght@700&display=swap";
+
+const _loadedFonts = new Set<string>();
+async function _loadFont(family: string, url: string) {
+  if (_loadedFonts.has(family)) return;
+  if (!document.querySelector(`link[data-font="${family}"]`)) {
+    const link = document.createElement("link");
+    link.rel = "stylesheet"; link.href = url;
+    link.setAttribute("data-font", family);
+    document.head.appendChild(link);
+  }
+  await document.fonts.ready;
+  try { await Promise.all(["700"].map((w) => document.fonts.load(`${w} 40px "${family}"`).catch(() => null))); } catch { /**/ }
+  _loadedFonts.add(family);
+}
+
+function _dominantColor(img: HTMLImageElement, scratch: HTMLCanvasElement) {
+  const ctx = scratch.getContext("2d")!;
+  const sampleY = Math.floor(img.naturalHeight * 0.75);
+  const sampleH = Math.max(1, Math.floor(img.naturalHeight * 0.2));
+  ctx.drawImage(img, 0, sampleY, img.naturalWidth, sampleH, 0, 0, OVERLAY_SIZE, 1);
+  const data = ctx.getImageData(0, 0, OVERLAY_SIZE, 1).data;
+  let r = 0, g = 0, b = 0, n = 0;
+  for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; n++; }
+  return { r: Math.round(r / n), g: Math.round(g / n), b: Math.round(b / n) };
+}
+const _lighten = (c: {r:number;g:number;b:number}, f = 0.72) => ({
+  r: Math.round(c.r + (255 - c.r) * f), g: Math.round(c.g + (255 - c.g) * f), b: Math.round(c.b + (255 - c.b) * f),
+});
+const _darken  = (c: {r:number;g:number;b:number}, f = 0.5) => ({
+  r: Math.round(c.r * (1 - f)), g: Math.round(c.g * (1 - f)), b: Math.round(c.b * (1 - f)),
+});
+const _rgb = (c: {r:number;g:number;b:number}) => `rgb(${c.r},${c.g},${c.b})`;
+
+/** Render an image (loaded as HTMLImageElement) with a price banner overlay.
+ *  Returns a JPEG data URL at 1080×1080. */
+async function renderWithPriceBanner(img: HTMLImageElement, price: number, scratch: HTMLCanvasElement): Promise<string> {
+  await _loadFont(OVERLAY_FONT, OVERLAY_FONT_URL);
+  const canvas = document.createElement("canvas");
+  canvas.width = OVERLAY_SIZE; canvas.height = OVERLAY_SIZE;
+  const ctx = canvas.getContext("2d")!;
+
+  // Cover-crop the image to fill the square canvas
+  const { naturalWidth: iw, naturalHeight: ih } = img;
+  const scale = Math.max(OVERLAY_SIZE / iw, OVERLAY_SIZE / ih);
+  const sw = OVERLAY_SIZE / scale, sh = OVERLAY_SIZE / scale;
+  ctx.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, 0, 0, OVERLAY_SIZE, OVERLAY_SIZE);
+
+  // Dynamic colors sampled from the image
+  const dom      = _dominantColor(img, scratch);
+  const bgColor  = _lighten(dom, 0.72);
+  const txtColor = _darken(dom, 0.55);
+
+  // Draw rounded-top banner at the bottom
+  const bannerY = OVERLAY_SIZE - OVERLAY_BANNER;
+  const rad = 32;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(rad, bannerY); ctx.lineTo(OVERLAY_SIZE - rad, bannerY);
+  ctx.quadraticCurveTo(OVERLAY_SIZE, bannerY, OVERLAY_SIZE, bannerY + rad);
+  ctx.lineTo(OVERLAY_SIZE, OVERLAY_SIZE); ctx.lineTo(0, OVERLAY_SIZE); ctx.lineTo(0, bannerY + rad);
+  ctx.quadraticCurveTo(0, bannerY, rad, bannerY);
+  ctx.closePath();
+  ctx.shadowColor = "rgba(0,0,0,0.2)"; ctx.shadowBlur = 30; ctx.shadowOffsetY = -6;
+  ctx.fillStyle = _rgb(bgColor);
+  ctx.fill();
+  ctx.restore();
+
+  // Draw "₹{price} ONLY" text centered in the banner
+  const family    = `"${OVERLAY_FONT}", "Helvetica Neue", Arial, sans-serif`;
+  const centerX   = OVERLAY_SIZE / 2;
+  const centerY   = bannerY + OVERLAY_BANNER / 2 + 4;
+  const priceText = `₹${price}`;
+  const onlyText  = " ONLY";
+  const priceSize = Math.round(OVERLAY_BANNER * 0.70);
+  const onlySize  = Math.round(OVERLAY_BANNER * 0.40);
+
+  ctx.textBaseline = "middle"; ctx.textAlign = "left";
+  ctx.font = `700 ${priceSize}px ${family}`;
+  const priceW = ctx.measureText(priceText).width;
+  ctx.font = `700 ${onlySize}px ${family}`;
+  const onlyW  = ctx.measureText(onlyText).width;
+  const startX = centerX - (priceW + onlyW) / 2;
+
+  ctx.font = `700 ${priceSize}px ${family}`; ctx.fillStyle = _rgb(txtColor);
+  ctx.fillText(priceText, startX, centerY);
+  ctx.font = `700 ${onlySize}px ${family}`; ctx.fillStyle = _rgb(txtColor);
+  ctx.fillText(onlyText, startX + priceW, centerY + Math.round(priceSize * 0.14));
+
+  return canvas.toDataURL("image/jpeg", 0.95);
+}
+
+/** Load a remote image through the server proxy (avoids CORS) and return an HTMLImageElement. */
+async function loadImageViaProxy(url: string): Promise<HTMLImageElement> {
+  const res = await fetch(`/api/proxy-image?url=${encodeURIComponent(url)}`);
+  if (!res.ok) throw new Error(`Proxy fetch failed (${res.status})`);
+  const { base64, contentType } = await res.json();
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.onload  = () => resolve(img);
+    img.onerror = () => reject(new Error("Image decode failed"));
+    img.src = `data:${contentType};base64,${base64}`;
+  });
+}
 
 const MAX_IMAGES = 6;
 const EMPTY_FORM = {
@@ -30,6 +140,8 @@ export function ProductsTab() {
   const toast = useToast();
   const img = useImageItems(MAX_IMAGES);
   const variantFileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  // 1×1080px scratch canvas for dominant-color sampling during price-banner rendering
+  const scratchCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
@@ -160,23 +272,34 @@ export function ProductsTab() {
     const images = product.images?.length ? product.images : product.image ? [product.image] : [];
     if (!images.length) { toast.show("No images to download.", "error"); return; }
     setDownloadingProductId(product.id);
+
+    // Lazily create the scratch canvas needed for dominant-color sampling
+    if (!scratchCanvasRef.current) {
+      const c = document.createElement("canvas");
+      c.width = OVERLAY_SIZE; c.height = 1;
+      scratchCanvasRef.current = c;
+    }
+    const scratch = scratchCanvasRef.current;
+
     try {
-      const zip = new JSZip();
       const zipName = `SNS-${product.id}`;
+      const zip = new JSZip();
       const folder = zip.folder(zipName)!;
+
+      // Process all images in parallel: proxy-fetch → load → canvas overlay → add to zip
       await Promise.all(images.map(async (url, idx) => {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`Failed to fetch image ${idx + 1}`);
-        const blob = await res.blob();
-        const ext = url.split(".").pop()?.split("?")[0] || "jpg";
-        folder.file(`${zipName}-${idx + 1}.${ext}`, blob);
+        const imgEl = await loadImageViaProxy(url);
+        const dataUrl = await renderWithPriceBanner(imgEl, product.price, scratch);
+        const base64  = dataUrl.split(",")[1];
+        folder.file(`${zipName}-${idx + 1}.jpg`, base64, { base64: true });
       }));
-      const content = await zip.generateAsync({ type: "blob" });
+
+      const blob = await zip.generateAsync({ type: "blob" });
       const link = document.createElement("a");
-      link.href = URL.createObjectURL(content);
+      link.href = URL.createObjectURL(blob);
       link.download = `${zipName}.zip`;
       link.click();
-      URL.revokeObjectURL(link.href);
+      setTimeout(() => URL.revokeObjectURL(link.href), 5000);
     } catch (err) {
       toast.show(err instanceof Error ? err.message : "Download failed.", "error");
     } finally { setDownloadingProductId(null); }
