@@ -48,6 +48,8 @@ export interface OrderRow {
   raw_shipping_charge?: number;
   raw_cod_charge?: number;
   gift_wrap_charges?: number;
+  packaging_charge?: number;
+  wholesale_cost_override?: number;  // manual cost entry for quick orders (items: [])
   courier_name?: string;
   pincode: string;
   payment_mode: string;
@@ -119,6 +121,7 @@ interface FormState {
   raw_shipping_charge: string;
   raw_cod_charge: string;
   gift_wrap_charges: string;
+  packaging_charge: string;
   courier_name: string;
   sr_order_id: string;
   sr_shipment_id: string;
@@ -148,6 +151,7 @@ function toForm(order: OrderRow): FormState {
     raw_shipping_charge: String(order.raw_shipping_charge ?? ""),
     raw_cod_charge:      String(order.raw_cod_charge      ?? ""),
     gift_wrap_charges:   String(order.gift_wrap_charges   ?? 0),
+    packaging_charge:    String(order.packaging_charge    ?? 10),
     courier_name:        order.courier_name        ?? "",
     sr_order_id:         String(order.sr_order_id  ?? ""),
     sr_shipment_id:      String(order.sr_shipment_id ?? ""),
@@ -241,6 +245,7 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
   const shipping    = Number(form.shipping_charge)     || 0;
   const cod         = Number(form.cod_charge)          || 0;
   const giftWrap    = Number(form.gift_wrap_charges)   || 0;
+  const packaging   = Number(form.packaging_charge)    ?? 10;
   const discountAmount = form.discount_type === "percent"
     ? Math.round((subtotal * (Number(form.discount_value) || 0)) / 100)
     : (Number(form.discount_value) || 0);
@@ -324,6 +329,7 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
       shipping_charge:     shipping,
       cod_charge:          cod,
       gift_wrap_charges:   giftWrap,
+      packaging_charge:    packaging,
       grand_total,
       /* discount */
       discount_type:   form.discount_type,
@@ -517,7 +523,7 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
                   </div>
 
                   {/* Charges */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     <div>
                       <label className={lbl}>Shipping (₹)</label>
                       <input type="number" min="0" value={form.shipping_charge} onChange={(e) => set("shipping_charge", e.target.value)} className={inp} />
@@ -530,7 +536,11 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
                       <label className={lbl}>Gift Wrap (₹)</label>
                       <input type="number" min="0" value={form.gift_wrap_charges} onChange={(e) => set("gift_wrap_charges", e.target.value)} className={inp} placeholder="0" />
                     </div>
-                    <div className="bg-[#F3EEFB] rounded-lg px-3 py-2 flex flex-col justify-center">
+                    <div>
+                      <label className={lbl}>Packaging (₹)</label>
+                      <input type="number" min="0" value={form.packaging_charge} onChange={(e) => set("packaging_charge", e.target.value)} className={inp} placeholder="10" />
+                    </div>
+                    <div className="col-span-2 sm:col-span-3 bg-[#F3EEFB] rounded-lg px-3 py-2 flex items-center justify-between">
                       <p className="text-[10px] text-[#9B6FD1] font-semibold uppercase tracking-wide">Grand Total</p>
                       <p className="text-base font-bold text-[#7b2ff7]">₹{grandTotal}</p>
                       {discountAmount > 0 && (

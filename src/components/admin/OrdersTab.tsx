@@ -605,13 +605,20 @@ export function OrdersTab() {
               const expanded = expandedIds.has(order.id);
 
               // Profit calc
-              const PACKAGING = 10;
-              const wholesaleCost = order.items.reduce((s, i) => s + (i.product.wholesale_price ?? 0) * i.quantity, 0);
-              const rawShip = order.raw_shipping_charge ?? 0;
+              const PACKAGING = order.packaging_charge ?? 10;
+              const isQuickOrder = order.items.length === 0;
+              // For quick orders use the manually entered wholesale cost; for normal orders sum from items
+              const wholesaleCost = isQuickOrder
+                ? (order.wholesale_cost_override ?? 0)
+                : order.items.reduce((s, i) => s + (i.product.wholesale_price ?? 0) * i.quantity, 0);
+              const rawShip = order.raw_shipping_charge ?? (isQuickOrder ? order.shipping_charge : 0);
               const rawCod  = order.raw_cod_charge ?? (order.payment_mode === "cod" ? (order.cod_charge ?? 0) : 0);
               const profit  = order.grand_total - (wholesaleCost + rawShip + rawCod + PACKAGING);
               const pct     = order.grand_total > 0 ? Math.round((profit / order.grand_total) * 100) : 0;
-              const showProfit = order.raw_shipping_charge != null && order.items.some((i) => (i.product.wholesale_price ?? 0) > 0);
+              // Show profit for normal orders with shipping cost entered, OR quick orders with wholesale cost entered
+              const showProfit = isQuickOrder
+                ? (order.wholesale_cost_override ?? 0) > 0
+                : order.raw_shipping_charge != null && order.items.some((i) => (i.product.wholesale_price ?? 0) > 0);
 
               // Wholesale margin: W-Revenue (client_wholesale_price) − W-Cost (wholesale_price) − packaging
               // Shipping excluded — customer pays it separately

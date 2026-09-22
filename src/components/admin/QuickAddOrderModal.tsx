@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Zap, CheckCircle2 } from "lucide-react";
+import { X, Zap, CheckCircle2, TrendingUp, TrendingDown } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import type { OrderRow } from "./EditOrderModal";
 
@@ -16,6 +16,8 @@ interface FormState {
   subtotal: string;
   shipping_charge: string;
   cod_charge: string;
+  wholesale_cost: string;
+  packaging_charge: string;
 }
 
 const EMPTY: FormState = {
@@ -23,6 +25,8 @@ const EMPTY: FormState = {
   subtotal: "",
   shipping_charge: "0",
   cod_charge: "0",
+  wholesale_cost: "",
+  packaging_charge: "10",
 };
 
 export function QuickAddOrderModal({ open, onClose, onCreated, onError }: Props) {
@@ -32,21 +36,23 @@ export function QuickAddOrderModal({ open, onClose, onCreated, onError }: Props)
   const set = (k: keyof FormState, v: string) =>
     setForm((prev) => ({ ...prev, [k]: v }));
 
-  const subtotal       = Number(form.subtotal)        || 0;
-  const shippingCharge = Number(form.shipping_charge) || 0;
-  const codCharge      = Number(form.cod_charge)      || 0;
-  const grandTotal     = subtotal + shippingCharge + codCharge;
+  const subtotal        = Number(form.subtotal)          || 0;
+  const shippingCharge  = Number(form.shipping_charge)   || 0;
+  const codCharge       = Number(form.cod_charge)        || 0;
+  const wholesaleCost   = Number(form.wholesale_cost)    || 0;
+  const packagingCharge = Number(form.packaging_charge)  ?? 10;
+  const grandTotal      = subtotal + shippingCharge + codCharge;
+
+  // Profit only shown when wholesale cost is entered
+  const hasProfit    = wholesaleCost > 0;
+  const rawShipping  = shippingCharge; // for quick orders, charged = actual
+  const profit       = grandTotal - (wholesaleCost + rawShipping + codCharge + packagingCharge);
+  const profitPct    = grandTotal > 0 ? Math.round((profit / grandTotal) * 100) : 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.customer_name.trim()) {
-      onError("Customer name is required.");
-      return;
-    }
-    if (subtotal <= 0) {
-      onError("Subtotal must be greater than 0.");
-      return;
-    }
+    if (!form.customer_name.trim()) { onError("Customer name is required."); return; }
+    if (subtotal <= 0)              { onError("Subtotal must be greater than 0."); return; }
 
     setSaving(true);
 
@@ -55,17 +61,19 @@ export function QuickAddOrderModal({ open, onClose, onCreated, onError }: Props)
       .insert({
         items: [],
         subtotal,
-        shipping_charge: shippingCharge,
-        cod_charge: codCharge,
-        grand_total: grandTotal,
-        pincode: "",
-        payment_mode: codCharge > 0 ? "cod" : "prepaid",
-        customer_name: form.customer_name.trim(),
-        customer_mobile: "",
-        customer_address: "",
-        customer_city: "",
-        customer_state: "",
-        status: "pending",
+        shipping_charge:        shippingCharge,
+        cod_charge:             codCharge,
+        grand_total:            grandTotal,
+        packaging_charge:       packagingCharge,
+        wholesale_cost_override: wholesaleCost > 0 ? wholesaleCost : null,
+        pincode:                "",
+        payment_mode:           codCharge > 0 ? "cod" : "prepaid",
+        customer_name:          form.customer_name.trim(),
+        customer_mobile:        "",
+        customer_address:       "",
+        customer_city:          "",
+        customer_state:         "",
+        status:                 "pending",
       })
       .select()
       .single();
@@ -134,7 +142,7 @@ export function QuickAddOrderModal({ open, onClose, onCreated, onError }: Props)
                 />
               </div>
 
-              {/* Subtotal, Shipping, COD in a 3-col grid */}
+              {/* Revenue fields: Subtotal, Shipping, COD */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="label">Subtotal (₹)</label>
@@ -172,10 +180,69 @@ export function QuickAddOrderModal({ open, onClose, onCreated, onError }: Props)
                 </div>
               </div>
 
-              {/* Grand total pill */}
-              <div className="flex items-center justify-between bg-[#F3EEFB] rounded-xl px-4 py-2.5">
-                <span className="text-sm text-[#6B35C2] font-medium">Grand Total</span>
-                <span className="text-base font-bold text-[#6B35C2]">₹{grandTotal}</span>
+              {/* Cost fields: Wholesale + Packaging */}
+              <div>
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                  Cost (for profit estimate)
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Wholesale Cost (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={form.wholesale_cost}
+                      onChange={(e) => set("wholesale_cost", e.target.value)}
+                      placeholder="e.g. 100"
+                      className="input"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Packaging (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={form.packaging_charge}
+                      onChange={(e) => set("packaging_charge", e.target.value)}
+                      placeholder="10"
+                      className="input"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Grand Total + Profit summary */}
+              <div className="rounded-xl overflow-hidden border border-gray-100">
+                {/* Grand Total row */}
+                <div className="flex items-center justify-between bg-[#F3EEFB] px-4 py-2.5">
+                  <span className="text-sm text-[#6B35C2] font-medium">Grand Total</span>
+                  <span className="text-base font-bold text-[#6B35C2]">₹{grandTotal}</span>
+                </div>
+
+                {/* Profit row — only when wholesale cost entered */}
+                {hasProfit && (
+                  <div className={`px-4 py-2.5 flex items-center justify-between ${profit >= 0 ? "bg-emerald-50" : "bg-red-50"}`}>
+                    <div className="flex items-center gap-1.5">
+                      {profit >= 0
+                        ? <TrendingUp  className="w-3.5 h-3.5 text-emerald-600" />
+                        : <TrendingDown className="w-3.5 h-3.5 text-red-500" />}
+                      <span className={`text-xs font-semibold ${profit >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                        Est. {profit >= 0 ? "Profit" : "Loss"}
+                      </span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${profit >= 0 ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-500"}`}>
+                        {profitPct}%
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-sm font-bold ${profit >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                        ₹{Math.abs(profit)}
+                      </span>
+                      <p className="text-[10px] text-gray-400 leading-none mt-0.5">
+                        {grandTotal} − (W₹{wholesaleCost} + S₹{shippingCharge}{codCharge > 0 ? ` + C₹${codCharge}` : ""} + Pkg₹{packagingCharge})
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Actions */}

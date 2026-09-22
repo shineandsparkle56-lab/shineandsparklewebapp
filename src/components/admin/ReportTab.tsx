@@ -158,7 +158,7 @@ export function ReportTab() {
     setLoading(true);
     let query = supabase
       .from("orders")
-      .select("customer_name, grand_total, created_at, is_wholesale, items, shipping_charge, payment_mode, cod_charge, raw_shipping_charge, raw_cod_charge, discount_amount")
+      .select("customer_name, grand_total, created_at, is_wholesale, items, shipping_charge, payment_mode, cod_charge, raw_shipping_charge, raw_cod_charge, discount_amount, packaging_charge")
       .order("created_at", { ascending: true });
 
     if (!allTime) {
@@ -201,7 +201,7 @@ export function ReportTab() {
         // ── Estimated profit ──
         // Retail:    grand_total − (supplierCost + raw_shipping + raw_cod + ₹10 packaging)
         // Wholesale: clientWholesaleRevenue − supplierCost − ₹10 packaging  (shipping paid separately)
-        const PACKAGING_COST = 10;
+        const PACKAGING_COST = (r.packaging_charge as number) ?? 10;
         let estimatedProfit: number | null = null;
         let profitPct: number | null = null;
 

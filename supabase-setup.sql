@@ -279,3 +279,19 @@ ALTER TABLE orders
   ADD COLUMN IF NOT EXISTS discount_type   text    DEFAULT 'flat',
   ADD COLUMN IF NOT EXISTS discount_value  numeric(10,2) DEFAULT 0,
   ADD COLUMN IF NOT EXISTS discount_amount integer DEFAULT 0;
+
+-- ─────────────────────────────────────────────
+-- Per-order packaging charge
+--   Defaults to ₹10. Editable per order in the admin panel.
+--   Used as a cost deduction in profit calculations (not added to grand_total).
+-- ─────────────────────────────────────────────
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS packaging_charge integer NOT NULL DEFAULT 10;
+
+-- ─────────────────────────────────────────────
+-- Per-order wholesale cost override
+--   Stores the manually entered wholesale cost for quick orders (items: []).
+--   NULL for normal orders (cost is derived from items[].product.wholesale_price).
+-- ─────────────────────────────────────────────
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS wholesale_cost_override integer DEFAULT NULL;
