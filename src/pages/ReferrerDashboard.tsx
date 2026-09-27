@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Gift, IndianRupee, ShoppingBag, CheckCircle2,
   Clock, Sparkles, ExternalLink, ChevronRight, MessageCircle, Share2,
+  Truck, XCircle, Receipt, Wallet, BadgeCheck, ClipboardList,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { getSetting } from "../lib/settings";
@@ -164,8 +165,25 @@ export function ReferrerDashboard({ code }: { code: string }) {
     ? `₹${referrer.commission_value} flat per order`
     : `${referrer.commission_value}% of product subtotal`;
 
+  const canRequestPayout = totalPending >= minWithdrawal;
+
+  // Rich pre-filled WhatsApp message with all payout details
   const waPayoutMsg = encodeURIComponent(
-    `Hi! I'd like to request my referral payout of ₹${totalPending}. My code is ${referrer.code}.`
+    `Hi Shine and Sparkle! 👋\n\n` +
+    `I'd like to request my referral commission payout.\n\n` +
+    `*My Details:*\n` +
+    `Name: ${referrer.name}\n` +
+    `Referral Code: ${referrer.code}\n\n` +
+    `*Payout Summary:*\n` +
+    `Total Orders: ${totalOrders}\n` +
+    `Total Earned: ₹${totalEarned}\n` +
+    `Already Paid: ₹${totalPaid}\n` +
+    `Pending Amount: ₹${totalPending}\n\n` +
+    `*Order Breakdown:*\n` +
+    payouts.filter((p) => !p.paid).map((p) =>
+      `• Order #${p.order_id} — ₹${p.amount}${p.order_created_at ? ` (${new Date(p.order_created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })})` : ""}`
+    ).join("\n") +
+    `\n\nPlease process the payout of *₹${totalPending}* to my UPI/bank account. Thank you!`
   );
 
   return (
@@ -273,24 +291,14 @@ export function ReferrerDashboard({ code }: { code: string }) {
         {/* ── Payout eligibility banner ── */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
           {totalPending >= minWithdrawal ? (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-3">
-              <div className="flex items-start gap-2.5">
-                <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-emerald-700">You're eligible for a payout!</p>
-                  <p className="text-xs text-emerald-600 mt-0.5">
-                    You have <span className="font-bold">{fmt(totalPending)}</span> pending — minimum is {fmt(minWithdrawal)}.
-                  </p>
-                </div>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-emerald-700">You're eligible for a payout!</p>
+                <p className="text-xs text-emerald-600 mt-0.5">
+                  <span className="font-bold">{fmt(totalPending)}</span> pending — tap the button below to request.
+                </p>
               </div>
-              <a
-                href={`https://wa.me/919574024419?text=${waPayoutMsg}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full py-2.5 bg-[#25D366] text-white text-sm font-semibold rounded-xl hover:bg-[#1ebe5d] transition-colors"
-              >
-                <MessageCircle className="w-4 h-4" /> Request Payout on WhatsApp
-              </a>
             </div>
           ) : totalPending > 0 ? (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
@@ -392,9 +400,78 @@ export function ReferrerDashboard({ code }: { code: string }) {
         </motion.div>
 
         {/* ── Footer note ── */}
-        <p className="text-center text-xs text-gray-400 pb-6 px-4 leading-relaxed">
-          Commission is paid out manually by the store. Contact us on WhatsApp for payout requests.
+        <p className="text-center text-xs text-gray-400 px-4 leading-relaxed">
+          Contact us on WhatsApp for payout requests.
         </p>
+
+        {/* ── Commission Rules ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
+          className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3"
+        >
+          <div className="flex items-center gap-2">
+            <ClipboardList className="w-4 h-4 text-amber-700 shrink-0" />
+            <p className="text-sm font-bold text-amber-800">Commission Rules</p>
+          </div>
+          <ul className="space-y-2.5">
+            {[
+              { icon: <Truck       className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />, text: "Commission is credited only after successful delivery" },
+              { icon: <Clock       className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />, text: "Paid after 24h return period is over — to protect against returns" },
+              { icon: <XCircle     className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />, text: "Cancelled or returned orders do not earn commission" },
+              { icon: <Receipt     className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />, text: "Commission is on product subtotal only — not on shipping or COD charges" },
+              { icon: <Wallet      className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />, text: `Minimum ₹${minWithdrawal} pending balance required to request payout` },
+              { icon: <BadgeCheck  className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />, text: "Only one referral code counts per order" },
+            ].map(({ icon, text }) => (
+              <li key={text} className="flex items-start gap-2 text-xs text-amber-700">
+                {icon}
+                <span>{text}</span>
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+
+        <div className="pb-24" />
+      </div>
+
+      {/* ── Sticky payout button ── */}
+      <div className="fixed bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur-sm border-t border-gray-100 px-4 py-3 shadow-lg">
+        <div className="max-w-2xl mx-auto space-y-1.5">
+          {/* Progress bar when below minimum */}
+          {totalPending > 0 && !canRequestPayout && (
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-amber-400 transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.round((totalPending / minWithdrawal) * 100))}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-gray-400 shrink-0">
+                {fmt(totalPending)} / {fmt(minWithdrawal)} min
+              </span>
+            </div>
+          )}
+          {canRequestPayout ? (
+            <a
+              href={`https://wa.me/919574024419?text=${waPayoutMsg}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full py-3.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white text-sm font-bold rounded-2xl transition-colors shadow-md shadow-green-200"
+            >
+              <MessageCircle className="w-4 h-4" />
+              Request Payout of {fmt(totalPending)} on WhatsApp
+            </a>
+          ) : (
+            <button
+              disabled
+              className="flex items-center justify-center gap-2 w-full py-3.5 bg-gray-100 text-gray-400 text-sm font-bold rounded-2xl cursor-not-allowed"
+            >
+              <MessageCircle className="w-4 h-4" />
+              {totalPending === 0
+                ? "No pending balance"
+                : `Need ${fmt(minWithdrawal - totalPending)} more to unlock payout`}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Zap, Save } from "lucide-react";
+import { X, Zap, Save, TrendingUp, TrendingDown } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import type { OrderRow, OrderStatus } from "./EditOrderModal";
 import { ORDER_STATUSES } from "./EditOrderModal";
@@ -24,6 +24,8 @@ interface FormState {
   subtotal: string;
   shipping_charge: string;
   cod_charge: string;
+  wholesale_cost: string;
+  packaging_charge: string;
 }
 
 function toForm(order: OrderRow): FormState {
@@ -39,6 +41,8 @@ function toForm(order: OrderRow): FormState {
     subtotal:         String(order.subtotal  ?? 0),
     shipping_charge:  String(order.shipping_charge ?? 0),
     cod_charge:       String(order.cod_charge ?? 0),
+    wholesale_cost:   String(order.wholesale_cost_override ?? ""),
+    packaging_charge: String(order.packaging_charge ?? 10),
   };
 }
 
@@ -55,10 +59,17 @@ export function QuickEditOrderModal({ order, onClose, onSaved, onError }: Props)
   const set = (k: keyof FormState, v: string) =>
     setForm((prev) => ({ ...prev, [k]: v }));
 
-  const subtotal      = Number(form.subtotal)        || 0;
-  const shippingCharge = Number(form.shipping_charge) || 0;
-  const codCharge     = Number(form.cod_charge)       || 0;
-  const grandTotal    = subtotal + shippingCharge + (form.payment_mode === "cod" ? codCharge : 0);
+  const subtotal       = Number(form.subtotal)          || 0;
+  const shippingCharge = Number(form.shipping_charge)   || 0;
+  const codCharge      = Number(form.cod_charge)        || 0;
+  const wholesaleCost  = Number(form.wholesale_cost)    || 0;
+  const packaging      = Number(form.packaging_charge)  ?? 10;
+  const grandTotal     = subtotal + shippingCharge + (form.payment_mode === "cod" ? codCharge : 0);
+
+  // Live profit estimate — only shown when wholesale cost entered
+  const hasProfit  = wholesaleCost > 0;
+  const profit     = grandTotal - (wholesaleCost + shippingCharge + (form.payment_mode === "cod" ? codCharge : 0) + packaging);
+  const profitPct  = grandTotal > 0 ? Math.round((profit / grandTotal) * 100) : 0;
 
   const inp = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#9B6FD1]/30 bg-white";
   const lbl = "block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1";
@@ -78,18 +89,20 @@ export function QuickEditOrderModal({ order, onClose, onSaved, onError }: Props)
     setSaving(true);
 
     const patch: Partial<OrderRow> = {
-      customer_name:    form.customer_name.trim(),
-      customer_mobile:  form.customer_mobile.trim(),
-      customer_address: form.customer_address.trim(),
-      customer_city:    form.customer_city.trim(),
-      customer_state:   form.customer_state.trim(),
-      pincode:          form.pincode.trim(),
-      payment_mode:     form.payment_mode,
-      status:           form.status,
+      customer_name:           form.customer_name.trim(),
+      customer_mobile:         form.customer_mobile.trim(),
+      customer_address:        form.customer_address.trim(),
+      customer_city:           form.customer_city.trim(),
+      customer_state:          form.customer_state.trim(),
+      pincode:                 form.pincode.trim(),
+      payment_mode:            form.payment_mode,
+      status:                  form.status,
       subtotal,
-      shipping_charge:  shippingCharge,
-      cod_charge:       codCharge,
-      grand_total:      grandTotal,
+      shipping_charge:         shippingCharge,
+      cod_charge:              codCharge,
+      grand_total:             grandTotal,
+      packaging_charge:        packaging,
+      wholesale_cost_override: wholesaleCost > 0 ? wholesaleCost : undefined,
     };
 
     const { error, count } = await supabase
@@ -299,6 +312,62 @@ export function QuickEditOrderModal({ order, onClose, onSaved, onError }: Props)
                   <p className="text-base font-bold text-[#7b2ff7]">₹{grandTotal}</p>
                 </div>
               </div>
+
+              {/* Cost fields for profit estimate */}
+              <div>
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                  Cost (for profit estimate)
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={lbl}>Wholesale Cost (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={form.wholesale_cost}
+                      onChange={(e) => set("wholesale_cost", e.target.value)}
+                      className={inp}
+                      placeholder="e.g. 100"
+                    />
+                  </div>
+                  <div>
+                    <label className={lbl}>Packaging (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={form.packaging_charge}
+                      onChange={(e) => set("packaging_charge", e.target.value)}
+                      className={inp}
+                      placeholder="10"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Live profit estimate */}
+              {hasProfit && (
+                <div className={`rounded-xl px-4 py-3 flex items-center justify-between text-sm ${profit >= 0 ? "bg-emerald-50" : "bg-red-50"}`}>
+                  <div className="flex items-center gap-1.5">
+                    {profit >= 0
+                      ? <TrendingUp  className="w-4 h-4 text-emerald-600" />
+                      : <TrendingDown className="w-4 h-4 text-red-500" />}
+                    <span className={`font-semibold ${profit >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                      Est. {profit >= 0 ? "Profit" : "Loss"}
+                    </span>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${profit >= 0 ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-500"}`}>
+                      {profitPct}%
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className={`font-bold ${profit >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                      ₹{Math.abs(profit)}
+                    </span>
+                    <p className="text-[10px] text-gray-400 leading-none mt-0.5">
+                      {grandTotal} − (W₹{wholesaleCost} + S₹{shippingCharge} + Pkg₹{packaging})
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Footer buttons */}
               <div className="flex gap-2 pt-1">
