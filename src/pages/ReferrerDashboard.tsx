@@ -242,10 +242,10 @@ export function ReferrerDashboard({ code }: { code: string }) {
           {/* Referral link */}
           <div className="mt-3 p-3 bg-[#F3EEFB]/60 rounded-xl border border-[#9B6FD1]/20">
             <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">Your referral link</p>
+            <code className="block text-xs text-[#9B6FD1] font-medium break-all mb-2">
+              {window.location.origin}/?ref={referrer.code}
+            </code>
             <div className="flex items-center gap-2">
-              <code className="text-xs text-[#9B6FD1] font-medium truncate flex-1 min-w-0">
-                {window.location.origin}/?ref={referrer.code}
-              </code>
               <CopyButton text={`${window.location.origin}/?ref=${referrer.code}`} />
               <ShareButton
                 url={`${window.location.origin}/?ref=${referrer.code}`}
