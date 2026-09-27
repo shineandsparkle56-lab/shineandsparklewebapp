@@ -434,6 +434,98 @@ export function ProductsTab() {
               <p className="text-[11px] text-gray-400 mt-1">Auto: cost × 1.2 — override if needed</p>
             </div>
 
+            {/* ── Live margin preview ── */}
+            {(() => {
+              const price       = Number(form.price)                 || 0;
+              const origPrice   = Number(form.originalPrice)         || 0;
+              const cost        = Number(form.wholesale_price)       || 0;
+              const shipCredit  = Number(form.shipping_credit)       || 0;
+              const clientWp    = Number(form.client_wholesale_price)|| 0;
+              const discount    = origPrice > price && origPrice > 0
+                ? Math.round(((origPrice - price) / origPrice) * 100) : 0;
+              // Retail margin: selling price − cost − ship credit (credit is a cost you absorb)
+              const retailMargin  = cost > 0 ? price - cost - shipCredit : null;
+              const retailPct     = retailMargin !== null && price > 0
+                ? Math.round((retailMargin / price) * 100) : null;
+              // Wholesale margin: client wholesale price − cost − ship credit
+              const wMargin     = cost > 0 && clientWp > 0 ? clientWp - cost - shipCredit : null;
+              const wPct        = wMargin !== null && clientWp > 0
+                ? Math.round((wMargin / clientWp) * 100) : null;
+
+              if (!price && !cost) return null;
+              return (
+                <div className="sm:col-span-2 rounded-xl border border-gray-100 bg-gray-50 overflow-hidden">
+                  <div className="px-3 py-2 border-b border-gray-100 flex items-center gap-1.5">
+                    <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Live Margin Preview</span>
+                    {discount > 0 && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-[#F3EEFB] text-[#9B6FD1]">{discount}% off</span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 divide-x divide-gray-100">
+                    {/* Selling price */}
+                    <div className="px-3 py-2.5">
+                      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">Sell Price</p>
+                      <p className="text-sm font-bold text-gray-800 mt-0.5">{price > 0 ? `₹${price}` : "—"}</p>
+                      {origPrice > price && origPrice > 0 && (
+                        <p className="text-[10px] text-gray-400 line-through">₹{origPrice}</p>
+                      )}
+                    </div>
+                    {/* Cost */}
+                    <div className="px-3 py-2.5">
+                      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">Cost</p>
+                      <p className="text-sm font-bold text-gray-800 mt-0.5">{cost > 0 ? `₹${cost}` : "—"}</p>
+                      {shipCredit > 0 && (
+                        <p className="text-[10px] text-amber-500">−Ship Credit ₹{shipCredit}</p>
+                      )}
+                    </div>
+                    {/* Retail margin */}
+                    <div className="px-3 py-2.5">
+                      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">Retail Margin</p>
+                      {retailMargin !== null ? (
+                        <>
+                          <p className={`text-sm font-bold mt-0.5 ${retailMargin >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                            ₹{retailMargin}
+                          </p>
+                          <p className={`text-[10px] font-semibold ${retailMargin >= 0 ? "text-emerald-500" : "text-red-400"}`}>
+                            {retailPct}%
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-sm text-gray-300 mt-0.5">—</p>
+                      )}
+                    </div>
+                    {/* Wholesale margin */}
+                    <div className="px-3 py-2.5">
+                      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">W-Margin</p>
+                      {wMargin !== null ? (
+                        <>
+                          <p className={`text-sm font-bold mt-0.5 ${wMargin >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                            ₹{wMargin}
+                          </p>
+                          <p className={`text-[10px] font-semibold ${wMargin >= 0 ? "text-emerald-500" : "text-red-400"}`}>
+                            {wPct}%
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-sm text-gray-300 mt-0.5">—</p>
+                      )}
+                    </div>
+                  </div>
+                  {cost > 0 && (
+                    <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-100">
+                      <p className="text-[10px] text-gray-400">
+                        Retail: ₹{price} − Cost ₹{cost}{shipCredit > 0 ? ` − Ship ₹${shipCredit}` : ""} = <span className={`font-semibold ${(retailMargin ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"}`}>₹{retailMargin}</span>
+                        {clientWp > 0 && <span className="mx-1.5 text-gray-300">·</span>}
+                        {clientWp > 0 && (
+                          <span>W: ₹{clientWp} − Cost ₹{cost}{shipCredit > 0 ? ` − Ship ₹${shipCredit}` : ""} = <span className={`font-semibold ${(wMargin ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"}`}>₹{wMargin}</span></span>
+                        )}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Variants */}
             <div className="sm:col-span-2">
               <div className="flex items-center justify-between mb-2">
