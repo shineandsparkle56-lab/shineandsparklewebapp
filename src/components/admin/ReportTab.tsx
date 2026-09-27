@@ -7,13 +7,14 @@ import moment from "moment";
 // ── Types ─────────────────────────────────────────────────────
 interface SaleEntry {
   name:              string;
-  amount:            number;  // what goes into totalSale (wholesale revenue for wholesale orders, grand_total otherwise)
-  grand_total:       number;  // raw grand_total from DB (already has discount baked in)
+  amount:            number;
+  grand_total:       number;
   is_wholesale:      boolean;
-  wholesale_revenue: number;  // computed wholesale revenue (0 for retail orders)
-  estimated_profit:  number | null; // null when not enough data (no wholesale_price set or no raw_shipping)
+  wholesale_revenue: number;
+  estimated_profit:  number | null;
   profit_pct:        number | null;
-  discount_amount:   number; // ₹ discount applied on this order (0 = none)
+  discount_amount:   number;
+  referral_commission: number; // ₹ commission deducted for referral (0 = none)
 }
 interface ManualEntry { id: string; label: string; amount: string }
 
@@ -73,6 +74,30 @@ export function ReportTab() {
   const [sales, setSales]           = useState<SaleEntry[]>([]);
   const [loading, setLoading]       = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
+
+  // Referral commission rates — keyed by code
+  const [referralMap, setReferralMap] = useState<Record<string, { commission_type: "flat" | "percent"; commission_value: number }>>({});
+  const [referralMapLoaded, setReferralMapLoaded] = useState(false);
+
+  useEffect(() => {
+    supabase
+      .from("referrals")
+      .select("code, commission_type, commission_value")
+      .eq("is_active", true)
+      .then(({ data: refs }) => {
+        const map: typeof referralMap = {};
+        if (refs) {
+          for (const r of refs) map[r.code as string] = { commission_type: r.commission_type as "flat" | "percent", commission_value: Number(r.commission_value) };
+        }
+        setReferralMap(map);
+        setReferralMapLoaded(true);
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-run fetchSales once referralMap is ready (so commissions are calculated correctly)
+  useEffect(() => {
+    if (referralMapLoaded) fetchSales();
+  }, [referralMapLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track whether the current data was loaded from DB (skip first-save until loaded)
   const isLoadedRef = useRef(false);
@@ -158,7 +183,7 @@ export function ReportTab() {
     setLoading(true);
     let query = supabase
       .from("orders")
-      .select("customer_name, grand_total, created_at, is_wholesale, items, shipping_charge, payment_mode, cod_charge, raw_shipping_charge, raw_cod_charge, discount_amount, packaging_charge")
+      .select("customer_name, grand_total, created_at, is_wholesale, items, shipping_charge, payment_mode, cod_charge, raw_shipping_charge, raw_cod_charge, discount_amount, packaging_charge, referral_code, subtotal")
       .order("created_at", { ascending: true });
 
     if (!allTime) {
@@ -199,25 +224,35 @@ export function ReportTab() {
         const hasCostData = items.some((i) => (i.product.wholesale_price ?? 0) > 0);
 
         // ── Estimated profit ──
-        // Retail:    grand_total − (supplierCost + raw_shipping + raw_cod + ₹10 packaging)
-        // Wholesale: clientWholesaleRevenue − supplierCost − ₹10 packaging  (shipping paid separately)
+        // Retail:    grand_total − (supplierCost + raw_shipping + raw_cod + packaging + ref commission)
+        // Wholesale: clientWholesaleRevenue − supplierCost − packaging − ref commission
         const PACKAGING_COST = (r.packaging_charge as number) ?? 10;
+
+        // Referral commission — percent on subtotal, flat is flat
+        const refCode   = r.referral_code as string | null;
+        const refEntry  = refCode ? referralMap[refCode] : null;
+        const orderSubtotal = (r.subtotal as number) ?? grandTotal;
+        const refCommission = refEntry
+          ? refEntry.commission_type === "flat"
+            ? refEntry.commission_value
+            : Math.round((orderSubtotal * refEntry.commission_value) / 100)
+          : 0;
+
         let estimatedProfit: number | null = null;
         let profitPct: number | null = null;
 
         if (isWholesale && hasCostData && wholesaleRevenue > 0) {
-          // use items-only wholesale revenue (excl. shipping) so margin matches OrdersTab
           const itemsOnlyRevenue = items.reduce((s, i) => {
             const live = products.find((p) => p.id === i.product.id);
             const cwp  = live?.client_wholesale_price ?? 0;
             return s + cwp * i.quantity;
           }, 0);
-          estimatedProfit = itemsOnlyRevenue - supplierCost - PACKAGING_COST;
+          estimatedProfit = itemsOnlyRevenue - supplierCost - PACKAGING_COST - refCommission;
           profitPct = itemsOnlyRevenue > 0
             ? Math.round((estimatedProfit / itemsOnlyRevenue) * 100)
             : null;
         } else if (!isWholesale && hasCostData && rawShip !== null) {
-          estimatedProfit = grandTotal - (supplierCost + rawShip + rawCod + PACKAGING_COST);
+          estimatedProfit = grandTotal - (supplierCost + rawShip + rawCod + PACKAGING_COST + refCommission);
           profitPct = grandTotal > 0
             ? Math.round((estimatedProfit / grandTotal) * 100)
             : null;
@@ -233,11 +268,12 @@ export function ReportTab() {
           estimated_profit:  estimatedProfit,
           profit_pct:        profitPct,
           discount_amount:   (r.discount_amount as number) ?? 0,
+          referral_commission: refCommission,
         };
       }));
     }
     setLoading(false);
-  }, [month, allTime, products]);
+  }, [month, allTime, products, referralMap]);
 
   useEffect(() => { fetchSales(); }, [fetchSales]);
 
@@ -292,6 +328,9 @@ export function ReportTab() {
   const totalCharges    = data.charges.reduce((s, e) => s + toNum(e.amount), 0);
   const totalInvestment = data.investments.reduce((s, e) => s + toNum(e.amount), 0);
   const netProfit       = totalSale - totalCharges - totalInvestment;
+
+  // Total referral commissions paid/owed across all orders
+  const totalReferralCommission = sales.reduce((s, e) => s + e.referral_commission, 0);
 
   // Breakdown: retail vs wholesale
   const retailSaleTotal    = sales.filter((e) => !e.is_wholesale).reduce((s, e) => s + e.grand_total, 0);
@@ -372,6 +411,14 @@ export function ReportTab() {
           />
           <StatCard label="Total Charges"    value={`₹${totalCharges}`}    color="bg-orange-50 text-orange-700" />
           <StatCard label="Stock Investment" value={`₹${totalInvestment}`} color="bg-blue-50 text-blue-700" />
+          {totalReferralCommission > 0 && (
+            <StatCard
+              label="Referral Payouts"
+              value={`₹${totalReferralCommission}`}
+              sub="commission deducted from profit"
+              color="bg-purple-50 text-purple-700"
+            />
+          )}
           <StatCard
             label="Net Profit"
             value={`₹${netProfit}`}
@@ -449,6 +496,9 @@ export function ReportTab() {
                     )}
                     {s.discount_amount > 0 && (
                       <span className="shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-rose-100 text-rose-600">−₹{s.discount_amount}</span>
+                    )}
+                    {s.referral_commission > 0 && (
+                      <span className="shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-purple-100 text-purple-700">Ref −₹{s.referral_commission}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">

@@ -24,6 +24,7 @@ import { TermsOfService } from "./pages/TermsOfService";
 import { TrackOrder } from "./pages/TrackOrder";
 import { FestivalStorePage } from "./pages/FestivalStorePage";
 import { ProductDetailPage } from "./pages/ProductDetailPage";
+import { ReferrerDashboard } from "./pages/ReferrerDashboard";
 import { FestivalsProvider } from "./context/FestivalsContext";
 
 const queryClient = new QueryClient();
@@ -136,6 +137,12 @@ function AppRouter() {
   if (path === "/track") return <PageShell><TrackOrder /></PageShell>;
   if (path === "/about") return <PageShell><About /></PageShell>;
   if (path === "/contact") return <PageShell><Contact /></PageShell>;
+
+  // Referrer public dashboard — /ref/:code (no login needed)
+  if (path.startsWith("/ref/")) {
+    const refCode = path.replace("/ref/", "").split("/")[0].toUpperCase();
+    return <ReferrerDashboard code={refCode} />;
+  }
 
   const productId = path.startsWith("/product/") ? Number(path.split("/")[2]) : null;
   const isValidProduct = productId !== null && !isNaN(productId) && productId > 0;

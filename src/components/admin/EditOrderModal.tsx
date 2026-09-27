@@ -74,6 +74,7 @@ export interface OrderRow {
   weight_kg?: number;
   pickup_location?: string;
   pickup_pincode?: string;
+  referral_code?: string | null;
 }
 
 /* ─── CartLine (internal item state) ────────────────────────── */
@@ -134,6 +135,7 @@ interface FormState {
   pickup_location: string;
   discount_type:  "flat" | "percent";
   discount_value: string;
+  referral_code: string;
 }
 
 function toForm(order: OrderRow): FormState {
@@ -168,6 +170,7 @@ function toForm(order: OrderRow): FormState {
     discount_value:      order.discount_value != null && order.discount_value > 0
                            ? String(order.discount_value)
                            : "",
+    referral_code:       order.referral_code ?? "",
   };
 }
 
@@ -346,6 +349,7 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
       pincode:          form.pincode.trim(),
       payment_mode:     form.payment_mode,
       status:           form.status,
+      referral_code:    form.referral_code.trim() || null,
       /* logistics */
       courier_name:    form.courier_name.trim()  || undefined,
       awb_code:        form.awb_code.trim()      || undefined,
@@ -519,6 +523,16 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
                     <div>
                       <label className={lbl}>State</label>
                       <input value={form.customer_state} onChange={(e) => set("customer_state", e.target.value)} className={inp} placeholder="State" />
+                    </div>
+                    <div>
+                      <label className={lbl}>Referral Code <span className="normal-case font-normal text-gray-400">optional</span></label>
+                      <input
+                        value={form.referral_code}
+                        onChange={(e) => set("referral_code", e.target.value.toUpperCase())}
+                        className={inp}
+                        placeholder="e.g. AYUSH50"
+                        maxLength={30}
+                      />
                     </div>
                   </div>
 

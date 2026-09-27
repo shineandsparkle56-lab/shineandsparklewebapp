@@ -295,3 +295,49 @@ ALTER TABLE orders
 -- ─────────────────────────────────────────────
 ALTER TABLE orders
   ADD COLUMN IF NOT EXISTS wholesale_cost_override integer DEFAULT NULL;
+
+-- ═════════════════════════════════════════════
+-- REFERRAL SYSTEM
+-- ═════════════════════════════════════════════
+
+-- 1. Tag orders with the referral code used at checkout
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS referral_code text DEFAULT NULL;
+
+-- 2. Referrers table — one row per person who has a code
+CREATE TABLE IF NOT EXISTS referrals (
+  id               bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  name             text NOT NULL DEFAULT '',
+  mobile           text NOT NULL DEFAULT '',
+  code             text NOT NULL UNIQUE,          -- e.g. "AYUSH50"
+  commission_type  text NOT NULL DEFAULT 'flat',  -- 'flat' | 'percent'
+  commission_value numeric(10,2) NOT NULL DEFAULT 50,
+  is_active        boolean NOT NULL DEFAULT true,
+  notes            text DEFAULT '',
+  created_at       timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE referrals ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "anyone can read referrals"   ON referrals FOR SELECT USING (true);
+CREATE POLICY "anyone can insert referrals" ON referrals FOR INSERT WITH CHECK (true);
+CREATE POLICY "anyone can update referrals" ON referrals FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "anyone can delete referrals" ON referrals FOR DELETE USING (true);
+
+-- 3. Referral payouts — one row per order that earns commission
+CREATE TABLE IF NOT EXISTS referral_payouts (
+  id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  referral_id  bigint NOT NULL REFERENCES referrals(id) ON DELETE CASCADE,
+  order_id     bigint NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  amount       numeric(10,2) NOT NULL DEFAULT 0,  -- computed commission for this order
+  paid         boolean NOT NULL DEFAULT false,
+  paid_at      timestamptz DEFAULT NULL,
+  note         text DEFAULT '',
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (order_id)                               -- one payout entry per order
+);
+
+ALTER TABLE referral_payouts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "anyone can read referral_payouts"   ON referral_payouts FOR SELECT USING (true);
+CREATE POLICY "anyone can insert referral_payouts" ON referral_payouts FOR INSERT WITH CHECK (true);
+CREATE POLICY "anyone can update referral_payouts" ON referral_payouts FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "anyone can delete referral_payouts" ON referral_payouts FOR DELETE USING (true);

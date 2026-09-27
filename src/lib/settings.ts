@@ -4,6 +4,7 @@ export type AppSettingKey =
   | "cod_enabled"
   | "all_category_image_url"
   | "min_order_value"
+  | "min_withdrawal"
   | "default_pickup_location"
   | "default_pickup_pincodes"
   | "local_delivery_zones"

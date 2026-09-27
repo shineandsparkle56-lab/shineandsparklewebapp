@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
-  Package, ShoppingBag, Tag, ImageIcon, BarChart3, Printer, Settings, Sparkles, LogOut,
+  Package, ShoppingBag, Tag, ImageIcon, BarChart3, Printer, Settings, Sparkles, LogOut, Gift,
 } from "lucide-react";
 import { ProductsTab }   from "../components/admin/ProductsTab";
 import { OrdersTab }     from "../components/admin/OrdersTab";
@@ -11,11 +11,12 @@ import { PostEditor }         from "../components/admin/PostEditor";
 import { ReportTab }          from "../components/admin/ReportTab";
 import { ShiprocketPDFPrinter } from "../components/admin/ShiprocketPDFPrinter";
 import { FestivalsTab } from "../components/admin/FestivalsTab";
+import { ReferralsTab } from "../components/admin/ReferralsTab";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, X } from "lucide-react";
 import { useToast } from "../hooks/useToast";
 
-type Tab = "products" | "orders" | "categories" | "post" | "report" | "label" | "settings" | "festivals";
+type Tab = "products" | "orders" | "categories" | "post" | "report" | "label" | "settings" | "festivals" | "referrals";
 
 const TABS: { id: Tab; icon: React.ElementType; label: string }[] = [
   { id: "products",   icon: Package,    label: "Products"    },
@@ -25,6 +26,7 @@ const TABS: { id: Tab; icon: React.ElementType; label: string }[] = [
   { id: "report",     icon: BarChart3,  label: "Report"      },
   { id: "label",      icon: Printer,    label: "Label Print" },
   { id: "festivals",  icon: Sparkles,   label: "Festivals"   },
+  { id: "referrals",  icon: Gift,       label: "Referrals"   },
   { id: "settings",   icon: Settings,   label: "Settings"    },
 ];
 
@@ -92,6 +94,7 @@ export function AdminPanel() {
         {activeTab === "report"     && <ReportTab />}
         {activeTab === "label"      && <ShiprocketPDFPrinter />}
         {activeTab === "festivals"  && <FestivalsTab />}
+        {activeTab === "referrals"  && <ReferralsTab />}
         {activeTab === "settings"   && <SettingsTab />}
       </div>
 

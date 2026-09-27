@@ -5,6 +5,7 @@ interface Settings {
   codEnabled: boolean;
   allCategoryImage: string | null;
   minOrderValue: number;
+  minWithdrawal: number;
   defaultPickupLocation: string;
   defaultPickupPincodes: string[];
   localDeliveryZones: LocalDeliveryZone[];
@@ -21,6 +22,7 @@ interface UseSettingsReturn extends Settings {
   setCodEnabled: (enabled: boolean) => Promise<void>;
   setAllCategoryImage: (url: string | null) => Promise<void>;
   setMinOrderValue: (value: number) => Promise<void>;
+  setMinWithdrawal: (value: number) => Promise<void>;
   setDefaultPickupLocation: (name: string) => Promise<void>;
   setDefaultPickupPincodes: (pincodes: string[]) => Promise<void>;
   setLocalDeliveryZones: (zones: LocalDeliveryZone[]) => Promise<void>;
@@ -36,6 +38,7 @@ export function useSettings(): UseSettingsReturn {
   const [codEnabled, setCodEnabledState] = useState(true);
   const [allCategoryImage, setAllCategoryImageState] = useState<string | null>(null);
   const [minOrderValue, setMinOrderValueState] = useState(0);
+  const [minWithdrawal, setMinWithdrawalState] = useState(100);
   const [defaultPickupLocation, setDefaultPickupLocationState] = useState("");
   const [defaultPickupPincodes, setDefaultPickupPincodesState] = useState<string[]>([]);
   const [localDeliveryZones, setLocalDeliveryZonesState] = useState<LocalDeliveryZone[]>([]);
@@ -52,6 +55,7 @@ export function useSettings(): UseSettingsReturn {
       getSetting("cod_enabled"),
       getSetting("all_category_image_url"),
       getSetting("min_order_value"),
+      getSetting("min_withdrawal"),
       getSetting("default_pickup_location"),
       getSetting("default_pickup_pincodes"),
       getSetting("local_delivery_zones"),
@@ -61,11 +65,12 @@ export function useSettings(): UseSettingsReturn {
       getSetting("whatsapp_tpl_delayed"),
       getSetting("whatsapp_tpl_feedback"),
       getSetting("whatsapp_tpl_thank_you"),
-    ]).then(([cod, allImg, minOrder, pickupLocation, pickupPins, localZones, tyCard,
+    ]).then(([cod, allImg, minOrder, minWd, pickupLocation, pickupPins, localZones, tyCard,
               waTpl1, waTpl2, waTpl3, waTpl4, waTpl5]) => {
       if (cod !== null) setCodEnabledState(cod === "true");
       if (allImg !== null && allImg !== "") setAllCategoryImageState(allImg);
       if (minOrder !== null) setMinOrderValueState(parseInt(minOrder, 10) || 0);
+      if (minWd !== null) setMinWithdrawalState(parseInt(minWd, 10) || 100);
       if (pickupLocation !== null) setDefaultPickupLocationState(pickupLocation);
       if (pickupPins !== null) {
         try {
@@ -106,6 +111,11 @@ export function useSettings(): UseSettingsReturn {
   const setMinOrderValue = async (value: number) => {
     setMinOrderValueState(value);
     await setSetting("min_order_value", String(value));
+  };
+
+  const setMinWithdrawal = async (value: number) => {
+    setMinWithdrawalState(value);
+    await setSetting("min_withdrawal", String(value));
   };
 
   const setDefaultPickupLocation = async (name: string) => {
@@ -153,6 +163,7 @@ export function useSettings(): UseSettingsReturn {
     codEnabled,
     allCategoryImage,
     minOrderValue,
+    minWithdrawal,
     defaultPickupLocation,
     defaultPickupPincodes,
     localDeliveryZones,
@@ -166,6 +177,7 @@ export function useSettings(): UseSettingsReturn {
     setCodEnabled,
     setAllCategoryImage,
     setMinOrderValue,
+    setMinWithdrawal,
     setDefaultPickupLocation,
     setDefaultPickupPincodes,
     setLocalDeliveryZones,

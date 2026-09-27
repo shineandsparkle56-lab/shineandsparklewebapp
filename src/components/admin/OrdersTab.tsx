@@ -65,6 +65,22 @@ export function OrdersTab() {
   const toast = useToast();
   const { defaultPickupLocation, waTplOutForDelivery, waTplDispatched, waTplDelayed, waTplFeedback, waTplThankYou } = useSettings();
 
+  // Referral codes — loaded once for commission lookup in profit calc
+  const [referralMap, setReferralMap] = useState<Record<string, { commission_type: "flat" | "percent"; commission_value: number }>>({});
+
+  useEffect(() => {
+    supabase
+      .from("referrals")
+      .select("code, commission_type, commission_value")
+      .eq("is_active", true)
+      .then(({ data }) => {
+        if (!data) return;
+        const map: typeof referralMap = {};
+        for (const r of data) map[r.code as string] = { commission_type: r.commission_type as "flat" | "percent", commission_value: Number(r.commission_value) };
+        setReferralMap(map);
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -613,14 +629,23 @@ export function OrdersTab() {
                 : order.items.reduce((s, i) => s + (i.product.wholesale_price ?? 0) * i.quantity, 0);
               const rawShip = order.raw_shipping_charge ?? (isQuickOrder ? order.shipping_charge : 0);
               const rawCod  = order.raw_cod_charge ?? (order.payment_mode === "cod" ? (order.cod_charge ?? 0) : 0);
-              const profit  = order.grand_total - (wholesaleCost + rawShip + rawCod + PACKAGING);
+
+              // Referral commission deduction (percent on subtotal, flat is flat)
+              const refEntry = order.referral_code ? referralMap[order.referral_code] : null;
+              const refCommission = refEntry
+                ? refEntry.commission_type === "flat"
+                  ? refEntry.commission_value
+                  : Math.round((order.subtotal * refEntry.commission_value) / 100)
+                : 0;
+
+              const profit  = order.grand_total - (wholesaleCost + rawShip + rawCod + PACKAGING + refCommission);
               const pct     = order.grand_total > 0 ? Math.round((profit / order.grand_total) * 100) : 0;
               // Show profit for normal orders with shipping cost entered, OR quick orders with wholesale cost entered
               const showProfit = isQuickOrder
                 ? (order.wholesale_cost_override ?? 0) > 0
                 : order.raw_shipping_charge != null && order.items.some((i) => (i.product.wholesale_price ?? 0) > 0);
 
-              // Wholesale margin: W-Revenue (client_wholesale_price) − W-Cost (wholesale_price) − packaging
+              // Wholesale margin: W-Revenue (client_wholesale_price) − W-Cost (wholesale_price) − packaging − ref commission
               // Shipping excluded — customer pays it separately
               const clientWholesaleRevenue = order.items.reduce((s, i) => {
                 const liveProduct = products.find((p) => p.id === i.product.id);
@@ -628,7 +653,7 @@ export function OrdersTab() {
                 return s + cwp * i.quantity;
               }, 0);
               const hasClientWholesale = clientWholesaleRevenue > 0;
-              const wholesaleMargin    = clientWholesaleRevenue - wholesaleCost - PACKAGING;
+              const wholesaleMargin    = clientWholesaleRevenue - wholesaleCost - PACKAGING - refCommission;
               const wholesaleMarginPct = clientWholesaleRevenue > 0
                 ? Math.round((wholesaleMargin / clientWholesaleRevenue) * 100)
                 : 0;
@@ -884,15 +909,20 @@ export function OrdersTab() {
                               <span className="text-rose-500 text-[10px]">(incl. −₹{order.discount_amount} disc.)</span>
                             )}
                             <span className="opacity-40">−</span>
-                            <span>(Wholesale ₹{wholesaleCost} + Ship ₹{rawShip}{rawCod > 0 ? ` + COD ₹${rawCod}` : ""} + Pkg ₹{PACKAGING})</span>
+                            <span>(Wholesale ₹{wholesaleCost} + Ship ₹{rawShip}{rawCod > 0 ? ` + COD ₹${rawCod}` : ""} + Pkg ₹{PACKAGING}{refCommission > 0 ? ` + Ref ₹${refCommission}` : ""})</span>
                             <span className="opacity-40">=</span>
                             <span className={`font-bold ${profit >= 0 ? "text-emerald-700" : "text-red-600"}`}>₹{profit}</span>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className={`font-bold text-sm ${profit >= 0 ? "text-emerald-700" : "text-red-600"}`}>
                               {profit >= 0 ? "Profit" : "Loss"} ₹{Math.abs(profit)}
                             </span>
                             <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${profit >= 0 ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-500"}`}>{pct}%</span>
+                            {refCommission > 0 && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#F3EEFB] text-[#9B6FD1]">
+                                Ref: {order.referral_code} −₹{refCommission}
+                              </span>
+                            )}
                           </div>
                         </div>
                       )}
@@ -904,7 +934,7 @@ export function OrdersTab() {
                           <div className="flex flex-wrap items-center gap-1 text-gray-500 mb-1">
                             <span className="font-medium">W-Revenue ₹{clientWholesaleRevenue}</span>
                             <span className="opacity-40">−</span>
-                            <span>Cost ₹{wholesaleCost} + Pkg ₹{PACKAGING}</span>
+                            <span>Cost ₹{wholesaleCost} + Pkg ₹{PACKAGING}{refCommission > 0 ? ` + Ref ₹${refCommission}` : ""}</span>
                             <span className="opacity-40">=</span>
                             <span className={`font-bold ${wholesaleMargin >= 0 ? "text-amber-700" : "text-red-600"}`}>₹{wholesaleMargin}</span>
                           </div>

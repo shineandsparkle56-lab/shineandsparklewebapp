@@ -23,6 +23,7 @@ export function SettingsTab() {
   const {
     codEnabled, setCodEnabled,
     minOrderValue, setMinOrderValue,
+    minWithdrawal, setMinWithdrawal,
     defaultPickupPincodes, setDefaultPickupPincodes,
     setDefaultPickupLocation,
     localDeliveryZones, setLocalDeliveryZones,
@@ -52,6 +53,25 @@ export function SettingsTab() {
     setSavingMin(false);
     setMinSaved(true);
     setTimeout(() => setMinSaved(false), 2000);
+  };
+
+  // ── Min withdrawal ────────────────────────────────────────────
+  const [minWdInput,  setMinWdInput]  = useState("");
+  const [savingWd,    setSavingWd]    = useState(false);
+  const [wdSaved,     setWdSaved]     = useState(false);
+
+  useEffect(() => {
+    if (!loading) setMinWdInput(String(minWithdrawal));
+  }, [loading, minWithdrawal]);
+
+  const handleSaveMinWd = async () => {
+    const parsed = parseInt(minWdInput, 10);
+    const value = isNaN(parsed) || parsed < 1 ? 100 : parsed;
+    setSavingWd(true);
+    await setMinWithdrawal(value);
+    setSavingWd(false);
+    setWdSaved(true);
+    setTimeout(() => setWdSaved(false), 2000);
   };
 
   // ── Pickup locations ─────────────────────────────────────────
@@ -281,6 +301,29 @@ export function SettingsTab() {
               />
             </div>
             <SaveBtn onClick={handleSaveMinOrder} disabled={loading || savingMin} saving={savingMin} saved={minSaved} />
+          </div>
+        </div>
+
+        {/* ── Min referral withdrawal ── */}
+        <div className={`${SECTION} space-y-2`}>
+          <div>
+            <p className="text-sm font-semibold text-gray-800">Minimum Referral Withdrawal</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Referrers must accumulate at least ₹{minWithdrawal} before requesting a payout.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-400">₹</span>
+              <input
+                type="number" min="1" step="1" placeholder="100"
+                value={minWdInput}
+                onChange={(e) => setMinWdInput(e.target.value)}
+                disabled={loading}
+                className={INPUT + " pl-6 disabled:opacity-50"}
+              />
+            </div>
+            <SaveBtn onClick={handleSaveMinWd} disabled={loading || savingWd} saving={savingWd} saved={wdSaved} />
           </div>
         </div>
 
