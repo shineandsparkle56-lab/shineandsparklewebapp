@@ -84,8 +84,9 @@ function FestivalShell({ slug }: { slug: string }) {
 function CartVisibility() {
   const [path] = useLocation();
   const { loading } = useSettings();
-  const isAdmin = path === "/admin" || path.startsWith("/admin/");
-  if (isAdmin || loading) return null;
+  const isAdmin   = path === "/admin" || path.startsWith("/admin/");
+  const isRefPage = path.startsWith("/ref/");
+  if (isAdmin || isRefPage || loading) return null;
   return (
     <>
       <CartDrawer />

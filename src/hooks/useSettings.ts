@@ -10,6 +10,7 @@ interface Settings {
   defaultPickupPincodes: string[];
   localDeliveryZones: LocalDeliveryZone[];
   thankYouCardUrl: string | null;
+  referralCardUrl: string | null;
   waTplOutForDelivery: string;
   waTplDispatched: string;
   waTplDelayed: string;
@@ -27,6 +28,7 @@ interface UseSettingsReturn extends Settings {
   setDefaultPickupPincodes: (pincodes: string[]) => Promise<void>;
   setLocalDeliveryZones: (zones: LocalDeliveryZone[]) => Promise<void>;
   setThankYouCardUrl: (url: string | null) => Promise<void>;
+  setReferralCardUrl: (url: string | null) => Promise<void>;
   setWaTplOutForDelivery: (tpl: string) => Promise<void>;
   setWaTplDispatched: (tpl: string) => Promise<void>;
   setWaTplDelayed: (tpl: string) => Promise<void>;
@@ -44,6 +46,7 @@ export function useSettings(): UseSettingsReturn {
   const [localDeliveryZones, setLocalDeliveryZonesState] = useState<LocalDeliveryZone[]>([]);
   const [loading, setLoading] = useState(true);
   const [thankYouCardUrl, setThankYouCardUrlState] = useState<string | null>(null);
+  const [referralCardUrl,  setReferralCardUrlState]  = useState<string | null>(null);
   const [waTplOutForDelivery, setWaTplOutForDeliveryState] = useState(DEFAULT_WA_TEMPLATES.out_for_delivery);
   const [waTplDispatched,     setWaTplDispatchedState]     = useState(DEFAULT_WA_TEMPLATES.dispatched);
   const [waTplDelayed,        setWaTplDelayedState]        = useState(DEFAULT_WA_TEMPLATES.delayed);
@@ -60,12 +63,13 @@ export function useSettings(): UseSettingsReturn {
       getSetting("default_pickup_pincodes"),
       getSetting("local_delivery_zones"),
       getSetting("thank_you_card_url"),
+      getSetting("referral_card_url"),
       getSetting("whatsapp_tpl_out_for_delivery"),
       getSetting("whatsapp_tpl_dispatched"),
       getSetting("whatsapp_tpl_delayed"),
       getSetting("whatsapp_tpl_feedback"),
       getSetting("whatsapp_tpl_thank_you"),
-    ]).then(([cod, allImg, minOrder, minWd, pickupLocation, pickupPins, localZones, tyCard,
+    ]).then(([cod, allImg, minOrder, minWd, pickupLocation, pickupPins, localZones, tyCard, refCard,
               waTpl1, waTpl2, waTpl3, waTpl4, waTpl5]) => {
       if (cod !== null) setCodEnabledState(cod === "true");
       if (allImg !== null && allImg !== "") setAllCategoryImageState(allImg);
@@ -89,6 +93,7 @@ export function useSettings(): UseSettingsReturn {
         }
       }
       if (tyCard !== null && tyCard !== "") setThankYouCardUrlState(tyCard);
+      if (refCard !== null && refCard !== "") setReferralCardUrlState(refCard);
       if (waTpl1 !== null && waTpl1 !== "") setWaTplOutForDeliveryState(waTpl1);
       if (waTpl2 !== null && waTpl2 !== "") setWaTplDispatchedState(waTpl2);
       if (waTpl3 !== null && waTpl3 !== "") setWaTplDelayedState(waTpl3);
@@ -138,6 +143,11 @@ export function useSettings(): UseSettingsReturn {
     await setSetting("thank_you_card_url", url ?? "");
   };
 
+  const setReferralCardUrl = async (url: string | null) => {
+    setReferralCardUrlState(url);
+    await setSetting("referral_card_url", url ?? "");
+  };
+
   const setWaTplOutForDelivery = async (tpl: string) => {
     setWaTplOutForDeliveryState(tpl);
     await setSetting("whatsapp_tpl_out_for_delivery", tpl);
@@ -168,6 +178,7 @@ export function useSettings(): UseSettingsReturn {
     defaultPickupPincodes,
     localDeliveryZones,
     thankYouCardUrl,
+    referralCardUrl,
     waTplOutForDelivery,
     waTplDispatched,
     waTplDelayed,
@@ -182,6 +193,7 @@ export function useSettings(): UseSettingsReturn {
     setDefaultPickupPincodes,
     setLocalDeliveryZones,
     setThankYouCardUrl,
+    setReferralCardUrl,
     setWaTplOutForDelivery,
     setWaTplDispatched,
     setWaTplDelayed,

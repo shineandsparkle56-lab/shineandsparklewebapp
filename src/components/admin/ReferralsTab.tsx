@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Gift, Plus, Pencil, Trash2, X, CheckCircle2, Copy,
   ChevronDown, ChevronUp, Loader2, IndianRupee, Percent,
-  ExternalLink, Phone, ToggleLeft, ToggleRight, Search, MessageCircle,
+  ExternalLink, Phone, ToggleLeft, ToggleRight, Search, MessageCircle, QrCode,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { ReferralQRCard } from "./ReferralQRCard";
 
 // ─── types ────────────────────────────────────────────────────
 interface Referrer {
@@ -206,6 +207,7 @@ export function ReferralsTab() {
   const [search,        setSearch]        = useState("");
   const [payingIds,     setPayingIds]     = useState<Set<number>>(new Set());
   const [copiedCode,    setCopiedCode]    = useState<string | null>(null);
+  const [qrTarget,      setQrTarget]      = useState<Referrer | null>(null);
 
   // ── Toast helper ───────────────────────────────────────────
   const showToast = useCallback((msg: string, type: "ok" | "err" = "ok") => {
@@ -536,6 +538,14 @@ export function ReferralsTab() {
                             >
                               <ExternalLink className="w-3 h-3" /> Dashboard
                             </a>
+                            <button
+                              type="button"
+                              onClick={() => setQrTarget(ref)}
+                              className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-[#9B6FD1] transition-colors"
+                              title="Download QR card"
+                            >
+                              <QrCode className="w-3 h-3" /> QR Card
+                            </button>
                             {ref.mobile && (
                               <span className="flex items-center gap-1.5">
                                 <a href={`tel:${ref.mobile}`} className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-[#9B6FD1] transition-colors">
@@ -709,6 +719,17 @@ export function ReferralsTab() {
             message={`Delete referrer "${deleteTarget.name}" (${deleteTarget.code})? All their payout records will also be deleted.`}
             onConfirm={handleDelete}
             onCancel={() => setDeleteTarget(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── QR Card modal ── */}
+      <AnimatePresence>
+        {qrTarget && (
+          <ReferralQRCard
+            referrerName={qrTarget.name}
+            code={qrTarget.code}
+            onClose={() => setQrTarget(null)}
           />
         )}
       </AnimatePresence>

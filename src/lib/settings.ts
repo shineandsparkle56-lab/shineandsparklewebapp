@@ -9,6 +9,7 @@ export type AppSettingKey =
   | "default_pickup_pincodes"
   | "local_delivery_zones"
   | "thank_you_card_url"
+  | "referral_card_url"
   | "whatsapp_tpl_out_for_delivery"
   | "whatsapp_tpl_dispatched"
   | "whatsapp_tpl_delayed"

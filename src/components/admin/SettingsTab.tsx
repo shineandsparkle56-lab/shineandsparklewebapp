@@ -28,6 +28,7 @@ export function SettingsTab() {
     setDefaultPickupLocation,
     localDeliveryZones, setLocalDeliveryZones,
     thankYouCardUrl, setThankYouCardUrl,
+    referralCardUrl, setReferralCardUrl,
     waTplOutForDelivery, setWaTplOutForDelivery,
     waTplDispatched,    setWaTplDispatched,
     waTplDelayed,       setWaTplDelayed,
@@ -165,6 +166,41 @@ export function SettingsTab() {
   const handleTyCardRemove = async () => {
     setTyCardPreview(null);
     await setThankYouCardUrl(null);
+  };
+
+  // ── Referral Card ─────────────────────────────────────────────
+  const refCardInputRef                       = useRef<HTMLInputElement>(null);
+  const [refCardUploading, setRefCardUploading] = useState(false);
+  const [refCardSaved,     setRefCardSaved]     = useState(false);
+  const [refCardError,     setRefCardError]     = useState<string | null>(null);
+  const [refCardPreview,   setRefCardPreview]   = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!loading) setRefCardPreview(referralCardUrl ?? null);
+  }, [loading, referralCardUrl]);
+
+  const handleRefCardFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setRefCardError(null);
+    setRefCardUploading(true);
+    try {
+      const url = await uploadToStorage(file, "referral-card");
+      setRefCardPreview(url);
+      await setReferralCardUrl(url);
+      setRefCardSaved(true);
+      setTimeout(() => setRefCardSaved(false), 2500);
+    } catch (err) {
+      setRefCardError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setRefCardUploading(false);
+      if (refCardInputRef.current) refCardInputRef.current.value = "";
+    }
+  };
+
+  const handleRefCardRemove = async () => {
+    setRefCardPreview(null);
+    await setReferralCardUrl(null);
   };
 
   // ── WhatsApp Templates ───────────────────────────────────────
@@ -568,6 +604,73 @@ export function SettingsTab() {
             accept="image/*"
             className="hidden"
             onChange={handleTyCardFile}
+          />
+        </div>
+
+        {/* ── Referral Card Template ── */}
+        <div className={`${SECTION} space-y-2`}>
+          <div className="flex items-center gap-1.5">
+            <ImageIcon className="w-3.5 h-3.5 text-[#9B6FD1] shrink-0" />
+            <p className="text-sm font-semibold text-gray-800">Referral Card Template</p>
+          </div>
+          <p className="text-xs text-gray-400">
+            Upload your referral card template (PNG/JPG/WebP). The QR code and referral link will be overlaid automatically when generating the card.
+          </p>
+
+          {refCardError && (
+            <p className="text-xs text-red-500 bg-red-50 rounded-lg px-2.5 py-1.5">{refCardError}</p>
+          )}
+
+          {refCardPreview ? (
+            <div className="relative inline-block">
+              <img
+                src={refCardPreview}
+                alt="Referral Card preview"
+                className="w-40 rounded-xl border border-[#9B6FD1]/20 shadow-sm object-contain"
+              />
+              <button
+                onClick={handleRefCardRemove}
+                className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow transition-colors"
+                title="Remove card"
+              >
+                <X className="w-3 h-3" />
+              </button>
+              {refCardSaved && (
+                <div className="absolute bottom-2 left-0 right-0 text-center">
+                  <span className="text-[10px] font-semibold bg-emerald-500 text-white px-2 py-0.5 rounded-full">Saved ✓</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={() => refCardInputRef.current?.click()}
+              disabled={refCardUploading || loading}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl border-2 border-dashed border-[#9B6FD1]/40 hover:border-[#9B6FD1] hover:bg-[#F3EEFB] text-[#9B6FD1] text-xs font-semibold transition-all disabled:opacity-50"
+            >
+              {refCardUploading
+                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…</>
+                : <><ImageIcon className="w-3.5 h-3.5" /> Upload Referral Card Template</>}
+            </button>
+          )}
+
+          {refCardPreview && !refCardUploading && (
+            <button
+              onClick={() => refCardInputRef.current?.click()}
+              disabled={refCardUploading || loading}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[#9B6FD1]/30 text-[#9B6FD1] text-xs font-semibold hover:bg-[#F3EEFB] transition-colors disabled:opacity-50"
+            >
+              {refCardUploading
+                ? <><Loader2 className="w-3 h-3 animate-spin" /> Uploading…</>
+                : <><RefreshCw className="w-3 h-3" /> Replace Image</>}
+            </button>
+          )}
+
+          <input
+            ref={refCardInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleRefCardFile}
           />
         </div>
 
