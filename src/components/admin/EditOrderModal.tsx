@@ -270,11 +270,21 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
       const match = prev.find(
         (l) => l.product.id === p.id && (l.variant_id ?? `base-${l.product.id}`) === key,
       );
+
+      // Determine stock limit for this variant / base
+      const variantStock = variantId
+        ? (p.variants?.find((v) => v.id === variantId)?.stock ?? 0)
+        : p.stock;
+
       if (match) {
+        // Already at stock limit — don't increment
+        if (match.quantity >= variantStock) return prev;
         return prev.map((l) =>
           l === match ? { ...l, quantity: l.quantity + 1 } : l,
         );
       }
+      // Don't add if stock is 0
+      if (variantStock <= 0) return prev;
       return [
         ...prev,
         {
@@ -732,7 +742,7 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
                           >
                             {/* thumbnail */}
                             <img
-                              src={imgUrl(line.product.images?.[0] ?? line.product.image, "tiny")}
+                              src={imgUrl(line.product.image ?? line.product.images?.[0], "tiny")}
                               alt={line.product.name}
                               className="w-9 h-9 rounded-lg object-cover shrink-0"
                             />
@@ -762,13 +772,24 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
                               <span className="w-5 text-center text-xs font-bold text-gray-700">
                                 {line.quantity}
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => setQty(idx, line.quantity + 1)}
-                                className="w-6 h-6 rounded-full bg-white border border-gray-200 flex items-center justify-center hover:border-[#9B6FD1] hover:text-[#9B6FD1] transition-colors"
-                              >
-                                <Plus className="w-3 h-3" />
-                              </button>
+                              {(() => {
+                                const liveProduct  = products.find((p) => p.id === line.product.id);
+                                const variantStock = line.variant_id
+                                  ? (liveProduct?.variants?.find((v) => v.id === line.variant_id)?.stock ?? 0)
+                                  : (liveProduct?.stock ?? 99);
+                                const atMax = line.quantity >= variantStock;
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => !atMax && setQty(idx, line.quantity + 1)}
+                                    disabled={atMax}
+                                    title={atMax ? `Only ${variantStock} in stock` : undefined}
+                                    className="w-6 h-6 rounded-full bg-white border border-gray-200 flex items-center justify-center hover:border-[#9B6FD1] hover:text-[#9B6FD1] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:text-inherit"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                  </button>
+                                );
+                              })()}
                             </div>
                             {/* remove */}
                             <button
@@ -857,8 +878,9 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
                                 {p.base_variant_label && (
                                   <button
                                     type="button"
-                                    onClick={() => addLine(p, undefined, p.base_variant_label ?? undefined, p.price)}
-                                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white hover:bg-[#F3EEFB] border border-gray-100 text-left transition-colors"
+                                    onClick={() => p.stock > 0 && addLine(p, undefined, p.base_variant_label ?? undefined, p.price)}
+                                    disabled={p.stock === 0}
+                                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white hover:bg-[#F3EEFB] border border-gray-100 text-left transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
                                   >
                                     {p.base_variant_color && (
                                       <span
@@ -870,7 +892,9 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
                                       {p.base_variant_label}
                                     </span>
                                     <span className="text-[11px] text-gray-400 shrink-0">₹{p.price}</span>
-                                    <Plus className="w-3 h-3 text-[#9B6FD1] shrink-0" />
+                                    {p.stock === 0
+                                      ? <span className="text-[10px] font-semibold text-red-400 shrink-0">Out</span>
+                                      : <Plus className="w-3 h-3 text-[#9B6FD1] shrink-0" />}
                                   </button>
                                 )}
                                 {/* named variants */}
@@ -878,8 +902,9 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
                                   <button
                                     key={v.id}
                                     type="button"
-                                    onClick={() => addLine(p, v.id, v.label, v.price ?? p.price, v.images?.length ? v.images : undefined)}
-                                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white hover:bg-[#F3EEFB] border border-gray-100 text-left transition-colors"
+                                    onClick={() => v.stock > 0 && addLine(p, v.id, v.label, v.price ?? p.price, v.images?.length ? v.images : undefined)}
+                                    disabled={v.stock === 0}
+                                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white hover:bg-[#F3EEFB] border border-gray-100 text-left transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
                                   >
                                     {v.color && (
                                       <span
@@ -900,7 +925,9 @@ export function EditOrderModal({ order, onClose, onSaved, onError }: Props) {
                                     <span className="text-[11px] text-gray-400 shrink-0">
                                       ₹{v.price ?? p.price}
                                     </span>
-                                    <Plus className="w-3 h-3 text-[#9B6FD1] shrink-0" />
+                                    {v.stock === 0
+                                      ? <span className="text-[10px] font-semibold text-red-400 shrink-0">Out</span>
+                                      : <Plus className="w-3 h-3 text-[#9B6FD1] shrink-0" />}
                                   </button>
                                 ))}
                               </div>

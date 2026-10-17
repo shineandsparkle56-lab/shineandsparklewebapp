@@ -8,6 +8,8 @@ interface ProductsContextValue {
   updateProduct: (id: number, p: Omit<Product, "id">) => Promise<void>;
   deleteProduct: (id: number, imageUrls?: string[]) => Promise<void>;
   updateStock: (id: number, newStock: number) => Promise<void>;
+  updateVariantStock: (productId: number, variantId: string, newStock: number) => Promise<void>;
+  patchLocalProduct: (id: number, patch: Partial<Product>) => void;
   loading: boolean;
   error: string;
 }
@@ -143,8 +145,29 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
     setProducts((prev) => prev.map((p) => p.id === id ? { ...p, stock } : p));
   };
 
+  const updateVariantStock = async (productId: number, variantId: string, newStock: number) => {
+    const product = products.find((p) => p.id === productId);
+    if (!product) return;
+    const updatedVariants = product.variants.map((v) =>
+      v.id === variantId ? { ...v, stock: Math.max(0, newStock) } : v,
+    );
+    const { error: err } = await supabase
+      .from("products")
+      .update({ variants: updatedVariants })
+      .eq("id", productId);
+    if (err) throw new Error(err.message);
+    setProducts((prev) =>
+      prev.map((p) => p.id === productId ? { ...p, variants: updatedVariants } : p),
+    );
+  };
+
+  /** Patch local React state only — use when Supabase write already done elsewhere */
+  const patchLocalProduct = (id: number, patch: Partial<Product>) => {
+    setProducts((prev) => prev.map((p) => p.id === id ? { ...p, ...patch } : p));
+  };
+
   return (
-    <ProductsContext.Provider value={{ products, addProduct, updateProduct, deleteProduct, updateStock, loading, error }}>
+    <ProductsContext.Provider value={{ products, addProduct, updateProduct, deleteProduct, updateStock, updateVariantStock, patchLocalProduct, loading, error }}>
       {children}
     </ProductsContext.Provider>
   );

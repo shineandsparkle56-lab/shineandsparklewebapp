@@ -251,7 +251,9 @@ export function CartDrawer() {
               wholesale_price: item.product.wholesale_price ?? 0,
               shipping_credit: item.product.shipping_credit ?? 0,
               image: item.variantImage || (item.product.images?.length ? item.product.images[0] : item.product.image),
-              images: item.product.images ?? [item.product.image],
+              images: (item.variantId && item.product.variants?.find(v => v.id === item.variantId)?.images?.length)
+                ? item.product.variants!.find(v => v.id === item.variantId)!.images
+                : (item.product.images ?? [item.product.image]),
             },
             quantity: item.quantity,
             variant_id: item.variantId ?? null,

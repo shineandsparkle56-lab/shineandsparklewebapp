@@ -61,7 +61,7 @@ import { ORDER_STATUSES } from "./EditOrderModal";
 import ThankYouCard from "../ThankYouCard";
 
 export function OrdersTab() {
-  const { products, updateStock } = useProducts();
+  const { products, updateStock, updateVariantStock, patchLocalProduct } = useProducts();
   const toast = useToast();
   const { defaultPickupLocation, waTplOutForDelivery, waTplDispatched, waTplDelayed, waTplFeedback, waTplThankYou } = useSettings();
 
@@ -481,12 +481,61 @@ export function OrdersTab() {
     if (deductingStockId === order.id) return;
     setDeductingStockId(order.id);
     const deducting = !order.stock_deducted;
+
+    // ── Group ALL items by product id to apply every variant delta
+    //    in a single DB write per product.
+    //    Without this, sequential awaits read stale React state and the
+    //    second variant's write overwrites the first. ──────────────────
+    const productChanges = new Map<number, {
+      baseStockDelta: number;
+      variantDeltas:  Map<string, number>;   // variantId → total delta
+    }>();
+
     for (const item of order.items) {
-      const delta = deducting ? -item.quantity : item.quantity;
-      const product = products.find((p) => p.id === item.product.id);
-      if (!product) continue;
-      await updateStock(product.id, Math.max(0, product.stock + delta));
+      const delta     = deducting ? -item.quantity : item.quantity;
+      const variantId = (item as typeof item & { variant_id?: string | null }).variant_id;
+      const pid       = item.product.id;
+
+      if (!productChanges.has(pid)) {
+        productChanges.set(pid, { baseStockDelta: 0, variantDeltas: new Map() });
+      }
+      const entry = productChanges.get(pid)!;
+
+      if (variantId) {
+        entry.variantDeltas.set(variantId, (entry.variantDeltas.get(variantId) ?? 0) + delta);
+      } else {
+        entry.baseStockDelta += delta;
+      }
     }
+
+    // ── One write per product ──────────────────────────────────
+    for (const [pid, changes] of productChanges) {
+      const product = products.find((p) => p.id === pid);
+      if (!product) continue;
+
+      if (changes.variantDeltas.size > 0) {
+        // Build the full updated variants array in one pass
+        const updatedVariants = product.variants.map((v) => {
+          const delta = changes.variantDeltas.get(v.id);
+          return delta !== undefined ? { ...v, stock: Math.max(0, v.stock + delta) } : v;
+        });
+        const newBaseStock = changes.baseStockDelta !== 0
+          ? Math.max(0, product.stock + changes.baseStockDelta)
+          : product.stock;
+
+        // Single DB update for all variant changes + optional base stock
+        await supabase
+          .from("products")
+          .update({ variants: updatedVariants, stock: newBaseStock })
+          .eq("id", pid);
+
+        // Sync React state once
+        patchLocalProduct(pid, { variants: updatedVariants, stock: newBaseStock });
+      } else if (changes.baseStockDelta !== 0) {
+        await updateStock(pid, Math.max(0, product.stock + changes.baseStockDelta));
+      }
+    }
+
     await supabase.from("orders").update({ stock_deducted: deducting }).eq("id", order.id);
     setOrders((prev) => prev.map((o) => o.id === order.id ? { ...o, stock_deducted: deducting } : o));
     setDeductingStockId(null);
@@ -853,7 +902,7 @@ export function OrdersTab() {
                             <div className="flex flex-wrap gap-1.5">
                               {visibleItems.map((item, i) => (
                                 <div key={i} className="flex items-center gap-1.5 bg-white border border-gray-100 rounded-lg px-2 py-1">
-                                  <img src={imgUrl(item.product.images?.[0] ?? item.product.image, "tiny")} alt={item.product.name} className="w-6 h-6 rounded object-cover shrink-0" />
+                                  <img src={imgUrl(item.product.image ?? item.product.images?.[0], "tiny")} alt={item.product.name} className="w-6 h-6 rounded object-cover shrink-0" />
                                   <span className="text-[11px] text-gray-700 font-medium max-w-[90px] truncate">{item.product.name}</span>
                                   <span className="text-[11px] text-gray-400 shrink-0">×{item.quantity}</span>
                                 </div>
