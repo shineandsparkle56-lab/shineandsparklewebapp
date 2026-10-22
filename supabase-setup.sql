@@ -341,3 +341,38 @@ CREATE POLICY "anyone can read referral_payouts"   ON referral_payouts FOR SELEC
 CREATE POLICY "anyone can insert referral_payouts" ON referral_payouts FOR INSERT WITH CHECK (true);
 CREATE POLICY "anyone can update referral_payouts" ON referral_payouts FOR UPDATE USING (true) WITH CHECK (true);
 CREATE POLICY "anyone can delete referral_payouts" ON referral_payouts FOR DELETE USING (true);
+
+-- ═════════════════════════════════════════════
+-- COMBO BUILD BOX
+-- ═════════════════════════════════════════════
+
+-- combo_boxes — one row per box offer created by admin
+CREATE TABLE IF NOT EXISTS combo_boxes (
+  id               bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  name             text    NOT NULL DEFAULT '',          -- e.g. "Any 4 for ₹499"
+  description      text    NOT NULL DEFAULT '',          -- tagline shown on card
+  box_image_url    text    DEFAULT NULL,                 -- banner image (uploaded via admin)
+  item_count       integer NOT NULL DEFAULT 3,           -- how many items customer picks
+  box_price        integer NOT NULL DEFAULT 0,           -- fixed selling price (₹)
+  wholesale_min    numeric(10,2) NOT NULL DEFAULT 0,     -- filter: min wholesale_price
+  wholesale_max    numeric(10,2) NOT NULL DEFAULT 9999,  -- filter: max wholesale_price
+  allow_duplicates boolean NOT NULL DEFAULT true,        -- allow same product twice?
+  is_active        boolean NOT NULL DEFAULT true,
+  sort_order       integer NOT NULL DEFAULT 0,
+  created_at       timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE combo_boxes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "anyone can read combo_boxes"   ON combo_boxes FOR SELECT USING (true);
+CREATE POLICY "anyone can insert combo_boxes" ON combo_boxes FOR INSERT WITH CHECK (true);
+CREATE POLICY "anyone can update combo_boxes" ON combo_boxes FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "anyone can delete combo_boxes" ON combo_boxes FOR DELETE USING (true);
+
+-- ─────────────────────────────────────────────
+-- Combo box shipping credit
+--   Admin sets how much shipping cost the box absorbs.
+--   Works the same as product-level shipping_credit:
+--   deducted from the shipping charge shown to customer.
+-- ─────────────────────────────────────────────
+ALTER TABLE combo_boxes
+  ADD COLUMN IF NOT EXISTS shipping_credit integer NOT NULL DEFAULT 0;

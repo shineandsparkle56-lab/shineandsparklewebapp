@@ -1,14 +1,15 @@
 import { useState } from "react";
-import { ShoppingBag, Menu, Home, Info, Phone, Truck, Sparkles } from "lucide-react";
+import { ShoppingBag, Menu, Home, Info, Phone, Truck, Sparkles, Package2 } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { useScroll } from "../context/ScrollContext";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 
 const navLinks = [
-  { name: "Home",        href: "/",        icon: Home },
-  { name: "About",       href: "/about",   icon: Info },
-  { name: "Contact",     href: "/contact", icon: Phone },
-  { name: "Track Order", href: "/track",   icon: Truck },
+  { name: "Home",          href: "/",       icon: Home },
+  { name: "Build Your Box",href: "/combo",  icon: Package2 },
+  { name: "About",         href: "/about",  icon: Info },
+  { name: "Contact",       href: "/contact",icon: Phone },
+  { name: "Track Order",   href: "/track",  icon: Truck },
 ];
 
 export function Navbar() {

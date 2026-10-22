@@ -15,6 +15,14 @@ function loadCart(): CartItem[] {
 
 export const WHATSAPP_NUMBER = "919574024419";
 
+// ─── ComboBoxSlot — one chosen product slot inside a combo ────
+export interface ComboBoxSlot {
+  product:     Product;
+  variantId?:  string | null;
+  variantLabel?: string | null;
+  variantImage?: string | null;
+}
+
 export interface CartItem {
   product: Product;
   quantity: number;
@@ -22,17 +30,47 @@ export interface CartItem {
   variantId?: string;
   variantLabel?: string;
   variantImage?: string;
+  // ── Combo box fields — only set when itemType === "combo" ──
+  itemType?:      "regular" | "combo";
+  comboBoxId?:    number;
+  comboBoxName?:  string;
+  comboBoxPrice?: number;  // the fixed box price
+  comboSlots?:    ComboBoxSlot[];  // the N chosen products
 }
 
-// Unique key for a cart item = product id + variant id (or just product id if no variant)
-export function cartItemKey(item: Pick<CartItem, "product" | "variantId">) {
+// Unique key for a cart item
+export function cartItemKey(item: Pick<CartItem, "product" | "variantId" | "itemType" | "comboBoxId">) {
+  if (item.itemType === "combo" && item.comboBoxId !== undefined) {
+    return `combo__${item.comboBoxId}__${Date.now()}`;
+  }
   return item.variantId ? `${item.product.id}__${item.variantId}` : String(item.product.id);
+}
+
+// Stable key for removing a combo item (uses comboCartKey stored on the item)
+export function comboItemRemoveKey(item: CartItem): string {
+  return item.comboCartKey ?? cartItemKey(item);
+}
+
+// We store a stable key on the combo item at creation time
+declare module "../context/CartContext" {
+  interface CartItem {
+    comboCartKey?: string;
+  }
 }
 
 interface CartContextType {
   cart: CartItem[];
   addToCart: (product: Product, variantId?: string) => boolean;
+  addComboToCart: (opts: {
+    comboBoxId:    number;
+    comboBoxName:  string;
+    comboBoxPrice: number;
+    shippingCredit: number;
+    slots:         ComboBoxSlot[];
+    coverImage:    string;
+  }) => void;
   removeFromCart: (productId: number, variantId?: string) => void;
+  removeComboFromCart: (comboCartKey: string) => void;
   updateQuantity: (productId: number, delta: number, variantId?: string) => void;
   totalItems: number;
   subtotal: number;
@@ -52,30 +90,27 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [cart]);
 
   const addToCart = (product: Product, variantId?: string): boolean => {
-    // Resolve the variant object if provided
     const variant = variantId
       ? product.variants?.find((v) => v.id === variantId)
       : undefined;
-
-    // Stock limit:
-    // - Named variant (Silver) → use variant.stock
-    // - Base option (no variantId, but product has variants) → use product.stock (base stock only)
-    // - No variants at all → use product.stock
     const availableStock = variant ? variant.stock : product.stock;
 
     let hitLimit = false;
     setCart((prev) => {
       const key = variantId ? `${product.id}__${variantId}` : String(product.id);
-      const existing = prev.find((i) => cartItemKey(i) === key);
+      const existing = prev.find((i) => i.itemType !== "combo" && cartItemKey(i) === key);
       if (existing) {
         if (existing.quantity >= availableStock) { hitLimit = true; return prev; }
         return prev.map((i) =>
-          cartItemKey(i) === key ? { ...i, quantity: i.quantity + 1 } : i
+          (i.itemType !== "combo" && cartItemKey(i) === key)
+            ? { ...i, quantity: i.quantity + 1 }
+            : i
         );
       }
       const newItem: CartItem = {
         product,
         quantity: 1,
+        itemType: "regular",
         variantId: variant?.id,
         variantLabel: variant?.label,
         variantImage: variant?.images?.[0],
@@ -85,16 +120,63 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return !hitLimit;
   };
 
+  const addComboToCart = ({
+    comboBoxId, comboBoxName, comboBoxPrice, shippingCredit: boxShippingCredit, slots, coverImage,
+  }: {
+    comboBoxId:     number;
+    comboBoxName:   string;
+    comboBoxPrice:  number;
+    shippingCredit: number;
+    slots:          ComboBoxSlot[];
+    coverImage:     string;
+  }) => {
+    const key = `combo__${comboBoxId}__${Date.now()}`;
+    const phantomProduct: Product = {
+      id:                   -(comboBoxId),
+      name:                 comboBoxName,
+      category:             "combo-box" as Product["category"],
+      price:                comboBoxPrice,
+      originalPrice:        comboBoxPrice,
+      discount:             0,
+      image:                coverImage,
+      images:               [coverImage],
+      description:          `Combo box of ${slots.length} items`,
+      stock:                99,
+      shipping_credit:      Math.max(0, boxShippingCredit),
+      wholesale_price:      0,
+      client_wholesale_price: 0,
+      variants:             [],
+      tags:                 [],
+      sizes:                [],
+    };
+
+    const newItem: CartItem = {
+      product:        phantomProduct,
+      quantity:       1,
+      itemType:       "combo",
+      comboBoxId,
+      comboBoxName,
+      comboBoxPrice,
+      comboSlots:     slots,
+      comboCartKey:   key,
+    };
+    setCart((prev) => [...prev, newItem]);
+  };
+
   const removeFromCart = (productId: number, variantId?: string) => {
     const key = variantId ? `${productId}__${variantId}` : String(productId);
-    setCart((prev) => prev.filter((i) => cartItemKey(i) !== key));
+    setCart((prev) => prev.filter((i) => i.itemType === "combo" || cartItemKey(i) !== key));
+  };
+
+  const removeComboFromCart = (comboCartKey: string) => {
+    setCart((prev) => prev.filter((i) => i.comboCartKey !== comboCartKey));
   };
 
   const updateQuantity = (productId: number, delta: number, variantId?: string) => {
     const key = variantId ? `${productId}__${variantId}` : String(productId);
     setCart((prev) =>
       prev.reduce<CartItem[]>((acc, item) => {
-        if (cartItemKey(item) !== key) return [...acc, item];
+        if (item.itemType === "combo" || cartItemKey(item) !== key) return [...acc, item];
         const variant = item.variantId
           ? item.product.variants?.find((v) => v.id === item.variantId)
           : undefined;
@@ -107,19 +189,24 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const totalItems = cart.reduce((s, i) => s + i.quantity, 0);
+
   const subtotal = cart.reduce((s, i) => {
-    // Use variant price if set, otherwise product base price
+    if (i.itemType === "combo") return s + (i.comboBoxPrice ?? 0);
     const variant = i.variantId ? i.product.variants?.find((v) => v.id === i.variantId) : undefined;
     const price = variant?.price ?? i.product.price;
     return s + price * i.quantity;
   }, 0);
-  const shippingCredit = cart.reduce(
-    (s, i) => s + (i.product.shipping_credit ?? 0) * i.quantity, 0
-  );
+
+  const shippingCredit = cart.reduce((s, i) => {
+    // combo items use their phantom product's shipping_credit (set from box.shipping_credit)
+    return s + (i.product.shipping_credit ?? 0) * i.quantity;
+  }, 0);
 
   return (
     <CartContext.Provider value={{
-      cart, addToCart, removeFromCart, updateQuantity,
+      cart, addToCart, addComboToCart,
+      removeFromCart, removeComboFromCart,
+      updateQuantity,
       totalItems, subtotal, shippingCredit, isCartOpen, setIsCartOpen,
     }}>
       {children}

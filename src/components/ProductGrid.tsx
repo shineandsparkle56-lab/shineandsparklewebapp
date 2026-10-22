@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutGrid, List, ArrowUpDown, Check, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutGrid, List, ArrowUpDown, Check, Sparkles, ChevronLeft, ChevronRight, Package2, ChevronRight as ArrowRight } from "lucide-react";
+import { supabase } from "../lib/supabase";
+import { imgUrl } from "../lib/imgUrl";
 import { useCategories } from "../context/CategoriesContext";
 import { useScroll } from "../context/ScrollContext";
 import { useInfiniteProducts, SortOrder } from "../hooks/useInfiniteProducts";
@@ -56,12 +58,12 @@ function LoadMoreSpinner() {
 // Shows 1 card when there's only 1 festival, auto-slides when there are multiple.
 const FEST_AUTO_PLAY_MS = 4500;
 
-function FestivalCarousel({ festivals }: { festivals: Festival[] }) {
-  const [index,  setIndex]  = useState(0);
+function FestivalCarousel({ festivals, noPadding = false }: { festivals: Festival[]; noPadding?: boolean }) {
+  const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
-  const isDragging  = useRef(false);
+  const isDragging = useRef(false);
   const [dragOffset, setDragOffset] = useState(0);
   const count = festivals.length;
 
@@ -74,13 +76,13 @@ function FestivalCarousel({ festivals }: { festivals: Festival[] }) {
     if (count <= 1 || paused) return;
     const t = setInterval(next, FEST_AUTO_PLAY_MS);
     return () => clearInterval(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [count, paused, index]);
 
   const onTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
-    isDragging.current  = false;
+    isDragging.current = false;
     setDragOffset(0);
     setPaused(true);
   };
@@ -108,7 +110,7 @@ function FestivalCarousel({ festivals }: { festivals: Festival[] }) {
 
   return (
     <div
-      className="px-3 sm:px-4 pb-1.5"
+      className={noPadding ? "pb-0" : "px-3 sm:px-4 pb-1.5"}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
@@ -122,7 +124,7 @@ function FestivalCarousel({ festivals }: { festivals: Festival[] }) {
         <div
           className="flex"
           style={{
-            transform:  `translateX(calc(${-index * 100}% + ${dragOffset}px))`,
+            transform: `translateX(calc(${-index * 100}% + ${dragOffset}px))`,
             transition: dragOffset !== 0 ? "none" : "transform 0.45s cubic-bezier(0.25, 1, 0.5, 1)",
             willChange: "transform",
           }}
@@ -208,14 +210,116 @@ function FestivalCarousel({ festivals }: { festivals: Festival[] }) {
             <button
               key={i}
               onClick={() => { setIndex(i); setPaused(true); setTimeout(() => setPaused(false), FEST_AUTO_PLAY_MS); }}
-              className={`rounded-full transition-all duration-300 ${
-                i === index ? "w-5 h-1.5 bg-[#9B6FD1]" : "w-1.5 h-1.5 bg-gray-300 hover:bg-gray-400"
-              }`}
+              className={`rounded-full transition-all duration-300 ${i === index ? "w-5 h-1.5 bg-[#9B6FD1]" : "w-1.5 h-1.5 bg-gray-300 hover:bg-gray-400"
+                }`}
               aria-label={`Go to ${festivals[i].name}`}
             />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── ComboBoxStrip ─────────────────────────────────────────────
+// Shows up to 2 active combo boxes as clickable cards + "See all" button.
+// Fetched fresh on mount; hidden entirely if no active boxes exist.
+interface ComboBoxPreview {
+  id: number;
+  name: string;
+  description: string;
+  box_image_url: string | null;
+  item_count: number;
+  box_price: number;
+}
+
+function ComboBoxStrip({ inline = false }: { inline?: boolean }) {
+  const [boxes, setBoxes] = useState<ComboBoxPreview[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    supabase
+      .from("combo_boxes")
+      .select("id, name, description, box_image_url, item_count, box_price")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: false })
+      .limit(2)
+      .then(({ data }) => { setBoxes((data ?? []) as ComboBoxPreview[]); setLoaded(true); });
+  }, []);
+
+  if (!loaded || boxes.length === 0) return null;
+
+  // Alternate card background colors (like Plix)
+  const cardBgs = [
+    "from-purple-100 to-pink-100",
+    "from-pink-100 to-orange-100",
+  ];
+
+  return (
+    <div className={`${inline ? "sm:flex-[2] min-w-0 flex flex-col gap-2" : "px-3 sm:px-4 pb-2 mt-1.5 flex flex-col gap-2"}`}>
+      {/* Section header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <Package2 className="w-4 h-4 text-[#9B6FD1]" />
+          <span className="text-sm font-bold text-gray-800">Build Your Own Box</span>
+        </div>
+        <a href="/combo" className="flex items-center gap-0.5 text-xs font-semibold text-[#9B6FD1] hover:underline">
+          See all <ArrowRight className="w-3.5 h-3.5" />
+        </a>
+      </div>
+
+      {/* Cards row — side by side if 2 boxes, single if 1 */}
+      <div className={`grid gap-3 ${boxes.length === 1 ? "grid-cols-1" : "grid-cols-2"} ${inline ? "flex-1" : ""}`}>
+        {boxes.map((box, idx) => (
+          <a
+            key={box.id}
+            href={`/combo/${box.id}`}
+            className="group relative rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-200 min-h-[140px]"
+          >
+            {/* Background image — full card */}
+            {box.box_image_url ? (
+              <img
+                src={imgUrl(box.box_image_url, "full")}
+                alt={box.name}
+                className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+            ) : (
+              <div className={`absolute inset-0 bg-gradient-to-br ${cardBgs[idx % cardBgs.length]}`} />
+            )}
+
+            {/* Full card dim overlay so text is always readable */}
+            <div className="absolute inset-0 bg-black/30" />
+
+            {/* Stronger gradient overlays top + bottom */}
+            <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-black/40 to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/50 to-transparent" />
+
+
+            {/* ── Content: vertically spread top to bottom ── */}
+            <div className="relative z-20 flex flex-col justify-between h-full px-3 py-3" style={{ minHeight: "140px" }}>
+              {/* Big offer text — top */}
+              <div>
+                <p className="text-white font-black leading-tight drop-shadow-lg"
+                  style={{ fontSize: "clamp(16px, 3.5vw, 22px)", textShadow: "0 2px 8px rgba(0,0,0,0.7)" }}>
+                  Buy any {box.item_count}
+                </p>
+                <p className="font-black leading-tight drop-shadow-lg"
+                  style={{ fontSize: "clamp(18px, 4vw, 26px)", textShadow: "0 2px 8px rgba(0,0,0,0.5)", color: "#F3EEFB" }}>
+                  ₹{box.box_price} Only
+                </p>
+              </div>
+
+              {/* Full-width purple CTA button — bottom */}
+              <div className="w-full py-2 rounded-xl bg-[#9B6FD1] group-hover:bg-[#8a5fc0] transition-colors flex items-center justify-center shadow-md">
+                <span className="text-white text-[11px] font-bold">
+                  Pick any {box.item_count} items 
+                </span>
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
     </div>
   );
 }
@@ -331,18 +435,17 @@ export function ProductGrid({ allCategoryImage }: { allCategoryImage?: string | 
         <div className="px-3 sm:px-4 py-2">
           {/* Row 1 — Parent category image tiles */}
           <div className="flex items-center gap-4 overflow-x-auto scrollbar-none pt-1 pb-2 pl-2 pr-1"
-               style={{ WebkitOverflowScrolling: "touch" }}>
+            style={{ WebkitOverflowScrolling: "touch" }}>
             {/* "All" tile */}
             <button
               data-testid="filter-tab-all"
               onClick={() => { setActiveCategory("all"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
               className="flex flex-col items-center gap-1.5 flex-shrink-0 focus:outline-none"
             >
-              <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 overflow-hidden ${
-                activeCategory === "all"
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 overflow-hidden ${activeCategory === "all"
                   ? "shadow-md shadow-purple-200 outline outline-2 outline-[#9B6FD1] outline-offset-2"
                   : "ring-1 ring-gray-200"
-              }`}>
+                }`}>
                 {allCategoryImage
                   ? <img src={allCategoryImage} alt="All" loading="lazy" className="w-10 h-10 object-contain" />
                   : <span className="text-xl">✨</span>
@@ -363,11 +466,10 @@ export function ProductGrid({ allCategoryImage }: { allCategoryImage?: string | 
                   onClick={() => { setActiveCategory(cat.name); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                   className="flex flex-col items-center gap-1.5 flex-shrink-0 focus:outline-none relative"
                 >
-                  <div className={`w-14 h-14 rounded-full overflow-hidden transition-all duration-200 flex items-center justify-center ${
-                    isActive
+                  <div className={`w-14 h-14 rounded-full overflow-hidden transition-all duration-200 flex items-center justify-center ${isActive
                       ? "shadow-md shadow-purple-200 outline outline-2 outline-[#9B6FD1] outline-offset-2"
                       : "ring-1 ring-gray-200"
-                  } ${cat.image_url ? "bg-white" : isActive ? "bg-[#9B6FD1]" : "bg-[#F3EEFB]"}`}>
+                    } ${cat.image_url ? "bg-white" : isActive ? "bg-[#9B6FD1]" : "bg-[#F3EEFB]"}`}>
                     {cat.image_url ? (
                       <img
                         src={cat.image_url}
@@ -379,9 +481,8 @@ export function ProductGrid({ allCategoryImage }: { allCategoryImage?: string | 
                       <span className="text-xl">💎</span>
                     )}
                   </div>
-                  <span className={`text-[11px] font-semibold leading-none w-16 text-center ${
-                    isActive ? "text-[#9B6FD1]" : "text-gray-500"
-                  }`} style={{ wordBreak: "break-word", whiteSpace: "normal", lineHeight: "1.2" }}>
+                  <span className={`text-[11px] font-semibold leading-none w-16 text-center ${isActive ? "text-[#9B6FD1]" : "text-gray-500"
+                    }`} style={{ wordBreak: "break-word", whiteSpace: "normal", lineHeight: "1.2" }}>
                     {cat.label}
                   </span>
                   {hasNew && (
@@ -409,11 +510,10 @@ export function ProductGrid({ allCategoryImage }: { allCategoryImage?: string | 
                       const parent = categories.find((c) => activeSubs[0] && c.id === activeSubs[0].parent_id);
                       if (parent) { setActiveCategory(parent.name); window.scrollTo({ top: 0, behavior: "smooth" }); }
                     }}
-                    className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-all border ${
-                      activeSubs.every((s) => s.name !== activeCategory)
+                    className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-all border ${activeSubs.every((s) => s.name !== activeCategory)
                         ? "bg-[#9B6FD1] text-white border-[#9B6FD1] shadow-sm"
                         : "bg-white text-gray-500 border-gray-200 hover:border-[#9B6FD1]/40 hover:text-[#9B6FD1]"
-                    }`}
+                      }`}
                   >
                     All
                   </button>
@@ -423,11 +523,10 @@ export function ProductGrid({ allCategoryImage }: { allCategoryImage?: string | 
                       <button
                         key={sub.id}
                         onClick={() => { setActiveCategory(sub.name); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                        className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all border ${
-                          isSubActive
+                        className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all border ${isSubActive
                             ? "bg-[#9B6FD1] text-white border-[#9B6FD1] shadow-sm"
                             : "bg-white text-gray-500 border-gray-200 hover:border-[#9B6FD1]/40 hover:text-[#9B6FD1]"
-                        }`}
+                          }`}
                       >
                         {sub.label}
                         {newCategories.has(sub.name) && (
@@ -448,11 +547,10 @@ export function ProductGrid({ allCategoryImage }: { allCategoryImage?: string | 
               <div className="relative" ref={sortRef}>
                 <button
                   onClick={() => setSortOpen((o) => !o)}
-                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-200 ${
-                    sortOrder !== "default"
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-200 ${sortOrder !== "default"
                       ? "bg-[#9B6FD1] text-white shadow-md"
                       : "bg-[#F3EEFB] text-gray-600 hover:text-[#9B6FD1]"
-                  }`}
+                    }`}
                   aria-label="Sort by price"
                 >
                   <ArrowUpDown className="w-3.5 h-3.5 shrink-0" />
@@ -460,8 +558,8 @@ export function ProductGrid({ allCategoryImage }: { allCategoryImage?: string | 
                     {sortOrder === "low-high"
                       ? "Low → High"
                       : sortOrder === "high-low"
-                      ? "High → Low"
-                      : "Sort"}
+                        ? "High → Low"
+                        : "Sort"}
                   </span>
                 </button>
 
@@ -484,9 +582,8 @@ export function ProductGrid({ allCategoryImage }: { allCategoryImage?: string | 
                           <button
                             key={opt}
                             onClick={() => { setSortOrder(opt); setSortOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                            className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${
-                              sortOrder === opt ? "text-[#9B6FD1] font-semibold bg-[#F3EEFB]" : "text-gray-600 hover:bg-gray-50"
-                            }`}
+                            className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${sortOrder === opt ? "text-[#9B6FD1] font-semibold bg-[#F3EEFB]" : "text-gray-600 hover:bg-gray-50"
+                              }`}
                           >
                             {labels[opt]}
                             {sortOrder === opt && <Check className="w-3.5 h-3.5 text-[#9B6FD1]" />}
@@ -498,12 +595,7 @@ export function ProductGrid({ allCategoryImage }: { allCategoryImage?: string | 
                 </AnimatePresence>
               </div>
 
-              {/* Product count */}
-              {!loading && products.length > 0 && (
-                <span className="text-xs text-gray-400 font-medium hidden sm:block">
-                  {products.length} products
-                </span>
-              )}
+
             </div>
 
             {/* View toggle — mobile only */}
@@ -534,10 +626,34 @@ export function ProductGrid({ allCategoryImage }: { allCategoryImage?: string | 
         style={{ paddingTop: filterBarHeight + 12 }}
       >
 
-        {/* ── Festival store carousel ───────────────────────────── */}
-        {activeFestivals.length > 0 && (
-          <FestivalCarousel festivals={activeFestivals} />
-        )}
+        {/* ── Festival + Combo row ──────────────────────────────── */}
+        {/* Desktop: side-by-side; Mobile: stacked */}
+        <div className="px-3 sm:px-4 pb-1.5 mt-0 flex flex-col sm:flex-row gap-3 items-stretch">
+
+          {/* Festival section — same heading pattern as Combo */}
+          {activeFestivals.length > 0 && (
+            <div className="flex-1 sm:flex-[3] min-w-0 flex flex-col gap-2">
+              {/* Section header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-[#9B6FD1]" />
+                  <span className="text-sm font-bold text-gray-800">Festival Store</span>
+                </div>
+                <a href={`/festival/${activeFestivals[0]?.slug ?? ""}`}
+                  className="flex items-center gap-0.5 text-xs font-semibold text-[#9B6FD1] hover:underline">
+                  See all <ArrowRight className="w-3.5 h-3.5" />
+                </a>
+              </div>
+              {/* Carousel fills remaining height */}
+              <div className="flex-1">
+                <FestivalCarousel festivals={activeFestivals} noPadding />
+              </div>
+            </div>
+          )}
+
+          {/* Combo box strip — takes 40% on desktop, full width on mobile */}
+          <ComboBoxStrip inline={activeFestivals.length > 0} />
+        </div>
 
         <div className="px-3 sm:px-4 pt-1.5">
           {loading && (

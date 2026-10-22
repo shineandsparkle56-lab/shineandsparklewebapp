@@ -280,32 +280,78 @@ export function OrdersTab() {
   const handleDownloadPDF = async (order: OrderRow) => {
     setDownloadingId(order.id);
     try {
-      const cartItems: CartItem[] = order.items.map((i) => ({
-        product: {
-          id: i.product.id, name: i.product.name,
-          category: i.product.category as Product["category"],
-          price: i.product.price, originalPrice: i.product.price,
-          discount: 0, image: i.product.image,
-          images: i.product.images ?? [i.product.image],
-          description: "", stock: 99, shipping_credit: 0, wholesale_price: 0, client_wholesale_price: 0, variants: [], tags: [], sizes: [],
-        },
-        quantity: i.quantity,
-        variantId:    (i as typeof i & { variant_id?: string }).variant_id ?? undefined,
-        variantLabel: (i as typeof i & { variant_label?: string }).variant_label ?? undefined,
-        variantImage: i.product.image,
-      }));
+      // Expand combo box items into individual slot CartItems for PDF
+      const cartItems: CartItem[] = order.items.flatMap((i) => {
+        if ((i.product as any).category === "combo-box") {
+          const slots: any[] = (i as any).combo_slots ?? [];
+          return slots.map((slot: any) => {
+            const live = products.find((p) => p.id === slot.product_id);
+            return {
+              product: {
+                id:                   slot.product_id,
+                name:                 slot.product_name ?? "",
+                category:             (live?.category ?? "jewellery") as Product["category"],
+                price:                live?.price ?? 0,           // real MRP for display
+                originalPrice:        live?.originalPrice ?? 0,
+                discount:             0,
+                image:                slot.image ?? "",
+                images:               [slot.image ?? ""],
+                description:          "",
+                stock:                99,
+                shipping_credit:      0,
+                wholesale_price:      live?.wholesale_price ?? 0,
+                client_wholesale_price: live?.client_wholesale_price ?? 0,
+                variants:             [],
+                tags:                 [],
+                sizes:                [],
+              },
+              quantity:     1,
+              variantId:    slot.variant_id    ?? undefined,
+              variantLabel: slot.variant_label ?? undefined,
+              variantImage: slot.image         ?? undefined,
+            };
+          });
+        }
+        return [{
+          product: {
+            id: i.product.id, name: i.product.name,
+            category: i.product.category as Product["category"],
+            price: i.product.price, originalPrice: i.product.price,
+            discount: 0, image: i.product.image,
+            images: i.product.images ?? [i.product.image],
+            description: "", stock: 99, shipping_credit: 0, wholesale_price: 0, client_wholesale_price: 0, variants: [], tags: [], sizes: [],
+          },
+          quantity: i.quantity,
+          variantId:    (i as typeof i & { variant_id?: string }).variant_id ?? undefined,
+          variantLabel: (i as typeof i & { variant_label?: string }).variant_label ?? undefined,
+          variantImage: i.product.image,
+        }];
+      });
+
+      // For combo orders: compute MRP sum so we can show a "Combo Discount" line
+      const isComboOrd = order.items.some((i) => (i.product as any).category === "combo-box");
+      const mrpSum = isComboOrd
+        ? cartItems.reduce((s, ci) => s + ci.product.price * ci.quantity, 0)
+        : order.subtotal;
+      const comboDiscount = isComboOrd ? Math.max(0, mrpSum - order.subtotal) : 0;
       const meta: OrderMeta = {
         customerName: order.customer_name, customerMobile: order.customer_mobile,
         customerAddress: order.customer_address, customerCity: order.customer_city,
         customerState: order.customer_state, pincode: order.pincode,
         paymentMode: order.payment_mode, shippingCharge: order.shipping_charge,
         codCharge: order.cod_charge, grandTotal: order.grand_total,
-        discountAmount: order.discount_amount ?? 0,
-        discountLabel: order.discount_type === "percent" && (order.discount_value ?? 0) > 0
-          ? `${order.discount_value}%`
-          : (order.discount_amount ?? 0) > 0 ? `₹${order.discount_amount}` : undefined,
+        // For combo orders: show combo discount; for regular orders: show order-level discount
+        discountAmount: comboDiscount > 0
+          ? comboDiscount
+          : (order.discount_amount ?? 0),
+        discountLabel: comboDiscount > 0
+          ? "Combo Deal"
+          : (order.discount_type === "percent" && (order.discount_value ?? 0) > 0
+              ? `${order.discount_value}%`
+              : (order.discount_amount ?? 0) > 0 ? `₹${order.discount_amount}` : undefined),
       };
-      const blob = await generateOrderPDF(cartItems, order.subtotal, meta);
+      // For combo: pass MRP sum as subtotal so item rows add up correctly
+      const blob = await generateOrderPDF(cartItems, isComboOrd ? mrpSum : order.subtotal, meta);
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
       a.href     = url;
@@ -319,13 +365,41 @@ export function OrdersTab() {
   const handleDownloadWholesalePDF = async (order: OrderRow) => {
     setWholesaleDownloadingId(order.id);
     try {
-      const cartItems: CartItem[] = order.items.map((i) => {
-        // client_wholesale_price is NOT stored in the order items snapshot —
-        // look it up from the live products list instead
+      const cartItems: CartItem[] = order.items.flatMap((i) => {
+        if ((i.product as any).category === "combo-box") {
+          const slots: any[] = (i as any).combo_slots ?? [];
+          return slots.map((slot: any) => {
+            const live = products.find((p) => p.id === slot.product_id);
+            return {
+              product: {
+                id:                   slot.product_id,
+                name:                 slot.product_name ?? "",
+                category:             (live?.category ?? "jewellery") as Product["category"],
+                price:                live?.price ?? 0,
+                originalPrice:        live?.originalPrice ?? 0,
+                discount:             0,
+                image:                slot.image ?? "",
+                images:               [slot.image ?? ""],
+                description:          "",
+                stock:                99,
+                shipping_credit:      0,
+                wholesale_price:      live?.wholesale_price ?? 0,
+                client_wholesale_price: live?.client_wholesale_price ?? 0,
+                variants:             [],
+                tags:                 [],
+                sizes:                [],
+              },
+              quantity:     1,
+              variantId:    slot.variant_id    ?? undefined,
+              variantLabel: slot.variant_label ?? undefined,
+              variantImage: slot.image         ?? undefined,
+            };
+          });
+        }
+        // Regular item
         const liveProduct = products.find((p) => p.id === i.product.id);
         const clientWprice = liveProduct?.client_wholesale_price ?? 0;
-
-        return {
+        return [{
           product: {
             id: i.product.id, name: i.product.name,
             category: i.product.category as Product["category"],
@@ -341,8 +415,12 @@ export function OrdersTab() {
           variantId:    (i as typeof i & { variant_id?: string }).variant_id ?? undefined,
           variantLabel: (i as typeof i & { variant_label?: string }).variant_label ?? undefined,
           variantImage: i.product.image,
-        };
+        }];
       });
+      const isComboOrdW = order.items.some((i) => (i.product as any).category === "combo-box");
+      const mrpSumW = isComboOrdW
+        ? cartItems.reduce((s, ci) => s + ci.product.price * ci.quantity, 0)
+        : order.subtotal;
       const meta: OrderMeta = {
         customerName: order.customer_name, customerMobile: order.customer_mobile,
         customerAddress: order.customer_address, customerCity: order.customer_city,
@@ -350,7 +428,7 @@ export function OrdersTab() {
         paymentMode: order.payment_mode, shippingCharge: order.shipping_charge,
         codCharge: order.cod_charge, grandTotal: order.grand_total,
       };
-      const blob = await generateWholesalePDF(cartItems, order.subtotal, meta);
+      const blob = await generateWholesalePDF(cartItems, isComboOrdW ? mrpSumW : order.subtotal, meta);
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
       a.href     = url;
@@ -495,6 +573,25 @@ export function OrdersTab() {
       const delta     = deducting ? -item.quantity : item.quantity;
       const variantId = (item as typeof item & { variant_id?: string | null }).variant_id;
       const pid       = item.product.id;
+
+      // ── Combo box item: iterate combo_slots for the real products ──
+      if ((item.product as any).category === "combo-box") {
+        const slots: any[] = (item as any).combo_slots ?? [];
+        for (const slot of slots) {
+          const slotPid = slot.product_id;
+          const slotVid = slot.variant_id ?? null;
+          if (!productChanges.has(slotPid)) {
+            productChanges.set(slotPid, { baseStockDelta: 0, variantDeltas: new Map() });
+          }
+          const slotEntry = productChanges.get(slotPid)!;
+          if (slotVid) {
+            slotEntry.variantDeltas.set(slotVid, (slotEntry.variantDeltas.get(slotVid) ?? 0) + (deducting ? -1 : 1));
+          } else {
+            slotEntry.baseStockDelta += (deducting ? -1 : 1);
+          }
+        }
+        continue;
+      }
 
       if (!productChanges.has(pid)) {
         productChanges.set(pid, { baseStockDelta: 0, variantDeltas: new Map() });
@@ -672,10 +769,29 @@ export function OrdersTab() {
               // Profit calc
               const PACKAGING = order.packaging_charge ?? 10;
               const isQuickOrder = order.items.length === 0;
-              // For quick orders use the manually entered wholesale cost; for normal orders sum from items
+
+              // Detect combo box orders — ANY item may be a combo (mixed carts supported)
+              const comboItems    = order.items.filter((i) => (i.product as any).category === "combo-box");
+              const hasCombo      = comboItems.length > 0;
+              const isComboOrder  = !isQuickOrder && hasCombo;  // true even in mixed cart
+
+              // Wholesale cost — sum combo slot costs + normal item costs
               const wholesaleCost = isQuickOrder
                 ? (order.wholesale_cost_override ?? 0)
-                : order.items.reduce((s, i) => s + (i.product.wholesale_price ?? 0) * i.quantity, 0);
+                : order.items.reduce((s, i) => {
+                    if ((i.product as any).category === "combo-box") {
+                      // sum wholesale_price of each slot via live products
+                      const slotCost = ((i as any).combo_slots ?? []).reduce(
+                        (ss: number, slot: any) => {
+                          const live = products.find((p) => p.id === slot.product_id);
+                          return ss + (live?.wholesale_price ?? 0);
+                        }, 0
+                      );
+                      return s + slotCost;
+                    }
+                    return s + (i.product.wholesale_price ?? 0) * i.quantity;
+                  }, 0);
+
               const rawShip = order.raw_shipping_charge ?? (isQuickOrder ? order.shipping_charge : 0);
               const rawCod  = order.raw_cod_charge ?? (order.payment_mode === "cod" ? (order.cod_charge ?? 0) : 0);
 
@@ -689,14 +805,21 @@ export function OrdersTab() {
 
               const profit  = order.grand_total - (wholesaleCost + rawShip + rawCod + PACKAGING + refCommission);
               const pct     = order.grand_total > 0 ? Math.round((profit / order.grand_total) * 100) : 0;
-              // Show profit for normal orders with shipping cost entered, OR quick orders with wholesale cost entered
+              // Show profit when shipping is entered (combo or normal) OR quick order has cost data
               const showProfit = isQuickOrder
                 ? (order.wholesale_cost_override ?? 0) > 0
-                : order.raw_shipping_charge != null && order.items.some((i) => (i.product.wholesale_price ?? 0) > 0);
+                : order.raw_shipping_charge != null &&
+                  (isComboOrder || order.items.some((i) => (i.product.wholesale_price ?? 0) > 0));
 
-              // Wholesale margin: W-Revenue (client_wholesale_price) − W-Cost (wholesale_price) − packaging − ref commission
-              // Shipping excluded — customer pays it separately
+              // Wholesale margin: W-Revenue (client_wholesale_price) − W-Cost − packaging − ref commission
+              // For combo items sum client_wholesale_price from slots; for regular items use live product
               const clientWholesaleRevenue = order.items.reduce((s, i) => {
+                if ((i.product as any).category === "combo-box") {
+                  return s + ((i as any).combo_slots ?? []).reduce((ss: number, slot: any) => {
+                    const live = products.find((p) => p.id === slot.product_id);
+                    return ss + (live?.client_wholesale_price ?? 0);
+                  }, 0);
+                }
                 const liveProduct = products.find((p) => p.id === i.product.id);
                 const cwp = liveProduct?.client_wholesale_price ?? 0;
                 return s + cwp * i.quantity;
@@ -741,6 +864,7 @@ export function OrdersTab() {
                         </span>
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md uppercase ${sm.color}`}>{sm.label}</span>
                         {isQuick && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-500 uppercase">Quick</span>}
+                        {isComboOrder && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-[#F3EEFB] text-[#9B6FD1] uppercase">Combo</span>}
                         {order.is_wholesale && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 uppercase">Wholesale</span>}
                         {order.awb_code && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-sky-100 text-sky-600">AWB: {order.awb_code}</span>}
                       </div>
@@ -893,31 +1017,61 @@ export function OrdersTab() {
 
                       {/* Items */}
                       {!isQuick && (() => {
-                        const ITEM_LIMIT = 6;
+                        const ITEM_LIMIT = 8;
                         const allItemsExpanded = expandedItemsIds.has(order.id);
-                        const visibleItems = allItemsExpanded ? order.items : order.items.slice(0, ITEM_LIMIT);
-                        const hiddenCount = order.items.length - ITEM_LIMIT;
+
+                        // Build a flat list of display chips — expand combo slots inline
+                        const chips: { key: string; image: string; name: string; sub?: string; isCombo?: boolean }[] = [];
+                        for (const item of order.items) {
+                          if ((item.product as any).category === "combo-box") {
+                            const slots: any[] = (item as any).combo_slots ?? [];
+                            slots.forEach((slot: any, si: number) => {
+                              chips.push({
+                                key:     `combo-${si}`,
+                                image:   slot.image ?? "",
+                                name:    slot.product_name ?? "Item",
+                                sub:     slot.variant_label ?? undefined,
+                                isCombo: true,
+                              });
+                            });
+                          } else {
+                            chips.push({
+                              key:   `item-${item.product.id}`,
+                              image: item.product.image ?? item.product.images?.[0] ?? "",
+                              name:  item.product.name,
+                              sub:   item.quantity > 1 ? `×${item.quantity}` : undefined,
+                            });
+                          }
+                        }
+
+                        const visibleChips = allItemsExpanded ? chips : chips.slice(0, ITEM_LIMIT);
+                        const hiddenCount  = chips.length - ITEM_LIMIT;
+
                         return (
                           <div>
                             <div className="flex flex-wrap gap-1.5">
-                              {visibleItems.map((item, i) => (
-                                <div key={i} className="flex items-center gap-1.5 bg-white border border-gray-100 rounded-lg px-2 py-1">
-                                  <img src={imgUrl(item.product.image ?? item.product.images?.[0], "tiny")} alt={item.product.name} className="w-6 h-6 rounded object-cover shrink-0" />
-                                  <span className="text-[11px] text-gray-700 font-medium max-w-[90px] truncate">{item.product.name}</span>
-                                  <span className="text-[11px] text-gray-400 shrink-0">×{item.quantity}</span>
+                              {visibleChips.map((chip) => (
+                                <div key={chip.key}
+                                  className={`flex items-center gap-1.5 rounded-lg px-2 py-1 border ${chip.isCombo ? "bg-white border-[#9B6FD1]/20" : "bg-white border-gray-100"}`}>
+                                  <img src={imgUrl(chip.image, "tiny")} alt={chip.name}
+                                    className="w-6 h-6 rounded object-cover shrink-0" />
+                                  <span className="text-[11px] text-gray-700 font-medium max-w-[90px] truncate">{chip.name}</span>
+                                  {chip.sub && (
+                                    <span className={`text-[10px] shrink-0 ${chip.isCombo ? "text-[#9B6FD1]" : "text-gray-400"}`}>
+                                      {chip.sub}
+                                    </span>
+                                  )}
                                 </div>
                               ))}
                               {!allItemsExpanded && hiddenCount > 0 && (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); toggleItems(order.id); }}
+                                <button onClick={(e) => { e.stopPropagation(); toggleItems(order.id); }}
                                   className="flex items-center gap-1 px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-500 text-[11px] font-semibold rounded-lg transition-colors">
                                   +{hiddenCount} more
                                 </button>
                               )}
                             </div>
                             {allItemsExpanded && hiddenCount > 0 && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); toggleItems(order.id); }}
+                              <button onClick={(e) => { e.stopPropagation(); toggleItems(order.id); }}
                                 className="mt-1.5 text-[11px] text-[#9B6FD1] hover:underline">
                                 Show less
                               </button>
@@ -925,6 +1079,7 @@ export function OrdersTab() {
                           </div>
                         );
                       })()}
+
 
                       {/* Totals */}
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">

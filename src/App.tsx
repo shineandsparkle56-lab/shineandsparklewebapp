@@ -25,6 +25,8 @@ import { TrackOrder } from "./pages/TrackOrder";
 import { FestivalStorePage } from "./pages/FestivalStorePage";
 import { ProductDetailPage } from "./pages/ProductDetailPage";
 import { ReferrerDashboard } from "./pages/ReferrerDashboard";
+import { ComboListingPage }  from "./pages/ComboListingPage";
+import { ComboBuilderPage }  from "./pages/ComboBuilderPage";
 import { FestivalsProvider } from "./context/FestivalsContext";
 
 const queryClient = new QueryClient();
@@ -86,7 +88,8 @@ function CartVisibility() {
   const { loading } = useSettings();
   const isAdmin   = path === "/admin" || path.startsWith("/admin/");
   const isRefPage = path.startsWith("/ref/");
-  if (isAdmin || isRefPage || loading) return null;
+  const isCombo   = path === "/combo" || path.startsWith("/combo/");
+  if (isAdmin || isRefPage || isCombo || loading) return null;
   return (
     <>
       <CartDrawer />
@@ -143,6 +146,15 @@ function AppRouter() {
   if (path.startsWith("/ref/")) {
     const refCode = path.replace("/ref/", "").split("/")[0].toUpperCase();
     return <ReferrerDashboard code={refCode} />;
+  }
+
+  // Combo box listing — /combo
+  if (path === "/combo") return <ComboListingPage />;
+
+  // Combo box builder — /combo/:id
+  if (path.startsWith("/combo/")) {
+    const comboId = path.replace("/combo/", "").split("/")[0];
+    return <ComboBuilderPage comboId={comboId} />;
   }
 
   const productId = path.startsWith("/product/") ? Number(path.split("/")[2]) : null;

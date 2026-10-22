@@ -53,7 +53,7 @@ import moment from "moment";
 import { apiUrl } from "../lib/apiUrl";
 
 export function CartDrawer() {
-  const { isCartOpen, setIsCartOpen, cart, removeFromCart, updateQuantity, subtotal, totalItems, shippingCredit } = useCart();
+  const { isCartOpen, setIsCartOpen, cart, removeFromCart, removeComboFromCart, updateQuantity, subtotal, totalItems, shippingCredit } = useCart();
   const { codEnabled, minOrderValue, defaultPickupPincodes, localDeliveryZones } = useSettings();
 
   // Step state
@@ -212,6 +212,14 @@ export function CartDrawer() {
     setCheckingOut(true);
     const lines = cart
       .map((i) => {
+        // Combo box item
+        if (i.itemType === "combo") {
+          const slotLines = (i.comboSlots ?? [])
+            .map((s, idx) => `  ${idx + 1}. ${s.product.name}${s.variantLabel ? ` (${s.variantLabel})` : ""}`)
+            .join("\n");
+          return `*${i.comboBoxName}* (Build Your Box · ${i.comboSlots?.length ?? 0} items) - Rs. ${i.comboBoxPrice}\n${slotLines}`;
+        }
+        // Regular item
         const variant = i.variantId ? i.product.variants?.find((v) => v.id === i.variantId) : undefined;
         const price = (variant?.price ?? i.product.price) * i.quantity;
         const variantStr = i.variantLabel ? ` (${i.variantLabel})` : "";
@@ -239,6 +247,34 @@ export function CartDrawer() {
     try {
       await supabase.from("orders").insert({
         items: cart.map((item) => {
+          // Combo box item — store as a special item with sub-slots
+          if (item.itemType === "combo") {
+            return {
+              product: {
+                id:              item.comboBoxId ?? 0,
+                name:            item.comboBoxName ?? "",
+                category:        "combo-box",
+                price:           item.comboBoxPrice ?? 0,
+                original_price:  item.comboBoxPrice ?? 0,
+                discount:        0,
+                wholesale_price: 0,
+                shipping_credit: 0,
+                image:           item.product.image,
+                images:          item.product.images ?? [],
+              },
+              quantity:      1,
+              variant_id:    null,
+              variant_label: null,
+              combo_slots:   (item.comboSlots ?? []).map((s) => ({
+                product_id:    s.product.id,
+                product_name:  s.product.name,
+                variant_id:    s.variantId ?? null,
+                variant_label: s.variantLabel ?? null,
+                image:         s.variantImage ?? s.product.image,
+              })),
+            };
+          }
+          // Regular item
           const variant = item.variantId ? item.product.variants?.find((v) => v.id === item.variantId) : undefined;
           return {
             product: {
@@ -360,7 +396,77 @@ export function CartDrawer() {
                     <div className="px-4 pt-4 pb-2 space-y-3">
                       <AnimatePresence initial={false}>
                         {cart.map((item) => {
-                          const itemKey = cartItemKey(item);
+                          const itemKey = item.comboCartKey ?? cartItemKey(item);
+
+                          // ── Combo box card ───────────────────────────────
+                          if (item.itemType === "combo") {
+                            return (
+                              <motion.div
+                                key={itemKey}
+                                initial={{ opacity: 0, x: 24 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 24, height: 0 }}
+                                transition={{ duration: 0.22, ease: "easeOut" }}
+                                className="bg-[#F3EEFB]/70 rounded-2xl p-3 relative border border-[#9B6FD1]/20"
+                              >
+                                {/* Remove button */}
+                                <button
+                                  onClick={() => removeComboFromCart(itemKey)}
+                                  className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center text-gray-300 hover:text-red-400 transition-colors"
+                                  aria-label={`Remove ${item.comboBoxName}`}
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+
+                                {/* Header row */}
+                                <div className="flex items-start gap-3 pr-6">
+                                  {item.product.image ? (
+                                    <img
+                                      src={imgUrl(item.product.image, "full")}
+                                      alt={item.comboBoxName}
+                                      className="w-14 h-14 object-cover rounded-xl flex-shrink-0"
+                                    />
+                                  ) : (
+                                    <div className="w-14 h-14 rounded-xl bg-[#9B6FD1]/10 flex items-center justify-center shrink-0">
+                                      <Gift className="w-6 h-6 text-[#9B6FD1]" />
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-serif text-gray-900 text-sm font-semibold leading-snug">
+                                      {item.comboBoxName}
+                                    </p>
+                                    <span className="inline-block text-[10px] font-bold text-[#9B6FD1] bg-white border border-[#9B6FD1]/20 px-2 py-0.5 rounded-full mt-0.5">
+                                      Build Your Box · {item.comboSlots?.length ?? 0} items
+                                    </span>
+                                    <p className="text-base font-bold text-gray-900 mt-1">₹{item.comboBoxPrice}</p>
+                                  </div>
+                                </div>
+
+                                {/* Sub-items list */}
+                                {(item.comboSlots ?? []).length > 0 && (
+                                  <div className="mt-2.5 space-y-1.5 pl-1">
+                                    {(item.comboSlots ?? []).map((slot, si) => (
+                                      <div key={si} className="flex items-center gap-2">
+                                        <img
+                                          src={imgUrl(slot.variantImage ?? slot.product.image, "full")}
+                                          alt={slot.product.name}
+                                          className="w-8 h-8 rounded-lg object-cover shrink-0 border border-white"
+                                        />
+                                        <div className="min-w-0">
+                                          <p className="text-[11px] text-gray-700 font-medium truncate">{slot.product.name}</p>
+                                          {slot.variantLabel && (
+                                            <p className="text-[10px] text-[#9B6FD1]">{slot.variantLabel}</p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </motion.div>
+                            );
+                          }
+
+                          // ── Regular item card ────────────────────────────
                           const variant = item.variantId
                             ? item.product.variants?.find((v) => v.id === item.variantId)
                             : undefined;
