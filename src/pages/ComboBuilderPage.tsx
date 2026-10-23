@@ -14,7 +14,7 @@ import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft, ChevronRight, Package2, CheckCircle2, Loader2, X,
-  ShoppingBag, Minus, Plus, LayoutGrid, List,
+  ShoppingBag, Minus, Plus, LayoutGrid, List, RotateCcw,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useProducts } from "../context/ProductsContext";
@@ -48,10 +48,10 @@ interface ComboProductCardProps {
   canAdd:     boolean;
   onAdd:      (product: Product, variant?: ProductVariant) => void;
   onMinus:    (product: Product, variant?: ProductVariant) => void;
-  onPickColor:(productId: number) => void;
+  onViewDetail:(product: Product) => void;
 }
 
-function ComboProductCard({ product, view, selEntry, canAdd, onAdd, onMinus, onPickColor }: ComboProductCardProps) {
+function ComboProductCard({ product, view, selEntry, canAdd, onAdd, onMinus, onViewDetail }: ComboProductCardProps) {
   const [imgIndex,   setImgIndex]   = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
   const isDragging   = useRef(false);
@@ -195,7 +195,6 @@ function ComboProductCard({ product, view, selEntry, canAdd, onAdd, onMinus, onP
             </>}
             {product.discount > 0 && <div className="absolute top-3 left-3 z-10 bg-[#9B6FD1] text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase pointer-events-none">{product.discount}% OFF</div>}
             {isNew && <div className="absolute top-3 right-3 z-10 bg-emerald-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase pointer-events-none">New</div>}
-            {qty > 0 && <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 bg-[#9B6FD1] text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow whitespace-nowrap">{qty} in box</div>}
             {noStock && <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none"><span className="bg-black/70 text-white text-xs font-bold px-3 py-1.5 rounded-full">Out of Stock</span></div>}
           </div>
           {/* Info + controls */}
@@ -209,7 +208,7 @@ function ComboProductCard({ product, view, selEntry, canAdd, onAdd, onMinus, onP
               {hasVariants && <p className="text-[10px] text-[#9B6FD1] font-semibold mt-0.5">{product.variants.length} colors available</p>}
             </div>
             <ComboCardControls product={product} qty={qty} canAdd={canAdd} noStock={noStock}
-              hasVariants={hasVariants} onAdd={onAdd} onMinus={onMinus} onPickColor={onPickColor} />
+              hasVariants={hasVariants} onAdd={onAdd} onMinus={onMinus} onViewDetail={onViewDetail} />
           </div>
         </div>
         {/* Pinch zoom overlay */}
@@ -231,7 +230,8 @@ function ComboProductCard({ product, view, selEntry, canAdd, onAdd, onMinus, onP
           style={{ touchAction: "pan-y" }}
           onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
           {/* Sliding strip */}
-          <div className="absolute inset-0 flex" style={stripStyle}>
+          <div className="absolute inset-0 flex" style={stripStyle}
+            onClick={() => !isDragging.current && onViewDetail(product)}>
             {images.map((src, i) => (
               <div key={src} className="relative flex-shrink-0 w-full h-full">
                 <img src={src} alt={`${product.name} ${i + 1}`} draggable={false}
@@ -257,11 +257,6 @@ function ComboProductCard({ product, view, selEntry, canAdd, onAdd, onMinus, onP
           {/* Badges */}
           {product.discount > 0 && <div className="absolute top-2 left-2 z-10 bg-[#9B6FD1] text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase pointer-events-none">{product.discount}% OFF</div>}
           {isNew && <div className="absolute top-2 right-2 z-10 bg-emerald-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase pointer-events-none">New</div>}
-          {qty > 0 && (
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 bg-[#9B6FD1] text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow whitespace-nowrap">
-              {qty} in box
-            </div>
-          )}
           {noStock && <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none"><span className="bg-black/70 text-white text-[9px] font-bold px-2.5 py-1 rounded-full">Out of Stock</span></div>}
         </div>
         {/* Info + controls */}
@@ -275,7 +270,7 @@ function ComboProductCard({ product, view, selEntry, canAdd, onAdd, onMinus, onP
             {hasVariants && <p className="text-[10px] text-[#9B6FD1] font-semibold mt-0.5">{product.variants.length} colors</p>}
           </div>
           <ComboCardControls product={product} qty={qty} canAdd={canAdd} noStock={noStock}
-            hasVariants={hasVariants} onAdd={onAdd} onMinus={onMinus} onPickColor={onPickColor} />
+            hasVariants={hasVariants} onAdd={onAdd} onMinus={onMinus} onViewDetail={onViewDetail} />
         </div>
       </div>
       {/* Pinch zoom overlay */}
@@ -286,14 +281,14 @@ function ComboProductCard({ product, view, selEntry, canAdd, onAdd, onMinus, onP
 }
 
 // ─── ComboCardControls ────────────────────────────────────────
-function ComboCardControls({ product, qty, canAdd, noStock, hasVariants, onAdd, onMinus, onPickColor }: {
+function ComboCardControls({ product, qty, canAdd, noStock, hasVariants, onAdd, onMinus, onViewDetail }: {
   product: Product; qty: number; canAdd: boolean; noStock: boolean;
   hasVariants: boolean; onAdd: (p: Product, v?: ProductVariant) => void;
-  onMinus: (p: Product, v?: ProductVariant) => void; onPickColor: (id: number) => void;
+  onMinus: (p: Product, v?: ProductVariant) => void; onViewDetail: (p: Product) => void;
 }) {
   if (hasVariants) {
     return (
-      <button onClick={() => !noStock && onPickColor(product.id)}
+      <button onClick={() => !noStock && onViewDetail(product)}
         disabled={noStock}
         className={`w-full py-1.5 rounded-xl text-[11px] font-bold border-2 transition-all ${
           qty > 0 ? "border-[#9B6FD1] bg-[#9B6FD1] text-white"
@@ -330,6 +325,310 @@ function ComboCardControls({ product, qty, canAdd, noStock, hasVariants, onAdd, 
         <Plus className="w-3.5 h-3.5" />
       </button>
     </div>
+  );
+}
+
+// ─── ComboProductDetailOverlay ────────────────────────────────
+// Full-screen product detail view inside the combo builder.
+// Shows image carousel, variant swatches (same as ProductDetailPage),
+// description, return policy — with +/- combo qty controls at the bottom.
+interface ComboDetailProps {
+  product:       Product;
+  selection:     Record<SelectionKey, SelectionEntry>;
+  remaining:     number;
+  allowDuplicates: boolean;
+  onAdd:   (p: Product, v?: ProductVariant) => void;
+  onMinus: (p: Product, v?: ProductVariant) => void;
+  onClose: () => void;
+}
+
+function ComboProductDetailOverlay({
+  product, selection, remaining, allowDuplicates, onAdd, onMinus, onClose,
+}: ComboDetailProps) {
+  const hasVariants = (product.variants?.length ?? 0) > 0;
+
+  // Build allVariants same as ProductDetailPage
+  const allVariants = hasVariants ? [
+    {
+      id: "__base",
+      label: product.base_variant_label || "Default",
+      images: product.images?.length ? product.images : [product.image],
+      stock: product.stock,
+      color: product.base_variant_color,
+      price: undefined as number | undefined,
+    },
+    ...(product.variants ?? []),
+  ] : [];
+
+  const firstInStockId = allVariants.find((v) => v.stock > 0)?.id ?? "__base";
+  const [selectedVId, setSelectedVId] = useState<string>(firstInStockId);
+  const selectedVariant = allVariants.find((v) => v.id === selectedVId);
+
+  // Images for selected variant
+  const baseImages = (product.images?.length ? product.images : [product.image]).map((u) => imgUrl(u, "full"));
+  const images = (selectedVariant && selectedVariant.id !== "__base" && (selectedVariant as ProductVariant & { images: string[] }).images?.length)
+    ? (selectedVariant as ProductVariant & { images: string[] }).images.map((u: string) => imgUrl(u, "full"))
+    : baseImages;
+
+  const [activeImg, setActiveImg] = useState(0);
+  const [dragOffset, setDragOffset] = useState(0);
+  const isDragging  = useRef(false);
+  const dragStartX  = useRef<number | null>(null);
+  const dragStartY  = useRef<number | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  const stock       = (selectedVariant as ProductVariant)?.stock ?? product.stock;
+  const outOfStock  = stock <= 0;
+  const displayPrice = (selectedVariant as ProductVariant)?.price ?? product.price;
+
+  // Get current qty for this product+variant in selection
+  const realVariantId = selectedVId === "__base" ? undefined : selectedVId;
+  const selKey = makeKey(product.id, realVariantId);
+  const qty    = selection[selKey]?.qty ?? 0;
+
+  // Can add more?
+  const atStockMax  = qty >= stock;
+  const atSlotMax   = remaining === 0 && qty === 0;
+  const atDupMax    = !allowDuplicates && qty > 0;
+  const canAdd      = !outOfStock && !atStockMax && !atSlotMax && !atDupMax;
+
+  // Touch swipe
+  const getDist = (t: React.TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const getMid  = (t: React.TouchList) => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 });
+  const [pinchZoom, setPinchZoom] = useState(1);
+  const [pinchPan,  setPinchPan]  = useState({ x: 0, y: 0 });
+  const [pinchRect, setPinchRect] = useState<DOMRect | null>(null);
+  const [pinchOrigin, setPinchOrigin] = useState({ x: 0, y: 0 });
+  const pinchStartDist = useRef<number | null>(null);
+  const pinchStartMid  = useRef({ x: 0, y: 0 });
+  const isPinching = pinchZoom > 1;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      pinchStartDist.current = getDist(e.touches);
+      const mid = getMid(e.touches);
+      pinchStartMid.current = mid; setPinchOrigin(mid); setPinchPan({ x: 0, y: 0 });
+      if (containerRef.current) setPinchRect(containerRef.current.getBoundingClientRect());
+      dragStartX.current = null; return;
+    }
+    dragStartX.current = e.touches[0].clientX; dragStartY.current = e.touches[0].clientY;
+    isDragging.current = false; setDragOffset(0);
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pinchStartDist.current !== null) {
+      const scale = Math.max(1, Math.min(3, getDist(e.touches) / pinchStartDist.current));
+      const mid   = getMid(e.touches);
+      setPinchZoom(scale); setPinchPan({ x: mid.x - pinchStartMid.current.x, y: mid.y - pinchStartMid.current.y });
+      e.preventDefault(); return;
+    }
+    if (pinchZoom > 1 || dragStartX.current === null || dragStartY.current === null) return;
+    const dx = e.touches[0].clientX - dragStartX.current;
+    const dy = e.touches[0].clientY - dragStartY.current;
+    if (!isDragging.current) { if (Math.abs(dx) < Math.abs(dy)) return; isDragging.current = true; }
+    const atStart = activeImg === 0 && dx > 0; const atEnd = activeImg === images.length - 1 && dx < 0;
+    setDragOffset(atStart || atEnd ? dx * 0.25 : dx);
+  };
+  const onTouchEnd = () => {
+    if (pinchStartDist.current !== null) { pinchStartDist.current = null; setPinchZoom(1); setPinchPan({ x: 0, y: 0 }); setPinchRect(null); return; }
+    if (isDragging.current) {
+      if (dragOffset < -50 && activeImg < images.length - 1) setActiveImg((i) => i + 1);
+      else if (dragOffset > 50 && activeImg > 0)             setActiveImg((i) => i - 1);
+    }
+    setDragOffset(0); setTimeout(() => { isDragging.current = false; }, 0); dragStartX.current = null;
+  };
+
+  const stripStyle: React.CSSProperties = {
+    transform:  `translateX(calc(${-(activeImg * 100)}% + ${dragOffset}px))`,
+    transition: dragOffset !== 0 ? "none" : "transform 0.3s cubic-bezier(0.25,1,0.5,1)",
+    willChange: "transform",
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+        transition={{ type: "spring", stiffness: 320, damping: 32 }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col"
+        style={{ maxHeight: "92vh" }}
+      >
+        {/* ── Sticky header ── */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
+          <div className="min-w-0">
+            <p className="font-semibold text-gray-800 truncate text-sm">{product.name}</p>
+            <p className="text-[11px] text-gray-400 capitalize">{product.category}</p>
+          </div>
+          <button onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 shrink-0 ml-3">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* ── Scrollable body ── */}
+        <div className="flex-1 overflow-y-auto">
+
+          {/* Image carousel */}
+          <div ref={containerRef}
+            className="relative w-full aspect-square bg-gray-50 overflow-hidden select-none"
+            style={{ touchAction: "pan-y" }}
+            onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+            <div className="absolute inset-0 flex" style={stripStyle}>
+              {images.map((src, i) => (
+                <div key={src} className="relative flex-shrink-0 w-full h-full">
+                  <img src={src} alt={`${product.name} ${i + 1}`} draggable={false}
+                    className="absolute inset-0 w-full h-full object-contain object-center" />
+                </div>
+              ))}
+            </div>
+            {images.length > 1 && <>
+              <button onClick={(e) => { e.stopPropagation(); setActiveImg((i) => (i - 1 + images.length) % images.length); }}
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-white/80 shadow hover:bg-white">
+                <ChevronLeft className="w-4 h-4 text-gray-700" />
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); setActiveImg((i) => (i + 1) % images.length); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-white/80 shadow hover:bg-white">
+                <ChevronRight className="w-4 h-4 text-gray-700" />
+              </button>
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex gap-1">
+                {images.map((_, i) => (
+                  <button key={i} onClick={(e) => { e.stopPropagation(); setActiveImg(i); }}
+                    className={`rounded-full transition-all duration-200 ${i === activeImg ? "w-4 h-1.5 bg-[#9B6FD1]" : "w-1.5 h-1.5 bg-white/70 hover:bg-white"}`} />
+                ))}
+              </div>
+            </>}
+            {product.discount > 0 && <div className="absolute top-3 left-3 z-10 bg-[#9B6FD1] text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase pointer-events-none">{product.discount}% OFF</div>}
+          </div>
+
+          {/* Detail */}
+          <div className="p-4 space-y-4">
+            {/* Price */}
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="text-2xl font-bold text-gray-900">₹{displayPrice}</span>
+              {product.originalPrice > displayPrice && <>
+                <span className="text-sm text-gray-400 line-through">₹{product.originalPrice}</span>
+                <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                  Save ₹{product.originalPrice - displayPrice}
+                </span>
+              </>}
+            </div>
+
+            {/* Variant swatches */}
+            {hasVariants && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2.5">
+                  Style: <span className="text-[#9B6FD1] normal-case font-bold">{selectedVariant?.label}</span>
+                </p>
+                <div className="flex flex-wrap gap-x-4 gap-y-3">
+                  {allVariants.filter((v) => v.stock > 0).map((v) => {
+                    const isSelected = v.id === selectedVId;
+                    const vKey = makeKey(product.id, v.id === "__base" ? undefined : v.id);
+                    const vQty = selection[vKey]?.qty ?? 0;
+                    return (
+                      <button key={v.id}
+                        onClick={() => { setSelectedVId(v.id); setActiveImg(0); setDragOffset(0); }}
+                        className="relative flex flex-col items-center gap-1.5 w-14 transition-all duration-200">
+                        <div
+                          style={{ backgroundColor: v.color || "#e5e7eb" }}
+                          className={`w-11 h-11 rounded-full border-[3px] transition-all duration-200 ${
+                            isSelected ? "border-[#9B6FD1] shadow-lg shadow-[#9B6FD1]/30 scale-110" : "border-white ring-1 ring-gray-200 hover:ring-[#9B6FD1] hover:scale-105"
+                          }`}
+                        />
+                        <span className={`text-[10px] font-semibold text-center leading-tight break-words w-full ${isSelected ? "text-[#9B6FD1]" : "text-gray-500"}`}>
+                          {v.label}
+                        </span>
+                        {vQty > 0 && (
+                          <span className="absolute top-0 right-1 w-4 h-4 bg-[#9B6FD1] rounded-full flex items-center justify-center shadow text-white text-[9px] font-black">
+                            {vQty}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Description */}
+            {product.description && (
+              <p className="text-sm text-gray-500 leading-relaxed">{product.description}</p>
+            )}
+
+            {/* Return policy */}
+            <div className="rounded-2xl bg-[#F3EEFB] px-4 py-3 text-xs text-gray-600">
+              <p className="font-semibold text-gray-800 mb-1 flex items-center gap-1.5">
+                <RotateCcw className="w-3.5 h-3.5 text-[#9B6FD1]" /> Return Policy
+              </p>
+              <p>Received a defective or wrong item? We'll give you a full refund or replacement.</p>
+            </div>
+
+            {/* Spacer for sticky footer */}
+            <div className="h-4" />
+          </div>
+        </div>
+
+        {/* ── Sticky footer: combo qty controls ── */}
+        <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
+          {outOfStock ? (
+            <div className="w-full py-3 rounded-2xl bg-gray-100 text-gray-400 text-sm font-semibold text-center">
+              Out of Stock
+            </div>
+          ) : qty === 0 ? (
+            <button
+              onClick={() => { onAdd(product, realVariantId ? product.variants.find((v) => v.id === realVariantId) : undefined); }}
+              disabled={!canAdd}
+              className={`w-full py-3 rounded-2xl text-sm font-bold transition-all ${
+                canAdd
+                  ? "bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white shadow-md shadow-purple-200"
+                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}>
+              {atSlotMax ? "Box is full" : atDupMax ? "Already added (duplicates off)" : "+ Add to Box"}
+            </button>
+          ) : (
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3 bg-[#F3EEFB] rounded-2xl px-4 py-2.5 flex-1 justify-between">
+                <button onClick={() => onMinus(product, realVariantId ? product.variants.find((v) => v.id === realVariantId) : undefined)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white text-[#9B6FD1] transition-colors">
+                  <Minus className="w-4 h-4" />
+                </button>
+                <span className="text-base font-bold text-[#9B6FD1] min-w-[24px] text-center">{qty}</span>
+                <button onClick={() => canAdd && onAdd(product, realVariantId ? product.variants.find((v) => v.id === realVariantId) : undefined)}
+                  disabled={!canAdd}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white text-[#9B6FD1] transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+              <button onClick={onClose}
+                className="shrink-0 px-5 py-2.5 bg-[#9B6FD1] text-white text-sm font-bold rounded-2xl hover:bg-[#8a5fc0] transition-colors">
+                Done
+              </button>
+            </div>
+          )}
+          {remaining === 0 && qty === 0 && (
+            <p className="text-center text-xs text-amber-600 font-medium mt-2">Box is full — remove an item first</p>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Pinch zoom overlay */}
+      {isPinching && pinchRect && (
+        <div className="fixed inset-0 z-[9999] pointer-events-none" style={{ background: "rgba(0,0,0,0.45)" }}>
+          <div style={{
+            position: "absolute", left: pinchRect.left, top: pinchRect.top,
+            width: pinchRect.width, height: pinchRect.height,
+            transformOrigin: `${pinchOrigin.x - pinchRect.left}px ${pinchOrigin.y - pinchRect.top}px`,
+            transform: `translate(${pinchPan.x}px, ${pinchPan.y}px) scale(${pinchZoom})`,
+            overflow: "hidden", willChange: "transform",
+          }}>
+            <img src={images[activeImg]} alt={product.name}
+              style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center", display: "block" }} />
+          </div>
+        </div>
+      )}
+    </motion.div>
   );
 }
 
@@ -373,8 +672,11 @@ export function ComboBuilderPage({ comboId }: { comboId: string }) {
   // selection: key → { product, variant?, qty }
   const [selection, setSelection] = useState<Record<SelectionKey, SelectionEntry>>({});
 
-  // Variant picker bottom sheet
+  // Variant picker bottom sheet — legacy (now replaced by detail overlay for variants)
   const [variantPickFor, setVariantPickFor] = useState<number | null>(null);
+
+  // Product detail overlay
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null);
 
   // ── Load box ──────────────────────────────────────────────
   useEffect(() => {
@@ -603,7 +905,7 @@ export function ComboBuilderPage({ comboId }: { comboId: string }) {
                     canAdd={canAdd}
                     onAdd={handleAdd}
                     onMinus={handleMinus}
-                    onPickColor={setVariantPickFor}
+                    onViewDetail={setDetailProduct}
                   />
                 );
               })}
@@ -612,98 +914,18 @@ export function ComboBuilderPage({ comboId }: { comboId: string }) {
         )}
       </div>
 
-      {/* ── Variant picker bottom sheet ── */}
+      {/* ── Product detail overlay ── */}
       <AnimatePresence>
-        {variantPickProduct && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-40" onClick={() => setVariantPickFor(null)}>
-            <motion.div
-              initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-              transition={{ type: "spring", stiffness: 340, damping: 30 }}
-              onClick={(e) => e.stopPropagation()}
-              className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl p-5 max-h-[80vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="font-semibold text-gray-800">{variantPickProduct.name}</p>
-                  <p className="text-xs text-gray-400">Choose a color / style · {remaining > 0 ? `${remaining} slot${remaining !== 1 ? "s" : ""} left` : "Box full"}</p>
-                </div>
-                <button onClick={() => setVariantPickFor(null)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {variantPickProduct.variants.map((v) => {
-                  const key        = makeKey(variantPickProduct.id, v.id);
-                  const vQty       = selection[key]?.qty ?? 0;
-                  const outOfStock = v.stock <= 0;
-                  const atMax      = vQty >= v.stock || (!box.allow_duplicates && vQty > 0);
-                  const cantAdd    = remaining === 0 && vQty === 0;
-                  return (
-                    <div key={v.id}
-                      className={`relative rounded-2xl border overflow-hidden transition-all ${
-                        outOfStock ? "border-gray-100 opacity-40"
-                        : vQty > 0 ? "border-[#9B6FD1] ring-1 ring-[#9B6FD1]/20"
-                        : "border-gray-100 hover:border-[#9B6FD1]/60"
-                      }`}>
-                      <div className="aspect-square bg-gray-50">
-                        {v.images?.[0] ? (
-                          <img src={imgUrl(v.images[0], "full")} alt={v.label} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <span className="w-10 h-10 rounded-full border-2 border-white shadow"
-                              style={{ backgroundColor: v.color ?? "#e5e7eb" }} />
-                          </div>
-                        )}
-                        {outOfStock && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-white/60">
-                            <span className="text-[10px] font-bold text-gray-500">Out of stock</span>
-                          </div>
-                        )}
-                        {vQty > 0 && (
-                          <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-[#9B6FD1] rounded-full flex items-center justify-center shadow">
-                            <span className="text-white text-[9px] font-black">{vQty}</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-2">
-                        <p className="text-xs font-medium text-gray-700 truncate">{v.label}</p>
-                        {!outOfStock && (
-                          vQty === 0 ? (
-                            <button
-                              onClick={() => !cantAdd && handleAdd(variantPickProduct, v)}
-                              disabled={cantAdd}
-                              className={`mt-1 w-full py-1 rounded-lg text-[10px] font-bold transition-colors ${
-                                cantAdd ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-[#F3EEFB] text-[#9B6FD1] hover:bg-[#9B6FD1] hover:text-white"
-                              }`}>
-                              + Add
-                            </button>
-                          ) : (
-                            <div className="mt-1 flex items-center justify-between bg-[#F3EEFB] rounded-lg px-1.5 py-0.5">
-                              <button onClick={() => handleMinus(variantPickProduct, v)}
-                                className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-white text-[#9B6FD1]">
-                                <Minus className="w-3 h-3" />
-                              </button>
-                              <span className="text-xs font-bold text-[#9B6FD1]">{vQty}</span>
-                              <button onClick={() => !atMax && remaining > 0 && handleAdd(variantPickProduct, v)}
-                                disabled={atMax || remaining === 0}
-                                className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-white text-[#9B6FD1] disabled:opacity-30 disabled:cursor-not-allowed">
-                                <Plus className="w-3 h-3" />
-                              </button>
-                            </div>
-                          )
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <button onClick={() => setVariantPickFor(null)}
-                className="mt-4 w-full py-3 bg-[#9B6FD1] text-white font-semibold rounded-2xl">
-                Done
-              </button>
-            </motion.div>
-          </motion.div>
+        {detailProduct && (
+          <ComboProductDetailOverlay
+            product={detailProduct}
+            selection={selection}
+            remaining={remaining}
+            allowDuplicates={box.allow_duplicates}
+            onAdd={handleAdd}
+            onMinus={handleMinus}
+            onClose={() => setDetailProduct(null)}
+          />
         )}
       </AnimatePresence>
 
