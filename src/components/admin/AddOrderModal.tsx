@@ -86,6 +86,7 @@ export function AddOrderModal({ open, onClose, onCreated, onError }: Props) {
             original_price: p.originalPrice,
             discount: p.discount,
             wholesale_price: p.wholesale_price,
+            client_wholesale_price: p.client_wholesale_price,
             shipping_credit: p.shipping_credit,
             image: p.images?.[0] ?? p.image,
             images: p.images ?? [p.image],

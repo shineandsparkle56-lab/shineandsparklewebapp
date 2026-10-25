@@ -285,6 +285,7 @@ export function CartDrawer() {
               original_price: item.product.originalPrice ?? item.product.price,
               discount: item.product.discount ?? 0,
               wholesale_price: item.product.wholesale_price ?? 0,
+              client_wholesale_price: item.product.client_wholesale_price ?? 0,
               shipping_credit: item.product.shipping_credit ?? 0,
               image: item.variantImage || (item.product.images?.length ? item.product.images[0] : item.product.image),
               images: (item.variantId && item.product.variants?.find(v => v.id === item.variantId)?.images?.length)

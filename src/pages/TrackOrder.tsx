@@ -39,7 +39,7 @@ interface TrackingResponse {
 }
 
 interface OrderItem {
-  product: { id: number; name: string; image: string; images?: string[]; price: number; category: string };
+  product: { id: number; name: string; image: string; images?: string[]; price: number; client_wholesale_price?: number; category: string };
   quantity: number;
   variant_label?: string | null;
 }
@@ -52,6 +52,7 @@ interface OrderRow {
   cod_charge: number;
   grand_total: number;
   payment_mode: string;
+  is_wholesale?: boolean;
   customer_name?: string;
   customer_mobile?: string;
   customer_address?: string;
@@ -156,7 +157,7 @@ export function TrackOrder() {
     try {
       const [trackRes, { data: orderData }] = await Promise.all([
         fetch(`/api/track-shipment?awb=${encodeURIComponent(trimmed)}`),
-        supabase.from("orders").select("id,items,subtotal,shipping_charge,cod_charge,grand_total,payment_mode,customer_name,customer_mobile,customer_address,customer_city,customer_state,pincode,created_at").eq("awb_code", trimmed).maybeSingle(),
+        supabase.from("orders").select("id,items,subtotal,shipping_charge,cod_charge,grand_total,payment_mode,is_wholesale,customer_name,customer_mobile,customer_address,customer_city,customer_state,pincode,created_at").eq("awb_code", trimmed).maybeSingle(),
       ]);
       const text = await trackRes.text();
       let tj: TrackingResponse;
@@ -169,7 +170,49 @@ export function TrackOrder() {
       if (!s.shipment_track_activities?.length && td.shipment_track_activities)
         s.shipment_track_activities = td.shipment_track_activities as TrackingActivity[];
       setTrack(s);
-      if (orderData) setOrder(orderData as OrderRow);
+
+      if (orderData) {
+        let finalOrder = orderData as OrderRow;
+
+        // For wholesale orders, ensure client_wholesale_price is set on each item.
+        // Older orders may not have it stored — fetch live values from products table.
+        if (finalOrder.is_wholesale) {
+          const missingIds = finalOrder.items
+            .filter((item) => !item.product.client_wholesale_price)
+            .map((item) => item.product.id)
+            .filter((id, i, arr) => arr.indexOf(id) === i); // unique
+
+          if (missingIds.length > 0) {
+            const { data: priceData } = await supabase
+              .from("products")
+              .select("id,client_wholesale_price")
+              .in("id", missingIds);
+
+            if (priceData?.length) {
+              const priceMap = new Map<number, number>(
+                priceData.map((p: { id: number; client_wholesale_price: number }) => [p.id, p.client_wholesale_price])
+              );
+              finalOrder = {
+                ...finalOrder,
+                items: finalOrder.items.map((item) =>
+                  item.product.client_wholesale_price
+                    ? item
+                    : {
+                        ...item,
+                        product: {
+                          ...item.product,
+                          client_wholesale_price: priceMap.get(item.product.id) ?? 0,
+                        },
+                      }
+                ),
+              };
+            }
+          }
+        }
+
+        setOrder(finalOrder);
+      }
+
       setAwb(trimmed);
       setTab("status");
     } catch (err) {
@@ -336,7 +379,7 @@ export function TrackOrder() {
                 <div className="flex border-b border-gray-100">
                   {([
                     { id: "status", icon: Truck,       label: "Timeline" },
-                    { id: "items",  icon: ShoppingBag, label: `Items${order.items?.length ? ` (${order.items.length})` : ""}` },
+                    { id: "items",  icon: ShoppingBag, label: `Items${order.items?.length ? ` (${order.items.reduce((s, i) => s + i.quantity, 0)})` : ""}` },
                     { id: "details",icon: User,         label: "Details" },
                   ] as { id: Tab; icon: React.ElementType; label: string }[]).map(({ id, icon: Icon, label }) => (
                     <button key={id} onClick={() => setTab(id)}
@@ -398,45 +441,66 @@ export function TrackOrder() {
                 {/* ── Items tab ── */}
                 {tab === "items" && (
                   <div className="p-4 space-y-2">
-                    {(showAllItems ? order.items : order.items.slice(0, ITEMS_LIMIT)).map((item, i) => (
-                      <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2">
-                        <img
-                          src={imgUrl(item.product.images?.[0] ?? item.product.image, "tiny")}
-                          alt={item.product.name}
-                          loading="lazy"
-                          className="w-11 h-11 rounded-lg object-cover shrink-0 border border-white shadow-sm bg-gray-100"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-gray-800 truncate">{item.product.name}</p>
-                          {item.variant_label && (
-                            <span className="text-[9px] font-semibold text-[#9B6FD1] bg-[#F3EEFB] border border-[#9B6FD1]/20 px-1.5 py-0.5 rounded-full">
-                              {item.variant_label}
-                            </span>
-                          )}
+                    {(showAllItems ? order.items : order.items.slice(0, ITEMS_LIMIT)).map((item, i) => {
+                      const unitPrice = order.is_wholesale && item.product.client_wholesale_price
+                        ? item.product.client_wholesale_price
+                        : item.product.price;
+                      return (
+                        <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2">
+                          <img
+                            src={imgUrl(item.product.images?.[0] ?? item.product.image, "tiny")}
+                            alt={item.product.name}
+                            loading="lazy"
+                            className="w-11 h-11 rounded-lg object-cover shrink-0 border border-white shadow-sm bg-gray-100"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-gray-800 truncate">{item.product.name}</p>
+                            {item.variant_label && (
+                              <span className="text-[9px] font-semibold text-[#9B6FD1] bg-[#F3EEFB] border border-[#9B6FD1]/20 px-1.5 py-0.5 rounded-full">
+                                {item.variant_label}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-xs font-bold text-gray-900">₹{unitPrice * item.quantity}</p>
+                            <p className="text-[10px] text-gray-400">× {item.quantity}</p>
+                          </div>
                         </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-xs font-bold text-gray-900">₹{item.product.price * item.quantity}</p>
-                          <p className="text-[10px] text-gray-400">× {item.quantity}</p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {order.items.length > ITEMS_LIMIT && (
                       <button
                         onClick={() => setShowAllItems(!showAllItems)}
                         className="w-full text-xs text-[#9B6FD1] font-semibold py-2 rounded-xl hover:bg-[#F3EEFB] transition-colors border border-[#9B6FD1]/20">
                         {showAllItems
                           ? "Show less ↑"
-                          : `Show all ${order.items.length} items ↓`}
+                          : `Show all ${order.items.reduce((s, i) => s + i.quantity, 0)} items ↓`}
                       </button>
                     )}
                     {/* Order total */}
                     <div className="border-t border-gray-100 pt-2 space-y-1 text-xs text-gray-500 mt-1">
-                      <div className="flex justify-between"><span>Subtotal</span><span>₹{order.subtotal}</span></div>
-                      {order.shipping_charge > 0 && <div className="flex justify-between"><span>Shipping</span><span>₹{order.shipping_charge}</span></div>}
-                      {order.cod_charge > 0 && <div className="flex justify-between"><span>COD Charge</span><span>₹{order.cod_charge}</span></div>}
-                      <div className="flex justify-between font-bold text-gray-800 pt-1 border-t border-gray-100">
-                        <span>Total</span><span>₹{order.grand_total}</span>
-                      </div>
+                      {(() => {
+                        const wholesaleSubtotal = order.is_wholesale
+                          ? order.items.reduce((sum, item) => {
+                              const unitPrice = item.product.client_wholesale_price || item.product.price;
+                              return sum + unitPrice * item.quantity;
+                            }, 0)
+                          : null;
+                        const displaySubtotal = wholesaleSubtotal ?? order.subtotal;
+                        const displayTotal = wholesaleSubtotal != null
+                          ? wholesaleSubtotal + (order.shipping_charge ?? 0) + (order.payment_mode === "cod" ? (order.cod_charge ?? 0) : 0)
+                          : order.grand_total;
+                        return (
+                          <>
+                            <div className="flex justify-between"><span>Subtotal</span><span>₹{displaySubtotal}</span></div>
+                            {order.shipping_charge > 0 && <div className="flex justify-between"><span>Shipping</span><span>₹{order.shipping_charge}</span></div>}
+                            {order.cod_charge > 0 && <div className="flex justify-between"><span>COD Charge</span><span>₹{order.cod_charge}</span></div>}
+                            <div className="flex justify-between font-bold text-gray-800 pt-1 border-t border-gray-100">
+                              <span>Total</span><span>₹{displayTotal}</span>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
