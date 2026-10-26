@@ -431,7 +431,7 @@ export function ProductsTab() {
             <div>
               <label className="label">Client Wholesale Price (₹)</label>
               <input type="number" min="0" value={form.client_wholesale_price} onChange={(e) => set("client_wholesale_price", e.target.value)} className="input" />
-              <p className="text-[11px] text-gray-400 mt-1">Auto: cost × 1.2 — override if needed</p>
+              <p className="text-[11px] text-gray-400 mt-1">Auto: cost × 1.3 — override if needed</p>
             </div>
 
             {/* ── Live margin preview ── */}

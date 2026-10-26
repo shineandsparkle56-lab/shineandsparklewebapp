@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { LayoutGrid, List, ArrowUpDown, Check, Sparkles, ChevronLeft, ChevronRight, Package2, ChevronRight as ArrowRight } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { imgUrl } from "../lib/imgUrl";
+import { useProducts } from "../context/ProductsContext";
 import { useCategories } from "../context/CategoriesContext";
 import { useScroll } from "../context/ScrollContext";
 import { useInfiniteProducts, SortOrder } from "../hooks/useInfiniteProducts";
@@ -231,16 +232,19 @@ interface ComboBoxPreview {
   box_image_url: string | null;
   item_count: number;
   box_price: number;
+  wholesale_min: number;
+  wholesale_max: number;
 }
 
 function ComboBoxStrip({ inline = false }: { inline?: boolean }) {
   const [boxes, setBoxes] = useState<ComboBoxPreview[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const { products } = useProducts();
 
   useEffect(() => {
     supabase
       .from("combo_boxes")
-      .select("id, name, description, box_image_url, item_count, box_price")
+      .select("id, name, description, box_image_url, item_count, box_price, wholesale_min, wholesale_max")
       .eq("is_active", true)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: false })
@@ -250,14 +254,20 @@ function ComboBoxStrip({ inline = false }: { inline?: boolean }) {
 
   if (!loaded || boxes.length === 0) return null;
 
-  // Alternate card background colors (like Plix)
-  const cardBgs = [
-    "from-purple-100 to-pink-100",
-    "from-pink-100 to-orange-100",
-  ];
+  /** Max single product price × item_count — same logic as ComboListingPage */
+  function retailValue(box: ComboBoxPreview): number {
+    const eligible = products.filter(
+      (p) => p.wholesale_price > 0 &&
+             p.wholesale_price >= box.wholesale_min &&
+             p.wholesale_price <= box.wholesale_max
+    );
+    if (!eligible.length) return 0;
+    const maxPrice = Math.max(...eligible.map((p) => p.price));
+    return maxPrice * box.item_count;
+  }
 
   return (
-    <div className={`${inline ? "sm:flex-[2] min-w-0 flex flex-col gap-2" : "px-3 sm:px-4 pb-2 mt-1.5 flex flex-col gap-2"}`}>
+    <div className={`${inline ? "sm:flex-[2] min-w-0 flex flex-col gap-2" : "flex flex-col gap-2 w-full"}`}>
       {/* Section header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
@@ -269,56 +279,72 @@ function ComboBoxStrip({ inline = false }: { inline?: boolean }) {
         </a>
       </div>
 
-      {/* Cards row — side by side if 2 boxes, single if 1 */}
-      <div className={`grid gap-3 ${boxes.length === 1 ? "grid-cols-1" : "grid-cols-2"} ${inline ? "flex-1" : ""}`}>
-        {boxes.map((box, idx) => (
-          <a
-            key={box.id}
-            href={`/combo/${box.id}`}
-            className="group relative rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-200 min-h-[140px]"
-          >
-            {/* Background image — full card */}
-            {box.box_image_url ? (
-              <img
-                src={imgUrl(box.box_image_url, "full")}
-                alt={box.name}
-                className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-            ) : (
-              <div className={`absolute inset-0 bg-gradient-to-br ${cardBgs[idx % cardBgs.length]}`} />
-            )}
+      {/* Cards — same column grid as product cards */}
+      <div className={`grid gap-2.5 ${
+        inline
+          ? `${boxes.length === 1 ? "grid-cols-1" : "grid-cols-2"} flex-1`
+          : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+      }`}>
+        {boxes.map((box, idx) => {
+          const retail  = retailValue(box);
+          const saving  = retail > box.box_price ? retail - box.box_price : 0;
+          const savePct = retail > 0 ? Math.round((saving / retail) * 100) : 0;
 
-            {/* Full card dim overlay so text is always readable */}
-            <div className="absolute inset-0 bg-black/30" />
-
-            {/* Stronger gradient overlays top + bottom */}
-            <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-black/40 to-transparent" />
-            <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/50 to-transparent" />
-
-
-            {/* ── Content: vertically spread top to bottom ── */}
-            <div className="relative z-20 flex flex-col justify-between h-full px-3 py-3" style={{ minHeight: "140px" }}>
-              {/* Big offer text — top */}
-              <div>
-                <p className="text-white font-black leading-tight drop-shadow-lg"
-                  style={{ fontSize: "clamp(16px, 3.5vw, 22px)", textShadow: "0 2px 8px rgba(0,0,0,0.7)" }}>
-                  Buy any {box.item_count}
-                </p>
-                <p className="font-black leading-tight drop-shadow-lg"
-                  style={{ fontSize: "clamp(18px, 4vw, 26px)", textShadow: "0 2px 8px rgba(0,0,0,0.5)", color: "#F3EEFB" }}>
-                  ₹{box.box_price} Only
-                </p>
+          return (
+            <a
+              key={box.id}
+              href={`/combo/${box.id}`}
+              className="group flex flex-col bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100"
+            >
+              {/* Image — fixed height, no text overlay */}
+              <div className="relative overflow-hidden bg-gradient-to-br from-[#F3EEFB] to-[#ede4f8]" style={{ aspectRatio: "1/1" }}>
+                {box.box_image_url ? (
+                  <img
+                    src={imgUrl(box.box_image_url, "full")}
+                    alt={box.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Package2 className="w-10 h-10 text-[#9B6FD1]/30" />
+                  </div>
+                )}
+                {/* % OFF badge */}
+                {savePct >= 10 && (
+                  <div className="absolute top-2 left-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">
+                    {savePct}% OFF
+                  </div>
+                )}
+                {/* Price pill */}
+                <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm rounded-full px-2.5 py-0.5 shadow-sm">
+                  <span className="text-xs font-bold text-[#9B6FD1]">₹{box.box_price}</span>
+                </div>
               </div>
 
-              {/* Full-width purple CTA button — bottom */}
-              <div className="w-full py-2 rounded-xl bg-[#9B6FD1] group-hover:bg-[#8a5fc0] transition-colors flex items-center justify-center shadow-md">
-                <span className="text-white text-[11px] font-bold">
-                  Pick any {box.item_count} items 
-                </span>
+              {/* Info */}
+              <div className="p-2.5 flex flex-col gap-2">
+                <div>
+                  <p className="text-xs font-bold text-gray-800 leading-snug">
+                    Any {box.item_count} for ₹{box.box_price}
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    {saving > 0 && (
+                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">
+                        Save ₹{saving}
+                      </span>
+                    )}
+                    <span className="text-[10px] text-gray-400">
+                      ₹{Math.round(box.box_price / box.item_count)}/item
+                    </span>
+                  </div>
+                </div>
+                <div className="w-full py-1.5 rounded-xl bg-[#9B6FD1] group-hover:bg-[#8a5fc0] transition-colors flex items-center justify-center">
+                  <span className="text-white text-[11px] font-bold">Pick any {box.item_count}</span>
+                </div>
               </div>
-            </div>
-          </a>
-        ))}
+            </a>
+          );
+        })}
       </div>
     </div>
   );
@@ -626,11 +652,11 @@ export function ProductGrid({ allCategoryImage }: { allCategoryImage?: string | 
         style={{ paddingTop: filterBarHeight + 12 }}
       >
 
-        {/* ── Festival + Combo row ──────────────────────────────── */}
-        {/* Desktop: side-by-side; Mobile: stacked */}
-        <div className="px-3 sm:px-4 pb-1.5 mt-0 flex flex-col sm:flex-row gap-3 items-stretch">
+        {/* ── Festival + Combo row — only on "All" category ── */}
+        {activeCategory === "all" && (
+        <div className="px-3 sm:px-4 pb-2.5 mt-0 flex flex-col sm:flex-row gap-3 items-stretch">
 
-          {/* Festival section — same heading pattern as Combo */}
+          {/* Festival section */}
           {activeFestivals.length > 0 && (
             <div className="flex-1 sm:flex-[3] min-w-0 flex flex-col gap-2">
               {/* Section header */}
@@ -651,11 +677,12 @@ export function ProductGrid({ allCategoryImage }: { allCategoryImage?: string | 
             </div>
           )}
 
-          {/* Combo box strip — takes 40% on desktop, full width on mobile */}
+          {/* Combo box strip */}
           <ComboBoxStrip inline={activeFestivals.length > 0} />
         </div>
+        )}
 
-        <div className="px-3 sm:px-4 pt-1.5">
+        <div className="px-3 sm:px-4 pt-0">
           {loading && (
             <div className={gridClass}>
               {Array.from({ length: 8 }).map((_, i) => (

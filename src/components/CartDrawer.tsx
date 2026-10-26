@@ -53,7 +53,7 @@ import moment from "moment";
 import { apiUrl } from "../lib/apiUrl";
 
 export function CartDrawer() {
-  const { isCartOpen, setIsCartOpen, cart, removeFromCart, removeComboFromCart, updateQuantity, subtotal, totalItems, shippingCredit } = useCart();
+  const { isCartOpen, setIsCartOpen, cart, removeFromCart, removeComboFromCart, updateQuantity, subtotal, totalItems, shippingCredit, addMoreMode, setAddMoreMode } = useCart();
   const { codEnabled, minOrderValue, defaultPickupPincodes, localDeliveryZones } = useSettings();
 
   // Step state
@@ -112,6 +112,7 @@ export function CartDrawer() {
   const handleOpenChange = (open: boolean) => {
     setIsCartOpen(open);
     if (!open) setStep(1);
+    if (open) setAddMoreMode(null); // clear nudge mode when user opens cart
   };
 
   // ── Shipping API ─────────────────────────────────────────────
@@ -622,7 +623,7 @@ export function CartDrawer() {
                         </div>
                       )}
 
-                      {/* ── Smart upsell: reduce shipping / COD banner ── */}
+                      {/* ── Add more products nudge ── */}
                       {shipping?.serviceable && (shippingCharge > 0 || codCharge > 0) && (
                         <motion.div
                           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
@@ -631,14 +632,14 @@ export function CartDrawer() {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1.5">
                               <Truck className="w-4 h-4 text-[#9B6FD1]" />
-                              <span className="text-xs font-bold text-gray-700">Save on shipping</span>
+                              <span className="text-xs font-bold text-gray-700">Lower your delivery charge</span>
                             </div>
                             <span className="text-xs font-bold text-[#9B6FD1]">
-                              ₹{shippingCharge + codCharge} remaining
+                              ₹{shippingCharge + codCharge} left
                             </span>
                           </div>
 
-                          {/* Progress bar: credit earned vs total charges */}
+                          {/* Progress bar */}
                           <div className="h-2 rounded-full bg-[#9B6FD1]/15 overflow-hidden">
                             <motion.div
                               className="h-full rounded-full bg-gradient-to-r from-[#9B6FD1] to-[#c084fc]"
@@ -654,14 +655,14 @@ export function CartDrawer() {
 
                           <p className="text-[11px] text-gray-500 leading-relaxed">
                             {shippingCredit > 0
-                              ? `You've saved ₹${shippingCredit} so far. Add more products with shipping credits to get `
-                              : `Add products with shipping credits to reduce your delivery${codCharge > 0 ? " & COD" : ""} charges. Get `}
-                            <span className="font-bold text-green-600">FREE shipping</span>
-                            {codCharge > 0 && <span className="font-bold text-green-600"> & free COD</span>}!
+                              ? `You've already reduced delivery by ₹${shippingCredit}. Add more products to bring it down further and get `
+                              : `The more products you add, the less you pay for delivery. Keep adding to get `}
+                            <span className="font-bold text-green-600">free delivery</span>!
                           </p>
 
                           <button
                             onClick={() => {
+                              setAddMoreMode({ shippingCharge, rawTotal: rawShippingCharge + rawCodCharge });
                               setIsCartOpen(false);
                               setTimeout(() => {
                                 const el = document.getElementById("products") ?? document.getElementById("shop");
@@ -670,8 +671,8 @@ export function CartDrawer() {
                             }}
                             className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-[#9B6FD1]/10 hover:bg-[#9B6FD1]/20 text-[#9B6FD1] text-xs font-semibold transition-colors"
                           >
-                            <Sparkles className="w-3.5 h-3.5" />
-                            Browse more — save ₹{shippingCharge + codCharge} on charges
+                            <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                            Add more & save ₹{shippingCharge + codCharge} on delivery
                           </button>
                         </motion.div>
                       )}
@@ -681,8 +682,8 @@ export function CartDrawer() {
                         <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex items-center gap-2">
                           <span className="text-lg">🎉</span>
                           <div>
-                            <p className="text-xs font-bold text-green-700">Free shipping unlocked!</p>
-                            <p className="text-[11px] text-green-600">You saved ₹{shippingSaved} on delivery charges.</p>
+                            <p className="text-xs font-bold text-green-700">You've got free delivery!</p>
+                            <p className="text-[11px] text-green-600">You saved ₹{shippingSaved} on delivery by adding more products.</p>
                           </div>
                         </div>
                       )}

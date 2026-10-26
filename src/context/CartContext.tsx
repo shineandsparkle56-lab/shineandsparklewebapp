@@ -77,6 +77,9 @@ interface CartContextType {
   shippingCredit: number;
   isCartOpen: boolean;
   setIsCartOpen: (isOpen: boolean) => void;
+  // "Add more" mode — set when user taps the delivery nudge button
+  addMoreMode: { shippingCharge: number; rawTotal: number } | null;
+  setAddMoreMode: (v: { shippingCharge: number; rawTotal: number } | null) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -84,6 +87,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>(loadCart);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [addMoreMode, setAddMoreMode] = useState<{ shippingCharge: number; rawTotal: number } | null>(null);
 
   useEffect(() => {
     try { localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart)); } catch { }
@@ -208,6 +212,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       removeFromCart, removeComboFromCart,
       updateQuantity,
       totalItems, subtotal, shippingCredit, isCartOpen, setIsCartOpen,
+      addMoreMode, setAddMoreMode,
     }}>
       {children}
     </CartContext.Provider>

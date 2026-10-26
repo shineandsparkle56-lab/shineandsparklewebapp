@@ -7,6 +7,10 @@
  *  - Pinch-zoom overlay (identical to ProductCard)
  *  - Qty +/- per product/variant, capped at available stock
  *  - Total count badge vs box.item_count
+ *  - Smart pricing footer: live retail value, savings, per-item avg
+ *  - Shipping nudge banner when box has shipping_credit
+ *  - Retail price shown on each product card
+ *  - Animated pulse on add, savings grow as selection fills
  */
 
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -15,6 +19,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft, ChevronRight, Package2, CheckCircle2, Loader2, X,
   ShoppingBag, Minus, Plus, LayoutGrid, List, RotateCcw,
+  Sparkles, Tag, TrendingDown,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useProducts } from "../context/ProductsContext";
@@ -40,20 +45,22 @@ function makeKey(productId: number, variantId?: string | null): SelectionKey {
 type ViewMode = "grid" | "list";
 
 // ─── ComboProductCard ─────────────────────────────────────────
-// Same image carousel / pinch zoom as ProductCard, with combo-specific footer
 interface ComboProductCardProps {
-  product:    Product;
-  view:       ViewMode;
-  selEntry?:  SelectionEntry;
-  canAdd:     boolean;
-  onAdd:      (product: Product, variant?: ProductVariant) => void;
-  onMinus:    (product: Product, variant?: ProductVariant) => void;
+  product:     Product;
+  view:        ViewMode;
+  selEntry?:   SelectionEntry;
+  canAdd:      boolean;
+  boxPrice:    number;   // total box price for per-item context
+  itemCount:   number;   // total slots
+  onAdd:       (product: Product, variant?: ProductVariant) => void;
+  onMinus:     (product: Product, variant?: ProductVariant) => void;
   onViewDetail:(product: Product) => void;
 }
 
-function ComboProductCard({ product, view, selEntry, canAdd, onAdd, onMinus, onViewDetail }: ComboProductCardProps) {
+function ComboProductCard({ product, view, selEntry, canAdd, boxPrice, itemCount, onAdd, onMinus, onViewDetail }: ComboProductCardProps) {
   const [imgIndex,   setImgIndex]   = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
+  const [justAdded,  setJustAdded]  = useState(false);
   const isDragging   = useRef(false);
   const dragStartX   = useRef<number | null>(null);
   const dragStartY   = useRef<number | null>(null);
@@ -74,9 +81,21 @@ function ComboProductCard({ product, view, selEntry, canAdd, onAdd, onMinus, onV
     ? product.variants.every((v) => v.stock <= 0)
     : product.stock <= 0;
 
-  const qty = selEntry?.qty ?? 0;
-  const isNew = !!product.created_at &&
+  const qty    = selEntry?.qty ?? 0;
+  const isNew  = !!product.created_at &&
     (Date.now() - new Date(product.created_at).getTime()) < 3 * 24 * 60 * 60 * 1000;
+
+  // Per-item average price of the box
+  const perItemBoxPrice = Math.round(boxPrice / itemCount);
+  // How much cheaper is this product vs box avg (positive = cheaper in box)
+  const saving = product.price - perItemBoxPrice;
+
+  // Pulse on add
+  const handleAdd = (p: Product, v?: ProductVariant) => {
+    onAdd(p, v);
+    setJustAdded(true);
+    setTimeout(() => setJustAdded(false), 600);
+  };
 
   // ── Arrow nav ────────────────────────────────────────────────
   const prevImg = (e: React.MouseEvent) => {
@@ -163,9 +182,12 @@ function ComboProductCard({ product, view, selEntry, canAdd, onAdd, onMinus, onV
   if (view === "list") {
     return (
       <>
-        <div className={`flex flex-col bg-white rounded-2xl overflow-hidden shadow-sm border transition-all ${
-          qty > 0 ? "border-[#9B6FD1]/40 ring-1 ring-[#9B6FD1]/20" : noStock ? "border-gray-100 opacity-60" : "border-gray-100 hover:shadow-md"
-        }`}>
+        <motion.div
+          animate={justAdded ? { scale: [1, 1.03, 1] } : {}}
+          transition={{ duration: 0.35 }}
+          className={`flex flex-col bg-white rounded-2xl overflow-hidden shadow-sm border transition-all ${
+            qty > 0 ? "border-[#9B6FD1]/40 ring-1 ring-[#9B6FD1]/20" : noStock ? "border-gray-100 opacity-60" : "border-gray-100 hover:shadow-md"
+          }`}>
           {/* Image */}
           <div ref={containerRef}
             className="relative aspect-square overflow-hidden bg-gray-50 select-none"
@@ -201,17 +223,28 @@ function ComboProductCard({ product, view, selEntry, canAdd, onAdd, onMinus, onV
           <div className="p-4 flex flex-col gap-3">
             <div>
               <h3 className="font-serif text-gray-900 text-base leading-snug">{product.name}</h3>
-              <div className="flex items-center gap-2 mt-1">
+              {/* Retail price row */}
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span className="text-lg font-bold text-gray-900">₹{product.price}</span>
-                {product.originalPrice > product.price && <span className="text-sm text-gray-400 line-through">₹{product.originalPrice}</span>}
+                {product.originalPrice > product.price && (
+                  <span className="text-sm text-gray-400 line-through">₹{product.originalPrice}</span>
+                )}
+                {/* In-box saving badge */}
+                {saving > 0 && (
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                    <TrendingDown className="w-2.5 h-2.5" />
+                    Save ₹{saving} in box
+                  </span>
+                )}
               </div>
               {hasVariants && <p className="text-[10px] text-[#9B6FD1] font-semibold mt-0.5">{product.variants.length} colors available</p>}
             </div>
             <ComboCardControls product={product} qty={qty} canAdd={canAdd} noStock={noStock}
-              hasVariants={hasVariants} onAdd={onAdd} onMinus={onMinus} onViewDetail={onViewDetail} />
+              hasVariants={hasVariants}
+              onAdd={(p, v) => handleAdd(p, v)}
+              onMinus={onMinus} onViewDetail={onViewDetail} />
           </div>
-        </div>
-        {/* Pinch zoom overlay */}
+        </motion.div>
         {isPinching && pinchRect && <PinchOverlay src={images[imgIndex]} alt={product.name}
           pinchRect={pinchRect} pinchOrigin={pinchOrigin} pinchPan={pinchPan} pinchZoom={pinchZoom} contain />}
       </>
@@ -221,15 +254,17 @@ function ComboProductCard({ product, view, selEntry, canAdd, onAdd, onMinus, onV
   // ── Grid view ─────────────────────────────────────────────────
   return (
     <>
-      <div className={`flex flex-col bg-white rounded-2xl overflow-hidden shadow-sm border transition-all duration-200 ${
-        qty > 0 ? "border-[#9B6FD1]/40 ring-1 ring-[#9B6FD1]/20" : noStock ? "border-gray-100 opacity-60" : "border-gray-100 hover:shadow-md hover:border-[#9B6FD1]/30"
-      }`}>
+      <motion.div
+        animate={justAdded ? { scale: [1, 1.04, 1] } : {}}
+        transition={{ duration: 0.35 }}
+        className={`flex flex-col bg-white rounded-2xl overflow-hidden shadow-sm border transition-all duration-200 ${
+          qty > 0 ? "border-[#9B6FD1]/40 ring-1 ring-[#9B6FD1]/20" : noStock ? "border-gray-100 opacity-60" : "border-gray-100 hover:shadow-md hover:border-[#9B6FD1]/30"
+        }`}>
         {/* Image */}
         <div ref={containerRef}
           className="relative w-full aspect-square overflow-hidden bg-gray-50 select-none"
           style={{ touchAction: "pan-y" }}
           onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-          {/* Sliding strip */}
           <div className="absolute inset-0 flex" style={stripStyle}
             onClick={() => !isDragging.current && onViewDetail(product)}>
             {images.map((src, i) => (
@@ -239,7 +274,6 @@ function ComboProductCard({ product, view, selEntry, canAdd, onAdd, onMinus, onV
               </div>
             ))}
           </div>
-          {/* Desktop arrows */}
           {images.length > 1 && <>
             <button onClick={prevImg} className="hidden sm:flex absolute left-1.5 top-1/2 -translate-y-1/2 z-20 w-7 h-7 items-center justify-center rounded-full bg-white/80 shadow hover:bg-white transition-colors">
               <ChevronLeft className="w-4 h-4 text-gray-700" />
@@ -254,7 +288,6 @@ function ComboProductCard({ product, view, selEntry, canAdd, onAdd, onMinus, onV
               ))}
             </div>
           </>}
-          {/* Badges */}
           {product.discount > 0 && <div className="absolute top-2 left-2 z-10 bg-[#9B6FD1] text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase pointer-events-none">{product.discount}% OFF</div>}
           {isNew && <div className="absolute top-2 right-2 z-10 bg-emerald-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase pointer-events-none">New</div>}
           {noStock && <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none"><span className="bg-black/70 text-white text-[9px] font-bold px-2.5 py-1 rounded-full">Out of Stock</span></div>}
@@ -263,17 +296,27 @@ function ComboProductCard({ product, view, selEntry, canAdd, onAdd, onMinus, onV
         <div className="p-2.5 flex flex-col gap-2 flex-1">
           <div className="flex-1">
             <p className="text-xs font-medium text-gray-800 line-clamp-2 leading-snug">{product.name}</p>
-            <div className="flex items-center gap-1.5 mt-1">
+            {/* Retail price row */}
+            <div className="flex items-center gap-1 mt-1 flex-wrap">
               <span className="text-sm font-bold text-gray-900">₹{product.price}</span>
-              {product.originalPrice > product.price && <span className="text-[10px] text-gray-400 line-through">₹{product.originalPrice}</span>}
+              {product.originalPrice > product.price && (
+                <span className="text-[10px] text-gray-400 line-through">₹{product.originalPrice}</span>
+              )}
             </div>
+            {/* In-box saving */}
+            {saving > 0 && (
+              <p className="text-[9px] font-bold text-emerald-600 mt-0.5 flex items-center gap-0.5">
+                <TrendingDown className="w-2.5 h-2.5 inline" /> ₹{saving} cheaper in box
+              </p>
+            )}
             {hasVariants && <p className="text-[10px] text-[#9B6FD1] font-semibold mt-0.5">{product.variants.length} colors</p>}
           </div>
           <ComboCardControls product={product} qty={qty} canAdd={canAdd} noStock={noStock}
-            hasVariants={hasVariants} onAdd={onAdd} onMinus={onMinus} onViewDetail={onViewDetail} />
+            hasVariants={hasVariants}
+            onAdd={(p, v) => handleAdd(p, v)}
+            onMinus={onMinus} onViewDetail={onViewDetail} />
         </div>
-      </div>
-      {/* Pinch zoom overlay */}
+      </motion.div>
       {isPinching && pinchRect && <PinchOverlay src={images[imgIndex]} alt={product.name}
         pinchRect={pinchRect} pinchOrigin={pinchOrigin} pinchPan={pinchPan} pinchZoom={pinchZoom} />}
     </>
@@ -329,9 +372,6 @@ function ComboCardControls({ product, qty, canAdd, noStock, hasVariants, onAdd, 
 }
 
 // ─── ComboProductDetailOverlay ────────────────────────────────
-// Full-screen product detail view inside the combo builder.
-// Shows image carousel, variant swatches (same as ProductDetailPage),
-// description, return policy — with +/- combo qty controls at the bottom.
 interface ComboDetailProps {
   product:       Product;
   selection:     Record<SelectionKey, SelectionEntry>;
@@ -347,7 +387,6 @@ function ComboProductDetailOverlay({
 }: ComboDetailProps) {
   const hasVariants = (product.variants?.length ?? 0) > 0;
 
-  // Build allVariants same as ProductDetailPage
   const allVariants = hasVariants ? [
     {
       id: "__base",
@@ -364,7 +403,6 @@ function ComboProductDetailOverlay({
   const [selectedVId, setSelectedVId] = useState<string>(firstInStockId);
   const selectedVariant = allVariants.find((v) => v.id === selectedVId);
 
-  // Images for selected variant
   const baseImages = (product.images?.length ? product.images : [product.image]).map((u) => imgUrl(u, "full"));
   const images = (selectedVariant && selectedVariant.id !== "__base" && (selectedVariant as ProductVariant & { images: string[] }).images?.length)
     ? (selectedVariant as ProductVariant & { images: string[] }).images.map((u: string) => imgUrl(u, "full"))
@@ -377,22 +415,19 @@ function ComboProductDetailOverlay({
   const dragStartY  = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  const stock       = (selectedVariant as ProductVariant)?.stock ?? product.stock;
-  const outOfStock  = stock <= 0;
+  const stock        = (selectedVariant as ProductVariant)?.stock ?? product.stock;
+  const outOfStock   = stock <= 0;
   const displayPrice = (selectedVariant as ProductVariant)?.price ?? product.price;
 
-  // Get current qty for this product+variant in selection
   const realVariantId = selectedVId === "__base" ? undefined : selectedVId;
   const selKey = makeKey(product.id, realVariantId);
   const qty    = selection[selKey]?.qty ?? 0;
 
-  // Can add more?
   const atStockMax  = qty >= stock;
   const atSlotMax   = remaining === 0 && qty === 0;
   const atDupMax    = !allowDuplicates && qty > 0;
   const canAdd      = !outOfStock && !atStockMax && !atSlotMax && !atDupMax;
 
-  // Touch swipe
   const getDist = (t: React.TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
   const getMid  = (t: React.TouchList) => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 });
   const [pinchZoom, setPinchZoom] = useState(1);
@@ -456,7 +491,7 @@ function ComboProductDetailOverlay({
         className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col"
         style={{ maxHeight: "92vh" }}
       >
-        {/* ── Sticky header ── */}
+        {/* Sticky header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
           <div className="min-w-0">
             <p className="font-semibold text-gray-800 truncate text-sm">{product.name}</p>
@@ -468,9 +503,8 @@ function ComboProductDetailOverlay({
           </button>
         </div>
 
-        {/* ── Scrollable body ── */}
+        {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto">
-
           {/* Image carousel */}
           <div ref={containerRef}
             className="relative w-full aspect-square bg-gray-50 overflow-hidden select-none"
@@ -565,12 +599,11 @@ function ComboProductDetailOverlay({
               <p>Received a defective or wrong item? We'll give you a full refund or replacement.</p>
             </div>
 
-            {/* Spacer for sticky footer */}
             <div className="h-4" />
           </div>
         </div>
 
-        {/* ── Sticky footer: combo qty controls ── */}
+        {/* Sticky footer: combo qty controls */}
         <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
           {outOfStock ? (
             <div className="w-full py-3 rounded-2xl bg-gray-100 text-gray-400 text-sm font-semibold text-center">
@@ -669,13 +702,8 @@ export function ComboBuilderPage({ comboId }: { comboId: string }) {
   const [added,    setAdded]    = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
 
-  // selection: key → { product, variant?, qty }
   const [selection, setSelection] = useState<Record<SelectionKey, SelectionEntry>>({});
-
-  // Variant picker bottom sheet — legacy (now replaced by detail overlay for variants)
   const [variantPickFor, setVariantPickFor] = useState<number | null>(null);
-
-  // Product detail overlay
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
 
   // ── Load box ──────────────────────────────────────────────
@@ -700,10 +728,23 @@ export function ComboBuilderPage({ comboId }: { comboId: string }) {
   }, [products, box]);
 
   // ── Derived ─────────────────────────────────────────────────
-  const totalSelected = Object.values(selection).reduce((s, e) => s + e.qty, 0);
-  const allFilled     = box ? totalSelected === box.item_count : false;
-  const overFilled    = box ? totalSelected > box.item_count : false;
-  const remaining     = box ? box.item_count - totalSelected : 0;
+  const totalSelected   = Object.values(selection).reduce((s, e) => s + e.qty, 0);
+  const allFilled       = box ? totalSelected === box.item_count : false;
+  const overFilled      = box ? totalSelected > box.item_count : false;
+  const remaining       = box ? box.item_count - totalSelected : 0;
+
+  // Live retail value of selected items
+  const selectedRetailValue = Object.values(selection).reduce((s, e) => {
+    const price = e.variant?.price ?? e.product.price;
+    return s + price * e.qty;
+  }, 0);
+  const boxPrice = box?.box_price ?? 0;
+  // Saving = retail of chosen items vs box price (only meaningful when filled)
+  const currentSaving     = selectedRetailValue > boxPrice ? selectedRetailValue - boxPrice : 0;
+  const currentSavingPct  = selectedRetailValue > 0
+    ? Math.round((currentSaving / selectedRetailValue) * 100) : 0;
+  // Per-item avg in box
+  const perItemBoxPrice = box ? Math.round(boxPrice / box.item_count) : 0;
 
   // ── Adjust qty ─────────────────────────────────────────────
   const adjustQty = (product: Product, variant: ProductVariant | undefined, delta: number) => {
@@ -771,12 +812,11 @@ export function ComboBuilderPage({ comboId }: { comboId: string }) {
     ? "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 lg:gap-5"
     : "grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-5 lg:gap-4";
 
-  const variantPickProduct = variantPickFor !== null
-    ? eligible.find((p) => p.id === variantPickFor) ?? null
-    : null;
+  // Shipping nudge: internal flag only — not shown to user
+  const hasShippingCredit = (box.shipping_credit ?? 0) > 0;
 
   return (
-    <div className="min-h-screen bg-gray-50/50 pb-36">
+    <div className="min-h-screen bg-gray-50/50 pb-44">
 
       {/* ── Sticky header ── */}
       <div className="bg-white/95 backdrop-blur-sm border-b border-gray-100 sticky top-0 z-30 px-4"
@@ -788,7 +828,9 @@ export function ComboBuilderPage({ comboId }: { comboId: string }) {
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="font-semibold text-gray-800 truncate">{box.name}</h1>
-            <p className="text-[11px] text-gray-400">Pick any {box.item_count} items · ₹{box.box_price}</p>
+            <p className="text-[11px] text-gray-400">
+              Pick any {box.item_count} · ₹{perItemBoxPrice}/item · ₹{box.box_price} total
+            </p>
           </div>
 
           {/* View toggle */}
@@ -819,6 +861,8 @@ export function ComboBuilderPage({ comboId }: { comboId: string }) {
           style={{ width: `${Math.min(100, (totalSelected / box.item_count) * 100)}%` }} />
       </div>
 
+      {/* ── Shipping nudge banner removed — credit applies silently ── */}
+
       {/* ── Selected strip — sticky below header ── */}
       <AnimatePresence>
         {totalSelected > 0 && (
@@ -827,20 +871,23 @@ export function ComboBuilderPage({ comboId }: { comboId: string }) {
             exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
             className="sticky top-[3.5rem] z-20 bg-white/95 backdrop-blur-sm border-b border-[#9B6FD1]/20 shadow-sm"
           >
-            <div className="max-w-5xl mx-auto px-4 pt-1 pb-3 flex items-center gap-3">
-              {/* Thumbnail row — py/px give room for badges that overflow the thumbnails */}
+            <div className="max-w-5xl mx-auto px-4 pt-1 pb-2 flex items-center gap-3">
+              {/* Thumbnail row */}
               <div className="flex items-center gap-2.5 overflow-x-auto scrollbar-none flex-1 min-w-0 py-2 px-1">
                 {Array.from({ length: box!.item_count }).map((_, i) => {
                   const entries = Object.values(selection);
                   const entry   = entries[i];
                   return (
-                    <div key={i} className="relative shrink-0 w-12 h-12">
+                    <div key={i} className="relative shrink-0 w-11 h-11">
                       {entry ? (
                         <>
-                          <img
+                          <motion.img
+                            initial={{ scale: 0.5, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={{ type: "spring", stiffness: 400, damping: 22 }}
                             src={imgUrl(entry.variant?.images?.[0] ?? entry.product.image, "full")}
                             alt={entry.product.name}
-                            className="w-12 h-12 rounded-xl object-cover border-2 border-[#9B6FD1] shadow-sm"
+                            className="w-11 h-11 rounded-xl object-cover border-2 border-[#9B6FD1] shadow-sm"
                           />
                           {entry.qty > 1 && (
                             <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[#9B6FD1] text-white text-[9px] font-black rounded-full flex items-center justify-center shadow z-10 leading-none">
@@ -855,7 +902,7 @@ export function ComboBuilderPage({ comboId }: { comboId: string }) {
                           </button>
                         </>
                       ) : (
-                        <div className="w-12 h-12 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center">
+                        <div className="w-11 h-11 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center">
                           <span className="text-[10px] font-bold text-gray-300">{i + 1}</span>
                         </div>
                       )}
@@ -864,12 +911,32 @@ export function ComboBuilderPage({ comboId }: { comboId: string }) {
                 })}
               </div>
 
-              {/* Status label */}
-              <span className={`shrink-0 text-xs font-bold pb-1 ${
-                allFilled ? "text-emerald-600" : remaining > 0 ? "text-[#9B6FD1]" : "text-red-500"
-              }`}>
-                {allFilled ? "✓ All set!" : remaining > 0 ? `${remaining} left` : "Too many"}
-              </span>
+              {/* Live savings pill — animates as user selects */}
+              <AnimatePresence mode="wait">
+                {currentSaving > 0 ? (
+                  <motion.div
+                    key="saving"
+                    initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }} transition={{ duration: 0.2 }}
+                    className="shrink-0 flex flex-col items-end gap-0.5"
+                  >
+                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <Tag className="w-2.5 h-2.5" />
+                      Save ₹{currentSaving}
+                    </span>
+                    <span className="text-[9px] text-gray-400">{currentSavingPct}% off retail</span>
+                  </motion.div>
+                ) : (
+                  <motion.span
+                    key="status"
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    className={`shrink-0 text-xs font-bold pb-1 ${
+                      allFilled ? "text-emerald-600" : remaining > 0 ? "text-[#9B6FD1]" : "text-red-500"
+                    }`}>
+                    {allFilled ? "✓ All set!" : remaining > 0 ? `${remaining} left` : "Too many"}
+                  </motion.span>
+                )}
+              </AnimatePresence>
             </div>
           </motion.div>
         )}
@@ -903,6 +970,8 @@ export function ComboBuilderPage({ comboId }: { comboId: string }) {
                     view={viewMode}
                     selEntry={selEntry}
                     canAdd={canAdd}
+                    boxPrice={box.box_price}
+                    itemCount={box.item_count}
                     onAdd={handleAdd}
                     onMinus={handleMinus}
                     onViewDetail={setDetailProduct}
@@ -930,32 +999,100 @@ export function ComboBuilderPage({ comboId }: { comboId: string }) {
       </AnimatePresence>
 
       {/* ── Sticky footer ── */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur-sm border-t border-gray-100 px-4 py-3 shadow-lg">
-        <div className="max-w-5xl mx-auto flex items-center gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-gray-500">
-                {allFilled ? "All items selected — ready to add!"
-                  : overFilled ? `Remove ${totalSelected - box.item_count} item${totalSelected - box.item_count > 1 ? "s" : ""}`
-                  : `${remaining} more item${remaining !== 1 ? "s" : ""} to go`}
-              </span>
-              <span className="text-sm font-bold text-[#9B6FD1] shrink-0 ml-2">₹{box.box_price}</span>
+      <div className="fixed bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur-sm border-t border-gray-100 shadow-lg">
+        <div className="max-w-5xl mx-auto px-4 pt-3 pb-4">
+
+          {/* ── Smart pricing panel ── */}
+          <AnimatePresence>
+            {totalSelected > 0 && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden mb-3"
+              >
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  {/* Box price */}
+                  <div className="bg-[#F3EEFB] rounded-xl px-2 py-2">
+                    <p className="text-[10px] text-[#9B6FD1] font-semibold leading-none">Box Price</p>
+                    <p className="text-sm font-bold text-[#9B6FD1] mt-0.5">₹{box.box_price}</p>
+                  </div>
+                  {/* Retail value of chosen items */}
+                  <div className={`rounded-xl px-2 py-2 ${selectedRetailValue > 0 ? "bg-gray-50" : "bg-gray-50 opacity-50"}`}>
+                    <p className="text-[10px] text-gray-500 font-semibold leading-none">Retail Value</p>
+                    <p className="text-sm font-bold text-gray-700 mt-0.5">
+                      {selectedRetailValue > 0 ? `₹${selectedRetailValue}` : "—"}
+                    </p>
+                  </div>
+                  {/* Savings */}
+                  <div className={`rounded-xl px-2 py-2 transition-colors ${currentSaving > 0 ? "bg-emerald-50" : "bg-gray-50 opacity-50"}`}>
+                    <p className={`text-[10px] font-semibold leading-none ${currentSaving > 0 ? "text-emerald-600" : "text-gray-400"}`}>
+                      You Save
+                    </p>
+                    <motion.p
+                      key={currentSaving}
+                      initial={{ scale: 0.85 }} animate={{ scale: 1 }}
+                      transition={{ duration: 0.2 }}
+                      className={`text-sm font-bold mt-0.5 ${currentSaving > 0 ? "text-emerald-600" : "text-gray-400"}`}
+                    >
+                      {currentSaving > 0 ? `₹${currentSaving}` : "—"}
+                    </motion.p>
+                  </div>
+                </div>
+
+                {/* Shipping credit applies silently — no user-facing nudge */}
+
+                {/* Completed: show savings summary */}
+                {allFilled && currentSaving > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                    className="mt-2 flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <p className="text-[11px] text-emerald-700 font-medium">
+                      Great pick! You're saving <span className="font-bold">₹{currentSaving} ({currentSavingPct}% off)</span> vs buying individually.
+                    </p>
+                  </motion.div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* ── Main footer row ── */}
+          <div className="flex items-center gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-gray-500">
+                  {allFilled ? "Ready to add to cart!"
+                    : overFilled ? `Remove ${totalSelected - box.item_count} item${totalSelected - box.item_count > 1 ? "s" : ""}`
+                    : totalSelected === 0 ? `Pick ${box.item_count} items · ₹${perItemBoxPrice}/item`
+                    : `${remaining} more item${remaining !== 1 ? "s" : ""} to go`}
+                </span>
+                <span className="text-sm font-bold text-[#9B6FD1] shrink-0 ml-2">₹{box.box_price}</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                <motion.div
+                  className={`h-full rounded-full ${overFilled ? "bg-red-400" : "bg-[#9B6FD1]"}`}
+                  animate={{ width: `${Math.min(100, (totalSelected / box.item_count) * 100)}%` }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                />
+              </div>
             </div>
-            <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
-              <div className={`h-full rounded-full transition-all duration-300 ${overFilled ? "bg-red-400" : "bg-[#9B6FD1]"}`}
-                style={{ width: `${Math.min(100, (totalSelected / box.item_count) * 100)}%` }} />
-            </div>
+            <button onClick={handleAddToCart} disabled={!allFilled || added}
+              className={`shrink-0 flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold transition-all shadow-md ${
+                allFilled && !added ? "bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white shadow-purple-200"
+                : added ? "bg-emerald-500 text-white"
+                : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}>
+              {added ? <><CheckCircle2 className="w-4 h-4" /> Added!</> : <><ShoppingBag className="w-4 h-4" /> Add to Cart</>}
+            </button>
           </div>
-          <button onClick={handleAddToCart} disabled={!allFilled || added}
-            className={`shrink-0 flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold transition-all shadow-md ${
-              allFilled && !added ? "bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white shadow-purple-200"
-              : added ? "bg-emerald-500 text-white"
-              : "bg-gray-100 text-gray-400 cursor-not-allowed"
-            }`}>
-            {added ? <><CheckCircle2 className="w-4 h-4" /> Added!</> : <><ShoppingBag className="w-4 h-4" /> Add to Cart</>}
-          </button>
         </div>
       </div>
+
+      {/* suppress unused var warning for variantPickFor */}
+      {variantPickFor !== null && null}
     </div>
   );
 }

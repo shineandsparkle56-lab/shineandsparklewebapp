@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react";
 import { Product, variantCover } from "../data/products";
 import { Button } from "./ui/button";
 import { useCart } from "../context/CartContext";
@@ -14,7 +14,7 @@ interface ProductCardProps {
 
 export function ProductCard({ product, index, view = "grid" }: ProductCardProps) {
   const [, navigate] = useLocation();
-  const { addToCart, setIsCartOpen } = useCart();
+  const { addToCart, updateQuantity, cart, setIsCartOpen } = useCart();
   const [imgIndex, setImgIndex] = useState(0);
   const [stockMsg, setStockMsg] = useState(false);
   const stockMsgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -78,6 +78,15 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
     addToCart(product, varId);
     setIsCartOpen(true);
   };
+
+  // How many of this product+variant are currently in the cart
+  const cartQty = (() => {
+    const varId = selectedVariantId === "__base" ? undefined : selectedVariantId;
+    const key = varId ? `${product.id}__${varId}` : String(product.id);
+    return cart.find((i) => i.itemType !== "combo" && (
+      varId ? `${i.product.id}__${i.variantId}` === key : String(i.product.id) === key && !i.variantId
+    ))?.quantity ?? 0;
+  })();
 
   // ── Swipe state (list view) ──────────────────────────────────
   const dragStartX = useRef<number | null>(null);
@@ -477,11 +486,34 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
               </div>
             )}
           </div>
-          <button onClick={handleAddToCart} disabled={outOfStock}
-            className="w-full py-1.5 rounded-xl text-xs font-semibold border-2 border-[#9B6FD1] text-[#9B6FD1] hover:bg-[#9B6FD1] hover:text-white transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-            data-testid={`btn-add-to-cart-${product.id}`}>
-            {outOfStock ? "Out of Stock" : "+ Add to Cart"}
-          </button>
+          <div className="mt-auto">
+            {cartQty > 0 ? (
+              <div className="flex items-center justify-between bg-[#F3EEFB] rounded-xl px-2 py-1">
+                <button
+                  onClick={(e) => { e.stopPropagation(); const varId = selectedVariantId === "__base" ? undefined : selectedVariantId; updateQuantity(product.id, -1, varId); }}
+                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white text-[#9B6FD1] transition-colors"
+                  aria-label="Remove one"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-sm font-bold text-[#9B6FD1] min-w-[20px] text-center">{cartQty}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleAddToCart(); }}
+                  disabled={cartQty >= activeStock}
+                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white text-[#9B6FD1] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  aria-label="Add one more"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button onClick={handleAddToCart} disabled={outOfStock}
+                className="w-full py-1.5 rounded-xl text-xs font-semibold border-2 border-[#9B6FD1] text-[#9B6FD1] hover:bg-[#9B6FD1] hover:text-white transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                data-testid={`btn-add-to-cart-${product.id}`}>
+                {outOfStock ? "Out of Stock" : "+ Add to Cart"}
+              </button>
+            )}
+          </div>
           {stockMsg && (
             <p className="text-[10px] text-amber-600 font-medium text-center leading-tight">
               Only {activeStock} {selectedVariant?.label ? `(${selectedVariant.label})` : ""} in stock
@@ -596,9 +628,32 @@ export function ProductCard({ product, index, view = "grid" }: ProductCardProps)
               )}
             </div>
           )}
-          <div className="mt-auto grid grid-cols-2 gap-3">
-            <Button variant="outline" className="w-full border-[#9B6FD1] text-[#9B6FD1] hover:bg-[#9B6FD1]/5 rounded-full disabled:opacity-40 disabled:cursor-not-allowed" onClick={handleAddToCart} disabled={outOfStock} data-testid={`btn-add-to-cart-${product.id}`}>Add to Cart</Button>
-            <Button className="w-full bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white rounded-full shadow-md hover:shadow-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed" onClick={handleBuyNow} disabled={outOfStock} data-testid={`btn-buy-now-${product.id}`}>Buy Now</Button>
+          <div className="mt-auto">
+            {cartQty > 0 ? (
+              <div className="flex items-center justify-between bg-[#F3EEFB] rounded-2xl px-4 py-2.5">
+                <button
+                  onClick={(e) => { e.stopPropagation(); const varId = selectedVariantId === "__base" ? undefined : selectedVariantId; updateQuantity(product.id, -1, varId); }}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white text-[#9B6FD1] transition-colors"
+                  aria-label="Remove one"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <span className="text-base font-bold text-[#9B6FD1] min-w-[24px] text-center">{cartQty}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleAddToCart(); }}
+                  disabled={cartQty >= activeStock}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white text-[#9B6FD1] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  aria-label="Add one more"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <Button variant="outline" className="w-full border-[#9B6FD1] text-[#9B6FD1] hover:bg-[#9B6FD1]/5 rounded-full disabled:opacity-40 disabled:cursor-not-allowed" onClick={handleAddToCart} disabled={outOfStock} data-testid={`btn-add-to-cart-${product.id}`}>Add to Cart</Button>
+                <Button className="w-full bg-[#9B6FD1] hover:bg-[#8a5fc0] text-white rounded-full shadow-md hover:shadow-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed" onClick={handleBuyNow} disabled={outOfStock} data-testid={`btn-buy-now-${product.id}`}>Buy Now</Button>
+              </div>
+            )}
           </div>
           {stockMsg && (
             <p className="text-xs text-amber-600 font-medium text-center mt-2">
