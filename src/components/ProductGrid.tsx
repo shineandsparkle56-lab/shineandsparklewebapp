@@ -271,7 +271,11 @@ function ComboBoxStrip({ inline = false }: { inline?: boolean }) {
       {/* Section header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <Package2 className="w-4 h-4 text-[#9B6FD1]" />
+          {/* Distinct icon badge so it reads as a bundle deal, not a product row */}
+          <div className="flex items-center gap-1 bg-[#9B6FD1] text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+            <Package2 className="w-3 h-3" />
+            <span>Bundle Deal</span>
+          </div>
           <span className="text-sm font-bold text-gray-800">Build Your Own Box</span>
         </div>
         <a href="/combo" className="flex items-center gap-0.5 text-xs font-semibold text-[#9B6FD1] hover:underline">
@@ -279,8 +283,8 @@ function ComboBoxStrip({ inline = false }: { inline?: boolean }) {
         </a>
       </div>
 
-      {/* Cards — same column grid as product cards */}
-      <div className={`grid gap-2.5 ${
+      {/* Cards — visually distinct from product cards */}
+      <div className={`grid gap-3 ${
         inline
           ? `${boxes.length === 1 ? "grid-cols-1" : "grid-cols-2"} flex-1`
           : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
@@ -294,53 +298,43 @@ function ComboBoxStrip({ inline = false }: { inline?: boolean }) {
             <a
               key={box.id}
               href={`/combo/${box.id}`}
-              className="group flex flex-col bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100"
+              className="group flex flex-col justify-between rounded-2xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-200 border-2 border-[#9B6FD1]/30 bg-gradient-to-br from-[#f9f5ff] via-[#f3ebff] to-[#ede0ff] p-3 gap-2.5 relative"
             >
-              {/* Image — fixed height, no text overlay */}
-              <div className="relative overflow-hidden bg-gradient-to-br from-[#F3EEFB] to-[#ede4f8]" style={{ aspectRatio: "1/1" }}>
-                {box.box_image_url ? (
-                  <img
-                    src={imgUrl(box.box_image_url, "full")}
-                    alt={box.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Package2 className="w-10 h-10 text-[#9B6FD1]/30" />
-                  </div>
-                )}
-                {/* % OFF badge */}
-                {savePct >= 10 && (
-                  <div className="absolute top-2 left-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">
-                    {savePct}% OFF
-                  </div>
-                )}
-                {/* Price pill */}
-                <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm rounded-full px-2.5 py-0.5 shadow-sm">
-                  <span className="text-xs font-bold text-[#9B6FD1]">₹{box.box_price}</span>
+              {/* Top row: icon + % OFF badge */}
+              <div className="flex items-start justify-between">
+                <div className="w-9 h-9 rounded-xl bg-[#9B6FD1] flex items-center justify-center shadow-sm shadow-[#9B6FD1]/40 flex-shrink-0">
+                  <Package2 className="w-4.5 h-4.5 text-white" />
                 </div>
+                {savePct >= 10 && (
+                  <span className="text-[10px] font-extrabold bg-amber-400 text-white px-2 py-0.5 rounded-full shadow tracking-wide">
+                    {savePct}% OFF
+                  </span>
+                )}
               </div>
 
-              {/* Info */}
-              <div className="p-2.5 flex flex-col gap-2">
-                <div>
-                  <p className="text-xs font-bold text-gray-800 leading-snug">
-                    Any {box.item_count} for ₹{box.box_price}
-                  </p>
-                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                    {saving > 0 && (
-                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">
-                        Save ₹{saving}
-                      </span>
-                    )}
-                    <span className="text-[10px] text-gray-400">
-                      ₹{Math.round(box.box_price / box.item_count)}/item
+              {/* Deal text */}
+              <div className="flex flex-col gap-0.5">
+                <p className="text-[10px] font-bold text-[#9B6FD1]/70 uppercase tracking-widest leading-none">
+                  Any {box.item_count} items
+                </p>
+                <p className="text-2xl font-black text-[#6b3fa0] leading-tight">
+                  ₹{box.box_price}
+                </p>
+                {saving > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full border border-emerald-200">
+                      Save ₹{saving}
+                    </span>
+                    <span className="text-[10px] text-[#9B6FD1]/60 font-medium">
+                      ₹{Math.round(box.box_price / box.item_count)}/pc
                     </span>
                   </div>
-                </div>
-                <div className="w-full py-1.5 rounded-xl bg-[#9B6FD1] group-hover:bg-[#8a5fc0] transition-colors flex items-center justify-center">
-                  <span className="text-white text-[11px] font-bold">Pick any {box.item_count}</span>
-                </div>
+                )}
+              </div>
+
+              {/* CTA */}
+              <div className="w-full py-2 rounded-xl bg-[#9B6FD1] group-hover:bg-[#7d51b8] transition-colors flex items-center justify-center gap-1 shadow-sm shadow-[#9B6FD1]/40">
+                <span className="text-white text-[11px] font-extrabold tracking-wide">Pick any {box.item_count}</span>
               </div>
             </a>
           );

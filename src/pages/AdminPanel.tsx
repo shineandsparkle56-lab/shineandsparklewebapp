@@ -67,22 +67,24 @@ export function AdminPanel() {
         </div>
 
         {/* Tab bar */}
-        <div className="max-w-5xl mx-auto overflow-x-auto scrollbar-none border-t border-gray-100">
-          <div className="flex gap-1 px-4 min-w-max">
-            {TABS.map(({ id, icon: Icon, label }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-                  activeTab === id
-                    ? "border-[#9B6FD1] text-[#9B6FD1]"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {label}
-              </button>
-            ))}
+        <div className="max-w-5xl mx-auto border-t border-gray-100">
+          <div className="overflow-x-auto scrollbar-none">
+            <div className="flex px-2 min-w-max lg:min-w-0 lg:flex-wrap">
+              {TABS.map(({ id, icon: Icon, label }) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className={`flex items-center gap-1 px-2 py-2.5 text-xs font-medium border-b-2 whitespace-nowrap transition-colors sm:gap-1.5 sm:px-3 sm:text-sm ${
+                    activeTab === id
+                      ? "border-[#9B6FD1] text-[#9B6FD1]"
+                      : "border-transparent text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5 flex-shrink-0 sm:w-4 sm:h-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </header>
