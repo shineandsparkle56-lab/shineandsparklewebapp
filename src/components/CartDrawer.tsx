@@ -53,7 +53,7 @@ import moment from "moment";
 import { apiUrl } from "../lib/apiUrl";
 
 export function CartDrawer() {
-  const { isCartOpen, setIsCartOpen, cart, removeFromCart, removeComboFromCart, updateQuantity, subtotal, totalItems, shippingCredit, addMoreMode, setAddMoreMode } = useCart();
+  const { isCartOpen, setIsCartOpen, cart, removeFromCart, removeComboFromCart, updateQuantity, patchCartItem, subtotal, totalItems, shippingCredit, addMoreMode, setAddMoreMode } = useCart();
   const { codEnabled, minOrderValue, defaultPickupPincodes, localDeliveryZones } = useSettings();
 
   // Step state
@@ -69,6 +69,7 @@ export function CartDrawer() {
   const [checkingRate, setCheckingRate] = useState(false);
   const [rateError, setRateError] = useState("");
   const [checkingOut, setCheckingOut] = useState(false);
+  const [cartValidationError, setCartValidationError] = useState<string | null>(null);
   const pincodeRef = useRef<HTMLInputElement>(null);
 
   // If admin disables COD while cart is open, fall back to prepaid
@@ -211,6 +212,106 @@ export function CartDrawer() {
   // ── WhatsApp checkout ─────────────────────────────────────────
   const checkoutWhatsApp = async () => {
     setCheckingOut(true);
+    setCartValidationError(null);
+
+    // ── Pre-checkout server validation ────────────────────────────────────
+    // Fetch live price/stock from Supabase right now — hard guarantee that
+    // no stale data reaches the order, regardless of how long the tab was open.
+    const regularItems = cart.filter((i) => i.itemType !== "combo");
+    if (regularItems.length > 0) {
+      const productIds = [...new Set(regularItems.map((i) => i.product.id))];
+      const { data: liveRows, error: fetchErr } = await supabase
+        .from("products")
+        .select("id, name, price, original_price, stock, variants, shipping_credit, wholesale_price, client_wholesale_price, discount, image, images, category, description, tags, sizes, base_variant_label, base_variant_color")
+        .in("id", productIds);
+
+      if (fetchErr) {
+        setCartValidationError("Could not verify prices. Please check your connection and try again.");
+        setCheckingOut(false);
+        return;
+      }
+
+      // Issues that BLOCK the order (item gone / out of stock)
+      const blockingIssues: string[] = [];
+      // Issues that are informational (price/qty updated automatically)
+      const infoIssues: string[] = [];
+
+      for (const item of regularItems) {
+        const row = liveRows?.find((r) => r.id === item.product.id);
+
+        if (!row) {
+          blockingIssues.push(`"${item.product.name}" is no longer available and was removed.`);
+          removeFromCart(item.product.id, item.variantId);
+          continue;
+        }
+
+        // Build a full live Product from the row so patchCartItem can replace the snapshot
+        const liveProduct: import("../data/products").Product = {
+          id:                    row.id,
+          name:                  row.name,
+          category:              row.category,
+          price:                 row.price,
+          originalPrice:         row.original_price ?? row.price,
+          discount:              row.discount ?? 0,
+          image:                 row.image,
+          images:                Array.isArray(row.images) && row.images.length ? row.images : [row.image],
+          description:           row.description ?? "",
+          stock:                 typeof row.stock === "number" ? row.stock : 99,
+          shipping_credit:       typeof row.shipping_credit === "number" ? row.shipping_credit : 0,
+          wholesale_price:       typeof row.wholesale_price === "number" ? row.wholesale_price : 0,
+          client_wholesale_price: typeof row.client_wholesale_price === "number" ? row.client_wholesale_price : 0,
+          variants:              Array.isArray(row.variants) ? row.variants : [],
+          base_variant_label:    row.base_variant_label ?? undefined,
+          base_variant_color:    row.base_variant_color ?? undefined,
+          tags:                  Array.isArray(row.tags) ? row.tags : [],
+          sizes:                 Array.isArray(row.sizes) ? row.sizes : [],
+        };
+
+        const liveVariant = item.variantId
+          ? liveProduct.variants?.find((v) => v.id === item.variantId)
+          : undefined;
+
+        const liveStock  = liveVariant ? liveVariant.stock : liveProduct.stock;
+        const livePrice  = liveVariant?.price ?? liveProduct.price;
+        const cartPrice  = item.variantId
+          ? item.product.variants?.find((v) => v.id === item.variantId)?.price ?? item.product.price
+          : item.product.price;
+
+        if (liveStock <= 0) {
+          blockingIssues.push(`"${item.product.name}" is now out of stock and was removed.`);
+          removeFromCart(item.product.id, item.variantId);
+          continue;
+        }
+
+        // Clamp quantity to live stock
+        const clampedQty = Math.min(item.quantity, liveStock);
+
+        if (livePrice !== cartPrice) {
+          infoIssues.push(`Price of "${item.product.name}" updated to ₹${livePrice}.`);
+        } else if (clampedQty !== item.quantity) {
+          infoIssues.push(`Quantity of "${item.product.name}" reduced to ${clampedQty} (stock limit).`);
+        }
+
+        // Always patch — replaces snapshot with live product + clamped qty
+        // If nothing changed patchCartItem is a no-op in effect (same values)
+        patchCartItem(item.product.id, item.variantId, liveProduct, clampedQty);
+      }
+
+      // Blocking issues — order cannot proceed, show error and return
+      if (blockingIssues.length > 0) {
+        setCartValidationError(blockingIssues.join(" ") + " Please review your cart.");
+        setCheckingOut(false);
+        return;
+      }
+
+      // Info issues — cart was silently updated, show banner and let customer
+      // confirm the new total before proceeding (they just tap once more)
+      if (infoIssues.length > 0) {
+        setCartValidationError(infoIssues.join(" ") + " Cart updated — please confirm the new total and tap again.");
+        setCheckingOut(false);
+        return;
+      }
+    }
     const lines = cart
       .map((i) => {
         // Combo box item
@@ -959,8 +1060,26 @@ export function CartDrawer() {
               {/* Step 3 footer */}
               {step === 3 && (
                 <div className="space-y-2">
+                  {/* Validation error — shown when checkout detects stale price/stock */}
+                  {cartValidationError && (
+                    <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                      <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                      <div className="flex flex-col gap-1">
+                        <p className="text-xs text-amber-800 leading-snug">{cartValidationError}</p>
+                        {/* Only show dismiss if the message is an info update (not a hard block) */}
+                        {!cartValidationError.includes("removed") && (
+                          <button
+                            className="text-[11px] font-semibold text-amber-700 underline underline-offset-2 text-left"
+                            onClick={() => setCartValidationError(null)}
+                          >
+                            Got it, proceed
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex gap-2">
-                    <button onClick={() => setStep(2)} className="flex items-center justify-center gap-1 px-4 py-3 rounded-2xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:border-[#9B6FD1]/40 transition-colors">
+                    <button onClick={() => { setStep(2); setCartValidationError(null); }} className="flex items-center justify-center gap-1 px-4 py-3 rounded-2xl border-2 border-gray-200 text-gray-600 font-semibold text-sm hover:border-[#9B6FD1]/40 transition-colors">
                       <ChevronLeft className="w-4 h-4" /> Back
                     </button>
                     <button

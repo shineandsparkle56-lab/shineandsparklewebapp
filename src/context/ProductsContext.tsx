@@ -47,7 +47,41 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => { fetchProducts(); }, []);
+  useEffect(() => {
+    fetchProducts();
+
+    // ── Supabase Realtime ───────────────────────────────────────────────────
+    // Subscribe to any INSERT / UPDATE / DELETE on the products table so every
+    // open browser session (customer + admin) sees price/stock changes
+    // immediately without a page reload.
+    const channel = supabase
+      .channel("products-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "products" },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            setProducts((prev) => [mapRow(payload.new as Record<string, unknown>), ...prev]);
+          } else if (payload.eventType === "UPDATE") {
+            setProducts((prev) =>
+              prev.map((p) =>
+                p.id === (payload.new as Record<string, unknown>).id
+                  ? mapRow(payload.new as Record<string, unknown>)
+                  : p
+              )
+            );
+          } else if (payload.eventType === "DELETE") {
+            setProducts((prev) =>
+              prev.filter((p) => p.id !== (payload.old as Record<string, unknown>).id)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchProducts = async () => {
     setLoading(true);

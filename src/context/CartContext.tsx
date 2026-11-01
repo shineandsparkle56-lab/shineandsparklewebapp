@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Product } from "../data/products";
+import { useProducts } from "./ProductsContext";
 
 const CART_STORAGE_KEY = "sns_cart";
 
@@ -72,6 +73,7 @@ interface CartContextType {
   removeFromCart: (productId: number, variantId?: string) => void;
   removeComboFromCart: (comboCartKey: string) => void;
   updateQuantity: (productId: number, delta: number, variantId?: string) => void;
+  patchCartItem: (productId: number, variantId: string | undefined, liveProduct: Product, clampedQty: number) => void;
   totalItems: number;
   subtotal: number;
   shippingCredit: number;
@@ -89,9 +91,69 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [addMoreMode, setAddMoreMode] = useState<{ shippingCharge: number; rawTotal: number } | null>(null);
 
+  // Persist cart to localStorage on every change
   useEffect(() => {
     try { localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart)); } catch { }
   }, [cart]);
+
+  // ── Live price / stock reconciliation ────────────────────────────────────
+  // Whenever the live products list changes (admin edited price/stock/variants),
+  // patch every regular cart item so the cart always reflects current data.
+  const { products } = useProducts();
+  useEffect(() => {
+    if (!products.length) return;
+    setCart((prev) => {
+      let changed = false;
+      const next = prev.reduce<CartItem[]>((acc, item) => {
+        // Leave combo phantom products alone — they have a fixed price set at box level
+        if (item.itemType === "combo") { acc.push(item); return acc; }
+
+        const live = products.find((p) => p.id === item.product.id);
+        if (!live) {
+          // Product was deleted — silently drop it from cart
+          changed = true;
+          return acc;
+        }
+
+        // Find the live variant (if any)
+        const liveVariant = item.variantId
+          ? live.variants?.find((v) => v.id === item.variantId)
+          : undefined;
+
+        const liveStock = liveVariant ? liveVariant.stock : live.stock;
+
+        // If stock dropped to 0, remove the item
+        if (liveStock <= 0) { changed = true; return acc; }
+
+        // Clamp quantity to current available stock
+        const clampedQty = Math.min(item.quantity, liveStock);
+        if (clampedQty !== item.quantity) changed = true;
+
+        // Check whether price or stock actually changed to avoid spurious re-renders
+        const priceChanged =
+          live.price !== item.product.price ||
+          live.originalPrice !== item.product.originalPrice ||
+          (liveVariant && liveVariant.price !== item.product.variants?.find((v) => v.id === item.variantId)?.price);
+
+        const stockChanged =
+          live.stock !== item.product.stock ||
+          JSON.stringify(live.variants?.map((v) => ({ id: v.id, stock: v.stock }))) !==
+          JSON.stringify(item.product.variants?.map((v) => ({ id: v.id, stock: v.stock })));
+
+        if (priceChanged || stockChanged || clampedQty !== item.quantity) {
+          changed = true;
+          acc.push({ ...item, product: live, quantity: clampedQty });
+        } else {
+          acc.push(item);
+        }
+        return acc;
+      }, []);
+
+      // Only trigger a state update if something actually changed
+      return changed ? next : prev;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products]);
 
   const addToCart = (product: Product, variantId?: string): boolean => {
     const variant = variantId
@@ -192,6 +254,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  /** Replace a cart item's product snapshot with the live version and clamp qty.
+   *  Used by CartDrawer's pre-checkout validation to update price/stock inline
+   *  so the customer sees the new total immediately without being stuck. */
+  const patchCartItem = (productId: number, variantId: string | undefined, liveProduct: Product, clampedQty: number) => {
+    const key = variantId ? `${productId}__${variantId}` : String(productId);
+    setCart((prev) =>
+      prev.map((item) => {
+        if (item.itemType === "combo" || cartItemKey(item) !== key) return item;
+        return { ...item, product: liveProduct, quantity: clampedQty };
+      })
+    );
+  };
+
   const totalItems = cart.reduce((s, i) => s + i.quantity, 0);
 
   const subtotal = cart.reduce((s, i) => {
@@ -210,7 +285,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     <CartContext.Provider value={{
       cart, addToCart, addComboToCart,
       removeFromCart, removeComboFromCart,
-      updateQuantity,
+      updateQuantity, patchCartItem,
       totalItems, subtotal, shippingCredit, isCartOpen, setIsCartOpen,
       addMoreMode, setAddMoreMode,
     }}>
