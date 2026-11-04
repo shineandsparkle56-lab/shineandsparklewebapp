@@ -9,6 +9,7 @@ interface ProductsContextValue {
   deleteProduct: (id: number, imageUrls?: string[]) => Promise<void>;
   updateStock: (id: number, newStock: number) => Promise<void>;
   updateVariantStock: (productId: number, variantId: string, newStock: number) => Promise<void>;
+  updateHidden: (id: number, is_hidden: boolean) => Promise<void>;
   patchLocalProduct: (id: number, patch: Partial<Product>) => void;
   loading: boolean;
   error: string;
@@ -39,6 +40,7 @@ function mapRow(row: Record<string, unknown>): Product {
     tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
     sizes: Array.isArray(row.sizes) ? (row.sizes as string[]) : [],
     created_at: row.created_at as string | undefined,
+    is_hidden: row.is_hidden === true,
   };
 }
 
@@ -117,6 +119,7 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
         base_variant_color: p.base_variant_color ?? null,
         tags: p.tags ?? [],
         sizes: p.sizes ?? [],
+        is_hidden: p.is_hidden ?? false,
       }])
       .select()
       .single();
@@ -146,6 +149,7 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
         base_variant_color: p.base_variant_color ?? null,
         tags: p.tags ?? [],
         sizes: p.sizes ?? [],
+        is_hidden: p.is_hidden ?? false,
       })
       .eq("id", id);
     if (err) throw new Error(err.message);
@@ -200,8 +204,20 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
     setProducts((prev) => prev.map((p) => p.id === id ? { ...p, ...patch } : p));
   };
 
+  /** Toggle a product's is_hidden flag — instantly reflected in all open sessions via Realtime */
+  const updateHidden = async (id: number, is_hidden: boolean) => {
+    // Optimistic local update first so the toggle feels instant
+    setProducts((prev) => prev.map((p) => p.id === id ? { ...p, is_hidden } : p));
+    const { error: err } = await supabase.from("products").update({ is_hidden }).eq("id", id);
+    if (err) {
+      // Roll back on failure
+      setProducts((prev) => prev.map((p) => p.id === id ? { ...p, is_hidden: !is_hidden } : p));
+      throw new Error(err.message);
+    }
+  };
+
   return (
-    <ProductsContext.Provider value={{ products, addProduct, updateProduct, deleteProduct, updateStock, updateVariantStock, patchLocalProduct, loading, error }}>
+    <ProductsContext.Provider value={{ products, addProduct, updateProduct, deleteProduct, updateStock, updateVariantStock, updateHidden, patchLocalProduct, loading, error }}>
       {children}
     </ProductsContext.Provider>
   );

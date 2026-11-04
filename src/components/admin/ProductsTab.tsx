@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Trash2, Package, ChevronDown, Upload, X, Image,
-  Download, Loader2, Minus, Pencil, Search, SlidersHorizontal, ChevronUp,
+  Download, Loader2, Minus, Pencil, Search, SlidersHorizontal, ChevronUp, Eye, EyeOff,
 } from "lucide-react";
 import JSZip from "jszip";
 import { useProducts } from "../../context/ProductsContext";
@@ -135,7 +135,7 @@ const EMPTY_FORM = {
 const BATCH_SIZE = 10;
 
 export function ProductsTab() {
-  const { products, addProduct, deleteProduct, updateStock, loading, error } = useProducts();
+  const { products, addProduct, deleteProduct, updateStock, updateHidden, loading, error } = useProducts();
   const { categories } = useCategories();
   const toast = useToast();
   const img = useImageItems(MAX_IMAGES);
@@ -731,8 +731,13 @@ export function ProductsTab() {
                     className="w-20 h-20 rounded-xl object-cover bg-[#F3EEFB] border border-gray-100 cursor-zoom-in hover:opacity-90 transition-opacity shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-gray-800 text-sm truncate">{p.name}</p>
+                      <p className={`font-medium text-sm truncate ${p.is_hidden ? "text-gray-400" : "text-gray-800"}`}>{p.name}</p>
                       <span className="text-[10px] font-mono font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">SNS-{p.id}</span>
+                      {p.is_hidden && (
+                        <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full shrink-0">
+                          <EyeOff className="w-2.5 h-2.5" />Hidden
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-gray-400 capitalize">{p.category} · ₹{p.price}{p.images?.length > 1 && <span className="ml-1 text-[#9B6FD1]">· {p.images.length} photos</span>}</p>
                     {p.wholesale_price > 0 && (() => {
@@ -748,6 +753,13 @@ export function ProductsTab() {
                     })()}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={async () => { try { await updateHidden(p.id, !p.is_hidden); } catch { toast.show("Failed to update visibility", "error"); } }}
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${p.is_hidden ? "text-amber-400 bg-amber-50 hover:bg-amber-100" : "text-gray-300 hover:text-gray-500 hover:bg-gray-100"}`}
+                      title={p.is_hidden ? "Hidden from store — click to show" : "Visible in store — click to hide"}
+                    >
+                      {p.is_hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                     <button onClick={() => handleDownloadProductImages(p)} disabled={downloadingProductId === p.id}
                       className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-emerald-500 hover:bg-emerald-50 transition-colors disabled:opacity-50" title="Download images">
                       {downloadingProductId === p.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}

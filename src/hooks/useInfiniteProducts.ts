@@ -30,6 +30,7 @@ function mapRow(row: Record<string, unknown>): Product {
     tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
     sizes: Array.isArray(row.sizes) ? (row.sizes as string[]) : [],
     created_at: row.created_at as string | undefined,
+    is_hidden: row.is_hidden === true,
   };
 }
 
@@ -64,7 +65,10 @@ export function useInfiniteProducts(
       let query = supabase
         .from("products")
         .select("*")
-        .range(from, from + PAGE_SIZE - 1);
+        .range(from, from + PAGE_SIZE - 1)
+        // Never show hidden products to customers — server-side so they don't
+        // even load. neq handles both false and null rows correctly.
+        .neq("is_hidden", true);
 
       // Stock filtering is done client-side after mapping (see below) so that
       // products whose base stock = 0 but named variants have stock still appear.

@@ -303,6 +303,8 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
         base_variant_color: form.base_variant_color.trim() || undefined,
         tags,
         sizes,
+        // Preserve existing visibility — editing never changes is_hidden
+        is_hidden: product.is_hidden ?? false,
       });
       onSaved("Product updated!");
       onClose();

@@ -32,4 +32,5 @@ export interface Product {
   tags: string[];          // festival / collection tags e.g. ["navratri", "diwali"]
   sizes: string[];         // available sizes e.g. ["2.4", "2.6", "2.8"] for bangles
   created_at?: string;     // ISO timestamp — used to show "New" badge
+  is_hidden?: boolean;     // when true the product is hidden from the customer-facing grid
 }
