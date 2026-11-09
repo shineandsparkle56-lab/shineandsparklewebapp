@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { ShoppingBag, Menu, Home, Info, Phone, Truck, Sparkles, Package2 } from "lucide-react";
+import { ShoppingBag, Menu, Home, Info, Phone, Truck, Sparkles, Package2, Search } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { useScroll } from "../context/ScrollContext";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
+import { SearchOverlay } from "./SearchOverlay";
 
 const navLinks = [
   { name: "Home",          href: "/",       icon: Home },
@@ -16,10 +17,12 @@ export function Navbar() {
   const { totalItems, setIsCartOpen } = useCart();
   const { scrollingDown } = useScroll();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const close = () => setMobileMenuOpen(false);
 
   return (
+    <>
     <header
       className={`fixed top-0 w-full bg-white/90 backdrop-blur-md z-40 border-b border-gray-100 shadow-sm transition-transform duration-300 ${
         scrollingDown ? "-translate-y-full" : "translate-y-0"
@@ -29,8 +32,8 @@ export function Navbar() {
     >
       <div className="container mx-auto px-4 h-14 flex items-center justify-between lg:grid lg:grid-cols-3">
 
-        {/* ── Left: hamburger (mobile) + logo ── */}
-        <div className="flex items-center gap-2">
+        {/* ── Left: hamburger (mobile) + search icon + logo ── */}
+        <div className="flex items-center gap-1">
 
           {/* Hamburger — mobile only */}
           <div className="lg:hidden">
@@ -102,6 +105,16 @@ export function Navbar() {
             </Sheet>
           </div>
 
+          {/* Search icon button */}
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="p-2 text-gray-700 hover:text-[#9B6FD1] transition-colors rounded-xl hover:bg-[#F3EEFB]"
+            aria-label="Search products"
+            data-testid="nav-search-btn"
+          >
+            <Search className="h-5 w-5" />
+          </button>
+
           {/* Logo */}
           <a href="/" className="flex items-center gap-2" aria-label="Shine and Sparkle - Home">
             <img
@@ -150,5 +163,9 @@ export function Navbar() {
 
       </div>
     </header>
+
+    {/* Search overlay — rendered outside header to cover full viewport */}
+    <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
+    </>
   );
 }

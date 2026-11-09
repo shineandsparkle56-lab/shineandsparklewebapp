@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Trash2, Package, ChevronDown, Upload, X, Image,
-  Download, Loader2, Minus, Pencil, Search, SlidersHorizontal, ChevronUp, Eye, EyeOff,
+  Download, Loader2, Minus, Pencil, Search, SlidersHorizontal, ChevronUp, Eye, EyeOff, ImagePlus,
 } from "lucide-react";
 import JSZip from "jszip";
 import { useProducts } from "../../context/ProductsContext";
@@ -23,6 +23,10 @@ const OVERLAY_BANNER = Math.round(OVERLAY_SIZE * 0.06); // ~65 px
 const OVERLAY_FONT   = "Oswald";
 const OVERLAY_FONT_URL = "https://fonts.googleapis.com/css2?family=Oswald:wght@700&display=swap";
 
+// Premium serif font for story title and price
+const STORY_SERIF     = "Playfair Display";
+const STORY_SERIF_URL = "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&display=swap";
+
 const _loadedFonts = new Set<string>();
 async function _loadFont(family: string, url: string) {
   if (_loadedFonts.has(family)) return;
@@ -33,7 +37,7 @@ async function _loadFont(family: string, url: string) {
     document.head.appendChild(link);
   }
   await document.fonts.ready;
-  try { await Promise.all(["700"].map((w) => document.fonts.load(`${w} 40px "${family}"`).catch(() => null))); } catch { /**/ }
+  try { await Promise.all(["700", "900"].map((w) => document.fonts.load(`${w} 40px "${family}"`).catch(() => null))); } catch { /**/ }
   _loadedFonts.add(family);
 }
 
@@ -54,6 +58,79 @@ const _darken  = (c: {r:number;g:number;b:number}, f = 0.5) => ({
   r: Math.round(c.r * (1 - f)), g: Math.round(c.g * (1 - f)), b: Math.round(c.b * (1 - f)),
 });
 const _rgb = (c: {r:number;g:number;b:number}) => `rgb(${c.r},${c.g},${c.b})`;
+
+/** Convert RGB → HSL */
+function _toHsl(r: number, g: number, b: number) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+  return { h, s, l };
+}
+/** Convert HSL → RGB */
+function _fromHsl(h: number, s: number, l: number) {
+  const hue2rgb = (p: number, q: number, t: number) => {
+    if (t < 0) t += 1; if (t > 1) t -= 1;
+    if (t < 1/6) return p + (q - p) * 6 * t;
+    if (t < 1/2) return q;
+    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+    return p;
+  };
+  if (s === 0) { const v = Math.round(l * 255); return { r: v, g: v, b: v }; }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  return {
+    r: Math.round(hue2rgb(p, q, h + 1/3) * 255),
+    g: Math.round(hue2rgb(p, q, h)       * 255),
+    b: Math.round(hue2rgb(p, q, h - 1/3) * 255),
+  };
+}
+
+/**
+ * Extract the PRIMARY product color — samples the center 40% of the image
+ * (where the product sits, not the background), finds the most saturated pixel
+ * cluster, then boosts saturation to make it vivid for the background gradient.
+ */
+function _productColor(img: HTMLImageElement, scratch: HTMLCanvasElement): {r:number;g:number;b:number} {
+  const ctx   = scratch.getContext("2d")!;
+  const iw    = img.naturalWidth, ih = img.naturalHeight;
+  // Sample a horizontal strip from the CENTER 40% of the image height
+  const sy    = Math.floor(ih * 0.30);
+  const sh_px = Math.max(1, Math.floor(ih * 0.40));
+  ctx.drawImage(img, 0, sy, iw, sh_px, 0, 0, scratch.width, 1);
+  const data  = ctx.getImageData(0, 0, scratch.width, 1).data;
+
+  // Collect all pixels, find the most saturated non-neutral one
+  let bestS = -1, bestR = 0, bestG = 0, bestB = 0;
+  let sumR = 0, sumG = 0, sumB = 0, n = 0;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i], g = data[i+1], b = data[i+2];
+    const { s, l } = _toHsl(r, g, b);
+    sumR += r; sumG += g; sumB += b; n++;
+    // Prefer saturated pixels that aren't pure white/black
+    if (s > bestS && l > 0.1 && l < 0.92) { bestS = s; bestR = r; bestG = g; bestB = b; }
+  }
+
+  // If image has very low saturation (white/gray bg product shot), fall back to avg
+  const avgR = Math.round(sumR / n), avgG = Math.round(sumG / n), avgB = Math.round(sumB / n);
+  const base = bestS > 0.08 ? { r: bestR, g: bestG, b: bestB } : { r: avgR, g: avgG, b: avgB };
+
+  // Boost saturation: push S to at least 0.65, keep lightness in 0.38–0.52 range
+  const { h, s, l } = _toHsl(base.r, base.g, base.b);
+  const boostedS = Math.max(s, 0.65);
+  const boostedL = Math.min(Math.max(l, 0.38), 0.52);
+  return _fromHsl(h, boostedS, boostedL);
+}
 
 /** Render an image (loaded as HTMLImageElement) with a price banner overlay.
  *  Returns a JPEG data URL at 1080×1080. */
@@ -126,7 +203,261 @@ async function loadImageViaProxy(url: string): Promise<HTMLImageElement> {
   });
 }
 
+// ── Story image generator (1080 × 1920 — Instagram story / portrait) ─────────
+const STORY_W = 1080;
+const STORY_H = 1920;
+
+// ── Rounded-rect path helper (reusable) ──────────────────────────────────────
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number, r: number,
+) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y,     x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x,     y + h, x,     y + h - r);
+  ctx.lineTo(x,     y + r);
+  ctx.quadraticCurveTo(x,     y,     x + r, y);
+  ctx.closePath();
+}
+
+// ── Draw one image cover-cropped into a rect ──────────────────────────────────
+function drawCover(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  dx: number, dy: number, dw: number, dh: number,
+) {
+  const { naturalWidth: iw, naturalHeight: ih } = img;
+  const scale = Math.max(dw / iw, dh / ih);
+  const sw = dw / scale, sh = dh / scale;
+  ctx.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, dx, dy, dw, dh);
+}
+
+/**
+ * Renders a 1080×1920 Instagram Story PNG for a product.
+ *
+ * Layout (top → bottom):
+ *   0   – 100   Brand header bar  (logo)
+ *   100 – 700   Hero image        (first photo, full-width, slight bottom vignette)
+ *   700 – 960   Product name + discount badge
+ *   960 – 1360  Photo collage     (up to 3 more images in a 1+2 or 3-col grid)
+ *   1360– 1700  Pricing zone      (original crossed-out, sale price, "only")
+ *   1700– 1920  CTA footer        (Shop Now button + URL)
+ */
+async function renderStoryImage(
+  imgs: HTMLImageElement[],
+  product: { name: string; price: number; originalPrice: number; discount: number },
+  scratch: HTMLCanvasElement,
+): Promise<string> {
+  await _loadFont(OVERLAY_FONT, OVERLAY_FONT_URL);
+  await _loadFont(STORY_SERIF, STORY_SERIF_URL);
+
+  // ── Fonts ────────────────────────────────────────────────────────────────────
+  const FS  = `"${STORY_SERIF}", Georgia, serif`;
+
+  // ── Color palette — brand purple (#9B6FD1) ───────────────────────────────────
+  // Background: very light lavender, near-white
+  const BG        = { r: 248, g: 244, b: 255 };   // #F8F4FF — lightest purple tint
+  // Brand purple shades
+  const BRAND     = { r: 155, g: 111, b: 209 };   // #9B6FD1 — primary
+  const BRAND_DK  = { r: 109, g: 68,  b: 160 };   // #6D44A0 — darker for text
+  const BRAND_DKR = { r: 72,  g: 40,  b: 115 };   // #482873 — deepest, headings
+  const BRAND_LT  = { r: 220, g: 205, b: 245 };   // #DCCDF5 — light accent
+  const ink       = BRAND_DKR;
+
+  // ── Layout — fixed 1080 × 1920, ALL images strictly 1:1 square ─────────────
+  const PAD   = 60;           // side padding
+  const GAP   = 14;           // gap between thumbnails
+  const R     = 28;           // corner radius
+  const CW    = STORY_W - PAD * 2;   // 960px content width
+
+  const extraImgs   = imgs.slice(1, 3);
+  const THUMB_COUNT = extraImgs.length;
+
+  // Thumbnail square size: equal columns from CW
+  const THUMB_SIZE = THUMB_COUNT > 0
+    ? Math.floor((CW - GAP * (THUMB_COUNT - 1)) / THUMB_COUNT)
+    : 0;
+
+  // Hero is ALWAYS 1:1 — width = CW, height = CW (= 960px)
+  // When thumbs exist, we scale down the hero to fit everything in 1920:
+  //   Text+price+btn+url zone needs ~560px
+  //   Gaps: top(56) + hero_gap(14) + name_gap(52) = ~122px overhead
+  //   Available for images: 1920 - 560 - 122 = 1238px
+  //   With 2 thumbs: hero + THUMB_SIZE = 1238 → hero = 1238 - THUMB_SIZE
+  //   THUMB_SIZE for 2 cols = (960-14)/2 = 473 → hero = 1238 - 473 = 765
+  //   Then hero is drawn at 765×765 (1:1 ✓), thumbs at 473×473 (1:1 ✓)
+  const TEXT_ZONE  = 560;     // reserved height for name+price+btn+url+gaps
+  const OVERHEAD   = 56 + GAP + 52; // top-pad + image-gap + gap-before-name = 122
+  const IMG_BUDGET = STORY_H - TEXT_ZONE - OVERHEAD;  // 1238px for images
+
+  const HERO_SIZE = THUMB_COUNT > 0
+    ? Math.min(CW, IMG_BUDGET - (THUMB_COUNT > 0 ? THUMB_SIZE + GAP : 0))
+    : Math.min(CW, IMG_BUDGET);  // no thumbs → full budget, capped at CW
+
+  // ── Fixed zone Y positions ────────────────────────────────────────────────────
+  const HERO_Y    = 56;
+  const HERO_BOT  = HERO_Y + HERO_SIZE;
+  const THUMB_Y   = THUMB_COUNT > 0 ? HERO_BOT + GAP : HERO_BOT;
+  const THUMB_BOT = THUMB_COUNT > 0 ? THUMB_Y + THUMB_SIZE : HERO_BOT;
+
+  // Text zone — safe gap below last image
+  const NAME_Y   = THUMB_BOT + 52;
+  const NAME_LH  = 58;
+  const NAME_H   = NAME_LH * 2;   // 2 lines reserved
+
+  const PRICE_Y  = NAME_Y + NAME_H + 120;
+  const PRICE_H  = 104;
+
+  // ── Canvas — always exactly 1080 × 1920 ──────────────────────────────────────
+  const canvas = document.createElement("canvas");
+  canvas.width  = STORY_W;
+  canvas.height = STORY_H;
+  const ctx = canvas.getContext("2d")!;
+
+  // ── 1. Background — light purple gradient ────────────────────────────────────
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, STORY_H);
+  bgGrad.addColorStop(0,   `rgb(${BG.r},${BG.g},${BG.b})`);            // near-white lavender top
+  bgGrad.addColorStop(0.6, `rgb(242,235,255)`);                          // #F2EBFF mid
+  bgGrad.addColorStop(1,   `rgb(${BRAND_LT.r},${BRAND_LT.g},${BRAND_LT.b})`); // light purple bottom
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, STORY_W, STORY_H);
+
+  // Subtle radial bloom from center — premium feel
+  const bloom = ctx.createRadialGradient(STORY_W / 2, STORY_H * 0.45, 0, STORY_W / 2, STORY_H * 0.45, STORY_W * 0.8);
+  bloom.addColorStop(0,   `rgba(255,255,255,0.55)`);
+  bloom.addColorStop(1,   `rgba(155,111,209,0.0)`);
+  ctx.fillStyle = bloom;
+  ctx.fillRect(0, 0, STORY_W, STORY_H);
+
+  // ── 2. Hero image — 1:1 square ───────────────────────────────────────────────
+  // Center hero horizontally (it may be narrower than CW when thumbs present)
+  const HERO_X = PAD + Math.floor((CW - HERO_SIZE) / 2);
+  ctx.save();
+  roundRect(ctx, HERO_X, HERO_Y, HERO_SIZE, HERO_SIZE, R);
+  ctx.clip();
+  drawCover(ctx, imgs[0], HERO_X, HERO_Y, HERO_SIZE, HERO_SIZE);
+  ctx.restore();
+
+  // ── 3. Thumbnail row — each cell 1:1 square ──────────────────────────────────
+  if (THUMB_COUNT > 0) {
+    for (let i = 0; i < THUMB_COUNT; i++) {
+      const tx = PAD + i * (THUMB_SIZE + GAP);
+      ctx.save();
+      roundRect(ctx, tx, THUMB_Y, THUMB_SIZE, THUMB_SIZE, R);
+      ctx.clip();
+      drawCover(ctx, extraImgs[i], tx, THUMB_Y, THUMB_SIZE, THUMB_SIZE);
+      ctx.restore();
+    }
+  }
+
+  // ── 4. Product name — centered, Playfair Display ─────────────────────────────
+  ctx.save();
+  ctx.font         = `700 52px ${FS}`;
+  ctx.textBaseline = "top";
+  ctx.textAlign    = "center";
+  ctx.fillStyle    = _rgb(BRAND_DKR);
+  const maxNameW  = CW;
+  const nameWords = product.name.split(" ");
+  const nameLines: string[] = [];
+  let nameCur = "";
+  for (const w of nameWords) {
+    const t = nameCur ? `${nameCur} ${w}` : w;
+    if (ctx.measureText(t).width > maxNameW && nameCur) {
+      nameLines.push(nameCur); nameCur = w;
+      if (nameLines.length === 2) { nameCur = ""; break; }
+    } else nameCur = t;
+  }
+  if (nameCur) nameLines.push(nameCur);
+  nameLines.slice(0, 2).forEach((l, i) => ctx.fillText(l, STORY_W / 2, NAME_Y + i * NAME_LH));
+  ctx.restore();
+
+  // Thin brand accent line under name
+  ctx.save();
+  const accentY = NAME_Y + nameLines.length * NAME_LH + 10;
+  const accentW = 80;
+  const accentGrad = ctx.createLinearGradient(STORY_W / 2 - accentW, 0, STORY_W / 2 + accentW, 0);
+  accentGrad.addColorStop(0,   `rgba(${BRAND.r},${BRAND.g},${BRAND.b},0)`);
+  accentGrad.addColorStop(0.5, `rgba(${BRAND.r},${BRAND.g},${BRAND.b},0.7)`);
+  accentGrad.addColorStop(1,   `rgba(${BRAND.r},${BRAND.g},${BRAND.b},0)`);
+  ctx.strokeStyle = accentGrad;
+  ctx.lineWidth   = 2;
+  ctx.beginPath();
+  ctx.moveTo(STORY_W / 2 - accentW, accentY);
+  ctx.lineTo(STORY_W / 2 + accentW, accentY);
+  ctx.stroke();
+  ctx.restore();
+
+  // ── 5. Price row — centered, inline ──────────────────────────────────────────
+  // Use Oswald for price — bold, clean numerals, better than serif for numbers
+  const FP = `"${OVERLAY_FONT}", Arial, sans-serif`;  // Oswald for price
+
+  ctx.save();
+
+  const saleTxt  = `₹${product.price}`;
+  const origTxt  = product.originalPrice > product.price ? `₹${product.originalPrice}` : "";
+  const priceGap = origTxt ? 28 : 0;
+
+  // Measure at render size
+  ctx.font = `700 108px ${FP}`;
+  const saleW = ctx.measureText(saleTxt).width;
+  ctx.font = `700 56px ${FP}`;
+  const origTxtW = origTxt ? ctx.measureText(origTxt).width : 0;
+
+  const totalPriceW = saleW + priceGap + origTxtW;
+  const priceStartX = (STORY_W - totalPriceW) / 2;
+
+  // ── Sale price — large Oswald, brand purple ──────────────────────────────────
+  ctx.font          = `700 108px ${FP}`;
+  ctx.textBaseline  = "alphabetic";
+  ctx.textAlign     = "left";
+  ctx.fillStyle     = _rgb(BRAND);
+  ctx.shadowColor   = `rgba(${BRAND.r},${BRAND.g},${BRAND.b},0.22)`;
+  ctx.shadowBlur    = 12;
+  ctx.shadowOffsetY = 3;
+  ctx.fillText(saleTxt, priceStartX, PRICE_Y);
+  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+
+  // ── Original price — smaller Oswald, muted, with crisp strikethrough ─────────
+  if (origTxt) {
+    const origX     = priceStartX + saleW + priceGap;
+    const origSize  = 56;
+
+    // Measure actual font metrics for precise strikethrough placement
+    ctx.font        = `700 ${origSize}px ${FP}`;
+    const metrics   = ctx.measureText(origTxt);
+    // actualBoundingBoxAscent gives distance from baseline to top of glyph
+    const ascent    = metrics.actualBoundingBoxAscent || origSize * 0.72;
+    // Strikethrough sits at ~50% of ascent above baseline
+    const strikeY   = PRICE_Y - ascent * 0.50;
+
+    // Draw text first
+    ctx.fillStyle   = `rgba(${BRAND_DK.r},${BRAND_DK.g},${BRAND_DK.b},0.45)`;
+    ctx.fillText(origTxt, origX, PRICE_Y);
+
+    // Crisp horizontal strikethrough — thicker, same color as text, full opacity
+    ctx.save();
+    ctx.strokeStyle = `rgba(${BRAND_DK.r},${BRAND_DK.g},${BRAND_DK.b},0.55)`;
+    ctx.lineWidth   = 3.5;
+    ctx.lineCap     = "round";
+    ctx.beginPath();
+    ctx.moveTo(origX - 2,          strikeY);
+    ctx.lineTo(origX + origTxtW + 2, strikeY);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  ctx.restore();
+
+  return canvas.toDataURL("image/png");
+}
+
 const MAX_IMAGES = 6;
+
 const EMPTY_FORM = {
   name: "", category: "", price: "", originalPrice: "", description: "",
   stock: "10", shipping_credit: "0", wholesale_price: "0", client_wholesale_price: "0",
@@ -162,6 +493,7 @@ export function ProductsTab() {
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [previewImg, setPreviewImg] = useState<string | null>(null);
   const [downloadingProductId, setDownloadingProductId] = useState<number | null>(null);
+  const [storyProductId, setStoryProductId] = useState<number | null>(null);
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
 
   const set = (k: keyof typeof EMPTY_FORM, v: string) =>
@@ -270,7 +602,8 @@ export function ProductsTab() {
 
   const handleDownloadProductImages = async (product: Product) => {
     const images = product.images?.length ? product.images : product.image ? [product.image] : [];
-    if (!images.length) { toast.show("No images to download.", "error"); return; }
+    const hasVariants = product.variants?.length > 0;
+    if (!images.length && !hasVariants) { toast.show("No images to download.", "error"); return; }
     setDownloadingProductId(product.id);
 
     // Lazily create the scratch canvas needed for dominant-color sampling
@@ -283,26 +616,149 @@ export function ProductsTab() {
 
     try {
       const zipName = `SNS-${product.id}`;
-      const zip = new JSZip();
-      const folder = zip.folder(zipName)!;
+      const zip     = new JSZip();
 
-      // Process all images in parallel: proxy-fetch → load → canvas overlay → add to zip
-      await Promise.all(images.map(async (url, idx) => {
-        const imgEl = await loadImageViaProxy(url);
-        const dataUrl = await renderWithPriceBanner(imgEl, product.price, scratch);
-        const base64  = dataUrl.split(",")[1];
-        folder.file(`${zipName}-${idx + 1}.jpg`, base64, { base64: true });
-      }));
+      // ── Build list of image batches to process ────────────────────────────
+      type Batch = { folderName: string; urls: string[]; price: number };
+      const batches: Batch[] = [];
+
+      if (!hasVariants) {
+        // No variants — all product images in root folder
+        batches.push({ folderName: zipName, urls: images, price: product.price });
+      } else {
+        // Base variant
+        if (images.length) {
+          const baseLabel = product.base_variant_label?.trim() || "Default";
+          const safeBase  = baseLabel.replace(/[^a-zA-Z0-9-_]/g, "_");
+          batches.push({ folderName: `${zipName}/${safeBase}`, urls: images, price: product.price });
+        }
+        // Named variants
+        for (const variant of product.variants) {
+          const varImgs = variant.images?.length ? variant.images : images;
+          if (!varImgs.length) continue;
+          const safeLabel = (variant.label ?? "variant").replace(/[^a-zA-Z0-9-_]/g, "_");
+          batches.push({
+            folderName: `${zipName}/${safeLabel}`,
+            urls:  varImgs,
+            price: variant.price ?? product.price,
+          });
+        }
+      }
+
+      if (!batches.length) { toast.show("No images to download.", "error"); return; }
+
+      // ── Process each batch ───────────────────────────────────────────────
+      for (const batch of batches) {
+        const folder = zip.folder(batch.folderName)!;
+        const batchName = batch.folderName.split("/").pop()!;
+        await Promise.all(batch.urls.map(async (url, idx) => {
+          const imgEl   = await loadImageViaProxy(url);
+          const dataUrl = await renderWithPriceBanner(imgEl, batch.price, scratch);
+          const base64  = dataUrl.split(",")[1];
+          folder.file(`${batchName}-${idx + 1}.jpg`, base64, { base64: true });
+        }));
+      }
 
       const blob = await zip.generateAsync({ type: "blob" });
       const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
+      link.href  = URL.createObjectURL(blob);
       link.download = `${zipName}.zip`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(link.href), 5000);
     } catch (err) {
       toast.show(err instanceof Error ? err.message : "Download failed.", "error");
     } finally { setDownloadingProductId(null); }
+  };
+
+  const handleGenerateStory = async (product: Product) => {
+    setStoryProductId(product.id);
+
+    // Lazily create scratch canvas
+    if (!scratchCanvasRef.current) {
+      const c = document.createElement("canvas");
+      c.width = OVERLAY_SIZE; c.height = 1;
+      scratchCanvasRef.current = c;
+    }
+    const scratch = scratchCanvasRef.current;
+
+    try {
+      const hasVariants = product.variants?.length > 0;
+
+      if (!hasVariants) {
+        // ── No variants: single story from product images ───────────────────
+        const urls = (product.images?.length ? product.images : product.image ? [product.image] : []).slice(0, 4);
+        if (!urls.length) { toast.show("No image available for story.", "error"); return; }
+        const imgEls  = await Promise.all(urls.map((u) => loadImageViaProxy(u)));
+        const dataUrl = await renderStoryImage(imgEls, product, scratch);
+        const link    = document.createElement("a");
+        link.href     = dataUrl;
+        link.download = `SNS-${product.id}-story.png`;
+        link.click();
+
+      } else {
+        // ── Has variants: one story per variant, downloaded as ZIP ──────────
+        const zip     = new JSZip();
+        const folder  = zip.folder(`SNS-${product.id}-stories`)!;
+
+        // Build the list of "slots" to generate — base first, then named variants
+        type StorySlot = { label: string; coverUrl: string; extraUrls: string[]; price: number };
+        const slots: StorySlot[] = [];
+
+        // ── Base / default variant (uses product.images, product.base_variant_label) ──
+        const baseImgs   = product.images?.length ? product.images : product.image ? [product.image] : [];
+        const baseCover  = baseImgs[0];
+        if (baseCover) {
+          slots.push({
+            label:     product.base_variant_label?.trim() || "Default",
+            coverUrl:  baseCover,
+            extraUrls: baseImgs.slice(1, 3),
+            price:     product.price,
+          });
+        }
+
+        // ── Named variants ──────────────────────────────────────────────────
+        for (const variant of product.variants) {
+          const varImgs  = variant.images?.length ? variant.images : baseImgs;
+          const cover    = varImgs[0] ?? baseCover;
+          if (!cover) continue;
+          slots.push({
+            label:     variant.label?.trim() || "Variant",
+            coverUrl:  cover,
+            extraUrls: [
+              varImgs[1] ?? baseImgs[0] ?? "",
+              varImgs[2] ?? baseImgs[1] ?? "",
+            ].filter(Boolean),
+            price: variant.price ?? product.price,
+          });
+        }
+
+        if (slots.length === 0) { toast.show("No images found for any variant.", "error"); return; }
+
+        // Process sequentially to avoid overloading the proxy
+        for (const slot of slots) {
+          const storyUrls = [slot.coverUrl, ...slot.extraUrls].slice(0, 3);
+          const imgEls    = await Promise.all(storyUrls.map((u) => loadImageViaProxy(u)));
+          const variantProduct = {
+            ...product,
+            price:     slot.price,
+            name:      product.name + (slot.label ? ` – ${slot.label}` : ""),
+          };
+          const dataUrl = await renderStoryImage(imgEls, variantProduct, scratch);
+          const base64  = dataUrl.split(",")[1];
+          const safeName = slot.label.replace(/[^a-zA-Z0-9-_]/g, "_");
+          folder.file(`SNS-${product.id}-${safeName}-story.png`, base64, { base64: true });
+        }
+
+        const blob = await zip.generateAsync({ type: "blob" });
+        const link = document.createElement("a");
+        link.href  = URL.createObjectURL(blob);
+        link.download = `SNS-${product.id}-stories.zip`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+      }
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : "Story generation failed.", "error");
+    } finally { setStoryProductId(null); }
   };
 
   return (
@@ -724,74 +1180,97 @@ export function ProductsTab() {
               </div>
             )}
             {visibleProducts.map((p) => (
-              <div key={p.id} className="px-4 py-4 flex flex-col gap-3">
-                <div className="flex items-center gap-3">
+              <div key={p.id} className="px-3 py-3 flex flex-col gap-2.5">
+                {/* Top row: image + info + actions */}
+                <div className="flex items-start gap-3">
                   <img src={imgUrl(p.images?.[0] ?? p.image, "tiny")} alt={p.name}
                     onClick={() => setPreviewImg(imgUrl(p.images?.[0] ?? p.image, "full"))}
-                    className="w-20 h-20 rounded-xl object-cover bg-[#F3EEFB] border border-gray-100 cursor-zoom-in hover:opacity-90 transition-opacity shrink-0" />
+                    className="w-16 h-16 rounded-xl object-cover bg-[#F3EEFB] border border-gray-100 cursor-zoom-in hover:opacity-90 transition-opacity shrink-0" />
+
+                  {/* Info block — full width, no truncation */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className={`font-medium text-sm truncate ${p.is_hidden ? "text-gray-400" : "text-gray-800"}`}>{p.name}</p>
-                      <span className="text-[10px] font-mono font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">SNS-{p.id}</span>
+                    {/* Name + hidden badge */}
+                    <div className="flex items-start gap-1.5 flex-wrap">
+                      <p className={`font-semibold text-sm leading-snug ${p.is_hidden ? "text-gray-400" : "text-gray-800"}`}>{p.name}</p>
                       {p.is_hidden && (
-                        <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full shrink-0">
+                        <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full shrink-0 mt-0.5">
                           <EyeOff className="w-2.5 h-2.5" />Hidden
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-400 capitalize">{p.category} · ₹{p.price}{p.images?.length > 1 && <span className="ml-1 text-[#9B6FD1]">· {p.images.length} photos</span>}</p>
+                    {/* SNS# + category + price + photos — single compact line */}
+                    <p className="text-[11px] text-gray-400 capitalize mt-0.5 leading-snug">
+                      <span className="font-mono font-semibold text-gray-400 bg-gray-100 px-1 py-0.5 rounded text-[10px] mr-1">SNS-{p.id}</span>
+                      {p.category} · ₹{p.price}
+                      {p.images?.length > 1 && <span className="text-[#9B6FD1] ml-1">· {p.images.length} photos</span>}
+                    </p>
+                    {/* Cost / Margin row */}
                     {p.wholesale_price > 0 && (() => {
                       const margin = p.price - p.wholesale_price - (p.shipping_credit ?? 0);
                       const pct = Math.round((margin / p.price) * 100);
                       return (
                         <div className="flex flex-wrap items-center gap-1 mt-1">
                           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-500">Cost ₹{p.wholesale_price}</span>
-                          {p.shipping_credit > 0 && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-500">Ship Credit ₹{p.shipping_credit}</span>}
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${margin >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"}`}>Margin ₹{margin} ({pct}%)</span>
+                          {p.shipping_credit > 0 && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-500">Ship ₹{p.shipping_credit}</span>}
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${margin >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"}`}>₹{margin} ({pct}%)</span>
                         </div>
                       );
                     })()}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                </div>
+
+                {/* Action buttons + stock — bottom row, full width */}
+                <div className="flex items-center justify-between gap-2">
+                  {/* Stock */}
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {(() => {
+                      const variantStock = (p.variants ?? []).reduce((s, v) => s + v.stock, 0);
+                      const totalStk = p.variants?.length ? p.stock + variantStock : p.stock;
+                      return (
+                        <>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${totalStk === 0 ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>
+                            {totalStk === 0 ? "OUT" : `${totalStk} in stock`}
+                          </span>
+                          {p.variants?.length ? (
+                            <span className="text-[10px] text-gray-400 truncate">{p.stock} base + {variantStock} var</span>
+                          ) : (
+                            <div className="flex items-center gap-0.5 bg-gray-50 border border-gray-200 rounded-lg px-1.5 py-0.5">
+                              <button type="button" onClick={() => updateStock(p.id, p.stock - 1)} disabled={p.stock === 0}
+                                className="w-5 h-5 flex items-center justify-center rounded hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] disabled:opacity-30 transition-colors"><Minus className="w-3 h-3" /></button>
+                              <span className="text-sm font-semibold text-gray-700 w-7 text-center">{p.stock}</span>
+                              <button type="button" onClick={() => updateStock(p.id, p.stock + 1)}
+                                className="w-5 h-5 flex items-center justify-center rounded hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] transition-colors"><Plus className="w-3 h-3" /></button>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Action buttons — compact, right-aligned */}
+                  <div className="flex items-center gap-0.5 shrink-0">
                     <button
                       onClick={async () => { try { await updateHidden(p.id, !p.is_hidden); } catch { toast.show("Failed to update visibility", "error"); } }}
                       className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${p.is_hidden ? "text-amber-400 bg-amber-50 hover:bg-amber-100" : "text-gray-300 hover:text-gray-500 hover:bg-gray-100"}`}
-                      title={p.is_hidden ? "Hidden from store — click to show" : "Visible in store — click to hide"}
+                      title={p.is_hidden ? "Hidden — tap to show" : "Visible — tap to hide"}
                     >
                       {p.is_hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
+                    <button
+                      onClick={() => handleGenerateStory(p)}
+                      disabled={storyProductId === p.id}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-purple-500 hover:bg-purple-50 transition-colors disabled:opacity-50"
+                      title={p.variants?.length > 0 ? `Story ZIP (${p.variants.length + 1} variants)` : "Download story"}
+                    >
+                      {storyProductId === p.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
+                    </button>
                     <button onClick={() => handleDownloadProductImages(p)} disabled={downloadingProductId === p.id}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-emerald-500 hover:bg-emerald-50 transition-colors disabled:opacity-50" title="Download images">
+                      className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-emerald-500 hover:bg-emerald-50 transition-colors disabled:opacity-50" title="Download post images">
                       {downloadingProductId === p.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                     </button>
                     <button onClick={() => setEditProduct(p)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-[#9B6FD1] hover:bg-[#F3EEFB] transition-colors" title="Edit"><Pencil className="w-4 h-4" /></button>
                     <button onClick={() => setDeleteId(p.id)} className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
                   </div>
-                </div>
-                {/* Stock row */}
-                <div className="flex items-center gap-2">
-                  {(() => {
-                    const variantStock = (p.variants ?? []).reduce((s, v) => s + v.stock, 0);
-                    const totalStk = p.variants?.length ? p.stock + variantStock : p.stock;
-                    return (
-                      <>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${totalStk === 0 ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>
-                          {totalStk === 0 ? "OUT OF STOCK" : `${totalStk} in stock`}
-                        </span>
-                        {p.variants?.length ? (
-                          <span className="text-[10px] text-gray-400">{p.stock} base + {variantStock} variants</span>
-                        ) : (
-                          <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1">
-                            <button type="button" onClick={() => updateStock(p.id, p.stock - 1)} disabled={p.stock === 0}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] disabled:opacity-30 transition-colors"><Minus className="w-3 h-3" /></button>
-                            <span className="text-sm font-semibold text-gray-700 w-8 text-center">{p.stock}</span>
-                            <button type="button" onClick={() => updateStock(p.id, p.stock + 1)}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[#F3EEFB] text-gray-400 hover:text-[#9B6FD1] transition-colors"><Plus className="w-3 h-3" /></button>
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
                 </div>
               </div>
             ))}
