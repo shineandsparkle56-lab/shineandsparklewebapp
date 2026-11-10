@@ -14,7 +14,22 @@ export type AppSettingKey =
   | "whatsapp_tpl_dispatched"
   | "whatsapp_tpl_delayed"
   | "whatsapp_tpl_feedback"
-  | "whatsapp_tpl_thank_you";
+  | "whatsapp_tpl_thank_you"
+  // ── Business / GST profile ───────────────────────────────────
+  | "biz_legal_name"
+  | "biz_address_line1"
+  | "biz_address_line2"
+  | "biz_city"
+  | "biz_state"
+  | "biz_pincode"
+  | "biz_phone"
+  | "biz_gstin"
+  | "biz_pan"
+  | "biz_state_code"
+  | "biz_invoice_prefix"   // e.g. "shine" → shine00001
+  | "biz_default_hsn"      // default HSN for all products (e.g. "7113")
+  | "biz_default_gst_rate" // default GST rate % (e.g. "3")
+  | "biz_signature_url";   // uploaded signature image URL
 
 export interface LocalDeliveryZone {
   pincode: string;

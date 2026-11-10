@@ -462,6 +462,7 @@ const EMPTY_FORM = {
   name: "", category: "", price: "", originalPrice: "", description: "",
   stock: "10", shipping_credit: "0", wholesale_price: "0", client_wholesale_price: "0",
   base_variant_label: "", base_variant_color: "",
+  hsn_code: "", gst_rate: "",
 };
 const BATCH_SIZE = 10;
 
@@ -581,6 +582,8 @@ export function ProductsTab() {
         base_variant_color: form.base_variant_color.trim() || undefined,
         tags: [],
         sizes: [],
+        hsn_code: form.hsn_code.trim() || undefined,
+        gst_rate: form.gst_rate.trim() ? parseFloat(form.gst_rate) : undefined,
       });
       setForm({ ...EMPTY_FORM, category: firstCat });
       setAddFormVariants([]); img.clear();
@@ -888,6 +891,22 @@ export function ProductsTab() {
               <label className="label">Client Wholesale Price (₹)</label>
               <input type="number" min="0" value={form.client_wholesale_price} onChange={(e) => set("client_wholesale_price", e.target.value)} className="input" />
               <p className="text-[11px] text-gray-400 mt-1">Auto: cost × 1.3 — override if needed</p>
+            </div>
+
+            {/* GST fields */}
+            <div>
+              <label className="label">HSN Code</label>
+              <input type="text" value={form.hsn_code} onChange={(e) => set("hsn_code", e.target.value)}
+                placeholder="e.g. 7113 (leave blank for default)"
+                className="input" />
+              <p className="text-[11px] text-gray-400 mt-1">Imitation jewellery: 7117 · Real gold/silver: 7113</p>
+            </div>
+            <div>
+              <label className="label">GST Rate (%)</label>
+              <input type="number" min="0" max="28" step="0.5" value={form.gst_rate} onChange={(e) => set("gst_rate", e.target.value)}
+                placeholder="Leave blank for business default"
+                className="input" />
+              <p className="text-[11px] text-gray-400 mt-1">Blank = use billing default (3%)</p>
             </div>
 
             {/* ── Live margin preview ── */}

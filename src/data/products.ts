@@ -33,4 +33,6 @@ export interface Product {
   sizes: string[];         // available sizes e.g. ["2.4", "2.6", "2.8"] for bangles
   created_at?: string;     // ISO timestamp — used to show "New" badge
   is_hidden?: boolean;     // when true the product is hidden from the customer-facing grid
+  hsn_code?: string;       // HSN code for GST invoice (e.g. "7113" for jewellery)
+  gst_rate?: number;       // GST % for this product (e.g. 3). Falls back to business default.
 }

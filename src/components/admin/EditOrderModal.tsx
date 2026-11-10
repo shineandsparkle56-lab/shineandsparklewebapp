@@ -75,6 +75,7 @@ export interface OrderRow {
   pickup_location?: string;
   pickup_pincode?: string;
   referral_code?: string | null;
+  invoice_number?: string | null;  // sequential GST invoice number e.g. "shine00084" — set once, never changes
 }
 
 /* ─── CartLine (internal item state) ────────────────────────── */

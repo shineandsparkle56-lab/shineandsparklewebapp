@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
-  Package, ShoppingBag, Tag, ImageIcon, BarChart3, Printer, Settings, Sparkles, LogOut, Gift, Package2,
+  Package, ShoppingBag, Tag, ImageIcon, BarChart3, Printer, Settings, Sparkles, LogOut, Gift, Package2, Receipt, IndianRupee,
 } from "lucide-react";
 import { ProductsTab }   from "../components/admin/ProductsTab";
 import { OrdersTab }     from "../components/admin/OrdersTab";
@@ -13,23 +13,27 @@ import { ShiprocketPDFPrinter } from "../components/admin/ShiprocketPDFPrinter";
 import { FestivalsTab } from "../components/admin/FestivalsTab";
 import { ReferralsTab } from "../components/admin/ReferralsTab";
 import { ComboBoxesTab } from "../components/admin/ComboBoxesTab";
+import { BillingTab }   from "../components/admin/BillingTab";
+import { PriceSetupTab } from "../components/admin/PriceSetupTab";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, X } from "lucide-react";
 import { useToast } from "../hooks/useToast";
 
-type Tab = "products" | "orders" | "categories" | "post" | "report" | "label" | "settings" | "festivals" | "referrals" | "combos";
+type Tab = "products" | "orders" | "categories" | "post" | "report" | "label" | "settings" | "festivals" | "referrals" | "combos" | "billing" | "prices";
 
 const TABS: { id: Tab; icon: React.ElementType; label: string }[] = [
-  { id: "products",   icon: Package,    label: "Products"    },
-  { id: "orders",     icon: ShoppingBag,label: "Orders"      },
-  { id: "categories", icon: Tag,        label: "Categories"  },
-  { id: "post",       icon: ImageIcon,  label: "Post"        },
-  { id: "report",     icon: BarChart3,  label: "Report"      },
-  { id: "label",      icon: Printer,    label: "Label Print" },
-  { id: "festivals",  icon: Sparkles,   label: "Festivals"   },
-  { id: "combos",     icon: Package2,   label: "Combo Boxes" },
-  { id: "referrals",  icon: Gift,       label: "Referrals"   },
-  { id: "settings",   icon: Settings,   label: "Settings"    },
+  { id: "products",   icon: Package,       label: "Products"    },
+  { id: "orders",     icon: ShoppingBag,   label: "Orders"      },
+  { id: "billing",    icon: Receipt,       label: "Billing"     },
+  { id: "prices",     icon: IndianRupee,   label: "Prices"      },
+  { id: "categories", icon: Tag,           label: "Categories"  },
+  { id: "post",       icon: ImageIcon,     label: "Post"        },
+  { id: "report",     icon: BarChart3,     label: "Report"      },
+  { id: "label",      icon: Printer,       label: "Label Print" },
+  { id: "festivals",  icon: Sparkles,      label: "Festivals"   },
+  { id: "combos",     icon: Package2,      label: "Combo Boxes" },
+  { id: "referrals",  icon: Gift,          label: "Referrals"   },
+  { id: "settings",   icon: Settings,      label: "Settings"    },
 ];
 
 export function AdminPanel() {
@@ -93,6 +97,8 @@ export function AdminPanel() {
       <div className="max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-8">
         {activeTab === "products"   && <ProductsTab />}
         {activeTab === "orders"     && <OrdersTab />}
+        {activeTab === "billing"    && <BillingTab />}
+        {activeTab === "prices"     && <PriceSetupTab />}
         {activeTab === "categories" && <CategoriesTab />}
         {activeTab === "post"       && <PostEditor />}
         {activeTab === "report"     && <ReportTab />}

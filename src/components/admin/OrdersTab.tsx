@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Plus, Trash2, ShoppingBag, Download, FileText, Loader2,
   Pencil, Truck, X, CheckCircle2, Zap, Link2, RefreshCw, ChevronDown,
-  MapPin, Calendar, Clock, Heart, SlidersHorizontal, MessageCircle, Star, Phone,
+  MapPin, Calendar, Clock, Heart, SlidersHorizontal, MessageCircle, Star, Phone, Receipt,
 } from "lucide-react";
 
 // ── Tracking types ─────────────────────────────────────────────────────────
@@ -51,6 +51,9 @@ import { useToast } from "../../hooks/useToast";
 import { imgUrl } from "../../lib/imgUrl";
 import { pushToShiprocket, saveSrIds, buildShiprocketItems, buildShiprocketItemsWholesale, estimateWeight } from "../../lib/shiprocket";
 import { useSettings } from "../../hooks/useSettings";
+import { assignInvoiceNumber } from "../../lib/invoiceNumber";
+import { getSetting } from "../../lib/settings";
+import { generateGSTInvoice, buildGSTInvoiceData, getOrderInvoiceNo, type BizProfile } from "../../utils/generateGSTInvoice";
 import { EditOrderModal } from "./EditOrderModal";
 import { AddOrderModal } from "./AddOrderModal";
 import { QuickAddOrderModal } from "./QuickAddOrderModal";
@@ -109,6 +112,87 @@ export function OrdersTab() {
   const [thankYouOrder, setThankYouOrder] = useState<OrderRow | null>(null);
   const [whatsappOpenId, setWhatsappOpenId] = useState<number | null>(null);
   const whatsappRef = useRef<HTMLDivElement | null>(null);
+
+  // ── Billing state ─────────────────────────────────────────────
+  const [billingId, setBillingId] = useState<number | null>(null);
+  const [bizProfile, setBizProfile] = useState<BizProfile | null>(null);
+
+  // Load biz profile once for Bill button
+  useEffect(() => {
+    Promise.all([
+      getSetting("biz_legal_name"),
+      getSetting("biz_address_line1"),
+      getSetting("biz_address_line2"),
+      getSetting("biz_city"),
+      getSetting("biz_state"),
+      getSetting("biz_pincode"),
+      getSetting("biz_phone"),
+      getSetting("biz_gstin"),
+      getSetting("biz_pan"),
+      getSetting("biz_state_code"),
+      getSetting("biz_invoice_prefix"),
+      getSetting("biz_default_hsn"),
+      getSetting("biz_default_gst_rate"),
+      getSetting("biz_signature_url"),
+    ]).then(([name, addr1, addr2, city, state, pin, phone, gstin, pan, sc, prefix, hsn, gstRate, sigUrl]) => {
+      setBizProfile({
+        legalName:      name    ?? "AYUSHKUMAR BALVANTBHAI PRAJAPATI",
+        addressLine1:   addr1   ?? "Building No. 762, AT MADHI, PRABHUNAGAR",
+        addressLine2:   addr2   ?? "MADHI, Surat",
+        city:           city    ?? "Madhi",
+        state:          state   ?? "Gujarat",
+        pincode:        pin     ?? "394340",
+        phone:          phone   ?? "9574024419",
+        gstin:          gstin   ?? "24KNXPK8077B1ZC",
+        pan:            pan     ?? "KNXPK8077B",
+        stateCode:      sc      ?? "24",
+        invoicePrefix:  prefix  ?? "shine",
+        defaultHsn:     hsn     ?? "7117",
+        defaultGstRate: gstRate ? parseFloat(gstRate) : 3,
+        signatureUrl:   sigUrl  ?? "",
+      });
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleBillOrder = async (order: OrderRow) => {
+    if (!bizProfile) { toast.show("Business profile not loaded yet.", "error"); return; }
+    if (!bizProfile.gstin) { toast.show("GSTIN not configured. Set it in Billing tab.", "error"); return; }
+    if (!order.customer_name) { toast.show("Order has no customer details. Edit it first.", "error"); return; }
+
+    setBillingId(order.id);
+    try {
+      // Assign invoice number (idempotent — reuses existing if already set)
+      const invoiceNo = await assignInvoiceNumber(
+        order.id,
+        bizProfile.invoicePrefix,
+        order.invoice_number,
+      );
+
+      // Update local state so button shows correct invoice number immediately
+      setOrders((prev) => prev.map((o) =>
+        o.id === order.id ? { ...o, invoice_number: invoiceNo } : o
+      ));
+
+      // Build and download the GST invoice PDF
+      const invoiceData = buildGSTInvoiceData(order, bizProfile, invoiceNo);
+      const blob = await generateGSTInvoice(invoiceData);
+
+      const url = URL.createObjectURL(blob);
+      const a   = document.createElement("a");
+      a.href     = url;
+      a.download = `Invoice_${invoiceNo}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.show(`Invoice ${invoiceNo} generated!`);
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : "Failed to generate invoice.", "error");
+    } finally {
+      setBillingId(null);
+    }
+  };
 
   // Close WhatsApp dropdown when clicking outside
   useEffect(() => {
@@ -1162,6 +1246,22 @@ export function OrdersTab() {
                         <button onClick={(e) => { e.stopPropagation(); handleDownloadWholesalePDF(order); }} disabled={wholesaleDownloadingId === order.id}
                           className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-60">
                           {wholesaleDownloadingId === order.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} W-PDF
+                        </button>
+                        {/* Bill button — assigns sequential invoice number and generates GST invoice */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleBillOrder(order); }}
+                          disabled={billingId === order.id || !bizProfile?.gstin}
+                          title={order.invoice_number ? `Invoice: ${order.invoice_number} — click to re-download` : "Assign invoice number and generate GST invoice"}
+                          className={`flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors disabled:opacity-60 border ${
+                            order.invoice_number
+                              ? "bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                              : "bg-[#F3EEFB] border-[#9B6FD1]/40 text-[#9B6FD1] hover:bg-[#9B6FD1] hover:text-white"
+                          }`}
+                        >
+                          {billingId === order.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Receipt className="w-3.5 h-3.5" />}
+                          {order.invoice_number ? order.invoice_number : "Bill"}
                         </button>
                         <button onClick={(e) => { e.stopPropagation(); setThankYouOrder(order); }}
                           className="flex items-center gap-1 px-3 py-1.5 bg-pink-50 hover:bg-pink-100 text-pink-600 text-xs font-semibold rounded-lg transition-colors border border-pink-200">

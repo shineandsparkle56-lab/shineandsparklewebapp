@@ -393,6 +393,9 @@ export function CartDrawer() {
               images: (item.variantId && item.product.variants?.find(v => v.id === item.variantId)?.images?.length)
                 ? item.product.variants!.find(v => v.id === item.variantId)!.images
                 : (item.product.images ?? [item.product.image]),
+              // Snapshot HSN and GST rate at order time so invoices are immutable
+              hsn_code: item.product.hsn_code ?? null,
+              gst_rate: item.product.gst_rate ?? null,
             },
             quantity: item.quantity,
             variant_id: item.variantId ?? null,

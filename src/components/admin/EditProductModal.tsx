@@ -20,7 +20,7 @@ interface Props {
   onError: (msg: string) => void;
 }
 
-type FormKey = "name" | "category" | "price" | "originalPrice" | "description" | "stock" | "shipping_credit" | "wholesale_price" | "client_wholesale_price" | "base_variant_label" | "base_variant_color";
+type FormKey = "name" | "category" | "price" | "originalPrice" | "description" | "stock" | "shipping_credit" | "wholesale_price" | "client_wholesale_price" | "base_variant_label" | "base_variant_color" | "hsn_code" | "gst_rate";
 
 async function uploadFile(file: File, productName?: string): Promise<string> {
   const compressed = await compressToWebP(file, { name: productName });
@@ -192,6 +192,7 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
     name: "", category: "", price: "", originalPrice: "",
     description: "", stock: "", shipping_credit: "", wholesale_price: "",
     client_wholesale_price: "", base_variant_label: "", base_variant_color: "",
+    hsn_code: "", gst_rate: "",
   });
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [tags, setTags] = useState<string[]>([]);
@@ -214,6 +215,8 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
       client_wholesale_price: String(product.client_wholesale_price ?? 0),
       base_variant_label: product.base_variant_label ?? "",
       base_variant_color: product.base_variant_color ?? "",
+      hsn_code: product.hsn_code ?? "",
+      gst_rate: product.gst_rate != null ? String(product.gst_rate) : "",
     });
     setVariants(product.variants ?? []);
     setTags(product.tags ?? []);
@@ -305,6 +308,8 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
         sizes,
         // Preserve existing visibility — editing never changes is_hidden
         is_hidden: product.is_hidden ?? false,
+        hsn_code: form.hsn_code.trim() || undefined,
+        gst_rate: form.gst_rate.trim() ? parseFloat(form.gst_rate) : undefined,
       });
       onSaved("Product updated!");
       onClose();
@@ -402,6 +407,22 @@ export function EditProductModal({ product, onClose, onSaved, onError }: Props) 
                   <label className="label">Client Wholesale Price (₹)</label>
                   <input type="number" min="0" value={form.client_wholesale_price} onChange={(e) => set("client_wholesale_price", e.target.value)} className="input" />
                   <p className="text-[11px] text-gray-400 mt-1">Auto: cost × 1.2 — override if needed</p>
+                </div>
+
+                {/* GST fields */}
+                <div>
+                  <label className="label">HSN Code</label>
+                  <input type="text" value={form.hsn_code} onChange={(e) => set("hsn_code", e.target.value)}
+                    placeholder="e.g. 7113 (leave blank for default)"
+                    className="input" />
+                  <p className="text-[11px] text-gray-400 mt-1">Imitation jewellery: 7117 · Real gold/silver: 7113</p>
+                </div>
+                <div>
+                  <label className="label">GST Rate (%)</label>
+                  <input type="number" min="0" max="28" step="0.5" value={form.gst_rate} onChange={(e) => set("gst_rate", e.target.value)}
+                    placeholder="Leave blank for business default"
+                    className="input" />
+                  <p className="text-[11px] text-gray-400 mt-1">Blank = use billing default ({`3%`})</p>
                 </div>
 
                 {/* Product Images */}

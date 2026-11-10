@@ -90,6 +90,9 @@ export function AddOrderModal({ open, onClose, onCreated, onError }: Props) {
             shipping_credit: p.shipping_credit,
             image: p.images?.[0] ?? p.image,
             images: p.images ?? [p.image],
+            // Snapshot HSN and GST rate at order time so invoices are immutable
+            hsn_code: p.hsn_code ?? null,
+            gst_rate: p.gst_rate ?? null,
           },
           quantity: 1,
         },

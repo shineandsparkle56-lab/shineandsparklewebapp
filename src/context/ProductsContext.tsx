@@ -41,6 +41,8 @@ function mapRow(row: Record<string, unknown>): Product {
     sizes: Array.isArray(row.sizes) ? (row.sizes as string[]) : [],
     created_at: row.created_at as string | undefined,
     is_hidden: row.is_hidden === true,
+    hsn_code: typeof row.hsn_code === "string" ? row.hsn_code : undefined,
+    gst_rate: typeof row.gst_rate === "number" ? row.gst_rate : undefined,
   };
 }
 
@@ -120,6 +122,8 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
         tags: p.tags ?? [],
         sizes: p.sizes ?? [],
         is_hidden: p.is_hidden ?? false,
+        hsn_code: p.hsn_code ?? null,
+        gst_rate: p.gst_rate ?? null,
       }])
       .select()
       .single();
@@ -150,6 +154,8 @@ export function ProductsProvider({ children }: { children: ReactNode }) {
         tags: p.tags ?? [],
         sizes: p.sizes ?? [],
         is_hidden: p.is_hidden ?? false,
+        hsn_code: p.hsn_code ?? null,
+        gst_rate: p.gst_rate ?? null,
       })
       .eq("id", id);
     if (err) throw new Error(err.message);

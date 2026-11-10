@@ -64,6 +64,8 @@ export interface UpdateOrderPayload {
     units: number;
     selling_price: number;
     discount?: number;
+    hsn?: string;
+    tax?: number;
   }[];
   weight?: number;
   length?: number;
@@ -157,8 +159,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           units: item.units,
           selling_price: item.selling_price,
           discount: item.discount ?? 0,
-          tax: 0,
-          hsn: "",
+          tax: item.tax ?? 0,
+          hsn: item.hsn ?? "",
         }));
       })(),
       payment_method: body.payment_mode === "cod" ? "COD" : "Prepaid",
