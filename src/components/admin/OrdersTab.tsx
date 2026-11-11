@@ -53,7 +53,7 @@ import { pushToShiprocket, saveSrIds, buildShiprocketItems, buildShiprocketItems
 import { useSettings } from "../../hooks/useSettings";
 import { assignInvoiceNumber } from "../../lib/invoiceNumber";
 import { getSetting } from "../../lib/settings";
-import { generateGSTInvoice, buildGSTInvoiceData, getOrderInvoiceNo, type BizProfile } from "../../utils/generateGSTInvoice";
+import { getOrderInvoiceNo, type BizProfile } from "../../utils/generateGSTInvoice";
 import { EditOrderModal } from "./EditOrderModal";
 import { AddOrderModal } from "./AddOrderModal";
 import { QuickAddOrderModal } from "./QuickAddOrderModal";
@@ -161,34 +161,21 @@ export function OrdersTab() {
 
     setBillingId(order.id);
     try {
-      // Assign invoice number (idempotent — reuses existing if already set)
+      // Assign invoice number and save to orders table — that's all
       const invoiceNo = await assignInvoiceNumber(
         order.id,
         bizProfile.invoicePrefix,
         order.invoice_number,
       );
 
-      // Update local state so button shows correct invoice number immediately
+      // Update local state so button shows the invoice number immediately
       setOrders((prev) => prev.map((o) =>
         o.id === order.id ? { ...o, invoice_number: invoiceNo } : o
       ));
 
-      // Build and download the GST invoice PDF
-      const invoiceData = buildGSTInvoiceData(order, bizProfile, invoiceNo);
-      const blob = await generateGSTInvoice(invoiceData);
-
-      const url = URL.createObjectURL(blob);
-      const a   = document.createElement("a");
-      a.href     = url;
-      a.download = `Invoice_${invoiceNo}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      toast.show(`Invoice ${invoiceNo} generated!`);
+      toast.show(`Invoice number ${invoiceNo} assigned. Go to Billing tab to download PDF.`);
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : "Failed to generate invoice.", "error");
+      toast.show(err instanceof Error ? err.message : "Failed to assign invoice number.", "error");
     } finally {
       setBillingId(null);
     }
@@ -211,21 +198,63 @@ export function OrdersTab() {
   const [showFilters,    setShowFilters]    = useState(false);
   const [filterShipping, setFilterShipping] = useState<"all" | "shipped" | "unshipped">("all");
   const [filterStatus,   setFilterStatus]   = useState<"all" | "pending" | "confirmed" | "shipped" | "delivered" | "cancelled">("all");
+  const [dateFrom,       setDateFrom]       = useState("");  // "YYYY-MM-DD"
+  const [dateTo,         setDateTo]         = useState("");  // "YYYY-MM-DD"
 
-  const activeFilterCount = [filterShipping !== "all", filterStatus !== "all"].filter(Boolean).length;
+  const activeFilterCount = [
+    filterShipping !== "all",
+    filterStatus !== "all",
+    !!dateFrom,
+    !!dateTo,
+  ].filter(Boolean).length;
 
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
       if (filterShipping === "shipped"   && !o.awb_code)  return false;
       if (filterShipping === "unshipped" && !!o.awb_code) return false;
       if (filterStatus !== "all" && o.status !== filterStatus) return false;
+      if (dateFrom) {
+        const orderDate = o.created_at.slice(0, 10); // "YYYY-MM-DD"
+        if (orderDate < dateFrom) return false;
+      }
+      if (dateTo) {
+        const orderDate = o.created_at.slice(0, 10);
+        if (orderDate > dateTo) return false;
+      }
       return true;
     });
-  }, [orders, filterShipping, filterStatus]);
+  }, [orders, filterShipping, filterStatus, dateFrom, dateTo]);
 
   function clearFilters() {
     setFilterShipping("all");
     setFilterStatus("all");
+    setDateFrom("");
+    setDateTo("");
+  }
+
+  // Quick date presets
+  function setPreset(preset: "today" | "yesterday" | "week" | "month" | "lastmonth") {
+    const now   = new Date();
+    const pad   = (n: number) => String(n).padStart(2, "0");
+    const fmt   = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const today = fmt(now);
+
+    if (preset === "today") {
+      setDateFrom(today); setDateTo(today);
+    } else if (preset === "yesterday") {
+      const y = new Date(now); y.setDate(y.getDate() - 1);
+      setDateFrom(fmt(y)); setDateTo(fmt(y));
+    } else if (preset === "week") {
+      const w = new Date(now); w.setDate(w.getDate() - 6);
+      setDateFrom(fmt(w)); setDateTo(today);
+    } else if (preset === "month") {
+      const m = new Date(now); m.setDate(1);
+      setDateFrom(fmt(m)); setDateTo(today);
+    } else if (preset === "lastmonth") {
+      const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const last  = new Date(now.getFullYear(), now.getMonth(), 0);
+      setDateFrom(fmt(first)); setDateTo(fmt(last));
+    }
   }
 
   function sendWhatsApp(mobile: string, message: string) {
@@ -827,6 +856,82 @@ export function OrdersTab() {
                 </button>
               )}
             </div>
+
+            {/* Date range filter */}
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider shrink-0">Date Range</p>
+              {/* Quick presets */}
+              {([
+                { label: "Today",      preset: "today"     },
+                { label: "Yesterday",  preset: "yesterday" },
+                { label: "This Week",  preset: "week"      },
+                { label: "This Month", preset: "month"     },
+                { label: "Last Month", preset: "lastmonth" },
+              ] as const).map(({ label, preset }) => {
+                const pad = (n: number) => String(n).padStart(2, "0");
+                const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+                const now   = new Date();
+                const today = fmt(now);
+                let isActive = false;
+                if (preset === "today")     isActive = dateFrom === today && dateTo === today;
+                if (preset === "yesterday") { const y = new Date(now); y.setDate(y.getDate() - 1); isActive = dateFrom === fmt(y) && dateTo === fmt(y); }
+                if (preset === "week")      { const w = new Date(now); w.setDate(w.getDate() - 6); isActive = dateFrom === fmt(w) && dateTo === today; }
+                if (preset === "month")     { const m = new Date(now); m.setDate(1); isActive = dateFrom === fmt(m) && dateTo === today; }
+                if (preset === "lastmonth") {
+                  const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                  const last  = new Date(now.getFullYear(), now.getMonth(), 0);
+                  isActive = dateFrom === fmt(first) && dateTo === fmt(last);
+                }
+                return (
+                  <button key={preset} onClick={() => setPreset(preset)}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all ${
+                      isActive
+                        ? "bg-[#9B6FD1] border-[#9B6FD1] text-white"
+                        : "bg-white border-gray-200 text-gray-500 hover:border-[#9B6FD1]/40"
+                    }`}>
+                    {label}
+                  </button>
+                );
+              })}
+              {/* Custom date inputs */}
+              <div className="flex items-center gap-1.5 ml-1">
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#9B6FD1]/40 focus:border-[#9B6FD1] text-gray-700"
+                />
+                <span className="text-[10px] text-gray-400">to</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#9B6FD1]/40 focus:border-[#9B6FD1] text-gray-700"
+                />
+                {(dateFrom || dateTo) && (
+                  <button onClick={() => { setDateFrom(""); setDateTo(""); }}
+                    className="text-[10px] text-red-400 hover:text-red-600 font-semibold">
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Clear all */}
+            {activeFilterCount > 0 && (
+              <div className="flex items-center pt-1">
+                <button onClick={clearFilters}
+                  className="flex items-center gap-1 text-[11px] text-red-500 hover:text-red-600 font-semibold">
+                  <X className="w-3 h-3" /> Clear all filters
+                  <span className="ml-1 bg-red-100 text-red-500 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                    {activeFilterCount}
+                  </span>
+                </button>
+                <span className="ml-3 text-[10px] text-gray-400">
+                  {filteredOrders.length} of {orders.length} orders shown
+                </span>
+              </div>
+            )}
           </div>
         )}
 
